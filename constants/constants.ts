@@ -1,7 +1,6 @@
 
-import { DynamicMenuItem } from './types';
+import { DynamicMenuItem } from '../types/types';
 
-// System static configuration (not mock data, but UI structure)
 export const DYNAMIC_PENTEST_MENU: DynamicMenuItem[] = [
   {
     id: 'target',

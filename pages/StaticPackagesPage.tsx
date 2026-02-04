@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Package, CheckCircle2, Upload, HardDrive, Layers, Download, Trash2, CheckSquare, Square, Server, Search, Globe, Activity, AlertTriangle, Loader2, X } from 'lucide-react';
+import { Package, CheckCircle2, Upload, HardDrive, Layers, Download, Trash2, CheckSquare, Square, Server, Search, Globe, Activity, AlertTriangle, Loader2, X, RefreshCw, ShieldCheck } from 'lucide-react';
 import { StaticPackage, PackageStats } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
 import { api } from '../api/api';
@@ -21,6 +21,8 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
   const [localSearch, setLocalSearch] = useState('');
   const [filterArch, setFilterArch] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showConfirm, setShowConfirm] = useState<{show: boolean, ids: string[]}>({ show: false, ids: [] });
   
   const filteredPackages = staticPackages.filter(p => 
@@ -29,6 +31,31 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
   );
 
   const isAllSelected = filteredPackages.length > 0 && selectedIds.size === filteredPackages.length;
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchStaticPackages();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleBatchCheck = async () => {
+    if (selectedIds.size === 0) return;
+    setIsValidating(true);
+    try {
+      const ids = Array.from(selectedIds);
+      // Run checks in sequence or parallel. Backend documentation shows individual check per ID.
+      await Promise.all(ids.map(id => api.staticPackages.check(id)));
+      alert(`已完成 ${ids.length} 个软件包的完整性校验`);
+      fetchStaticPackages();
+    } catch (err) {
+      alert("部分校验任务失败: " + (err instanceof Error ? err.message : "未知错误"));
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   const handleDeleteClick = (ids: string[], e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -61,6 +88,14 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
           <p className="text-slate-500 mt-1 font-medium">多架构二进制资产库与安全一致性底座</p>
         </div>
         <div className="flex gap-3">
+           <button 
+             onClick={handleRefresh}
+             disabled={isRefreshing}
+             className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+             title="手动刷新列表"
+           >
+             <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+           </button>
            <button onClick={() => api.staticPackages.checkAll().then(fetchStaticPackages)} className="bg-white border border-slate-200 text-slate-600 px-6 py-4 rounded-2xl font-black flex items-center gap-2 hover:bg-slate-50 transition-all">
              <CheckCircle2 size={18} /> 全量校验
            </button>
@@ -112,12 +147,24 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
         </div>
         <div className="flex gap-2 shrink-0">
           {selectedIds.size > 0 && (
-            <button 
-              onClick={() => handleDeleteClick(Array.from(selectedIds))}
-              className="bg-red-50 text-red-600 px-6 py-3.5 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-red-600 hover:text-white transition-all shadow-sm shadow-red-500/5 animate-in slide-in-from-right-2"
-            >
-              <Trash2 size={16} /> 删除选中 ({selectedIds.size})
-            </button>
+            <>
+              <button 
+                onClick={handleBatchCheck}
+                disabled={isValidating}
+                className="bg-indigo-50 text-indigo-600 px-6 py-3.5 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-indigo-600 hover:text-white transition-all shadow-sm shadow-indigo-500/5 animate-in slide-in-from-right-2 disabled:opacity-50"
+              >
+                {isValidating ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                验证选中 ({selectedIds.size})
+              </button>
+              <button 
+                onClick={() => handleDeleteClick(Array.from(selectedIds))}
+                disabled={isDeleting}
+                className="bg-red-50 text-red-600 px-6 py-3.5 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-red-600 hover:text-white transition-all shadow-sm shadow-red-500/5 animate-in slide-in-from-right-2 disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                删除选中 ({selectedIds.size})
+              </button>
+            </>
           )}
         </div>
       </div>

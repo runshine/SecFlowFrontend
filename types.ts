@@ -147,6 +147,8 @@ export type ViewType =
   | 'project-mgmt'
   | 'project-detail'
   | 'static-packages'
+  | 'static-package-detail'
+  | 'deploy-script-mgmt'
   | 'login'
   | 'engine-validation'
   | 'pentest-risk'

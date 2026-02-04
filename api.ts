@@ -145,6 +145,10 @@ export const api = {
 
   // 4. Static Packages Service
   staticPackages: {
+    health: async (): Promise<any> => {
+      const response = await fetch(`${API_BASE}/api/packages/health`);
+      return handleResponse(response);
+    },
     list: async (): Promise<{ packages: StaticPackage[] }> => {
       const response = await fetch(`${API_BASE}/api/packages`, {
         headers: getHeaders(),
@@ -152,13 +156,17 @@ export const api = {
       return handleResponse(response);
     },
     search: async (params: { name?: string; version?: string; architecture?: string }): Promise<{ packages: StaticPackage[] }> => {
-      const query = new URLSearchParams(params as any).toString();
-      const response = await fetch(`${API_BASE}/api/packages/search?${query}`, {
+      const query = new URLSearchParams();
+      if (params.name) query.append('name', params.name);
+      if (params.version) query.append('version', params.version);
+      if (params.architecture) query.append('architecture', params.architecture);
+      
+      const response = await fetch(`${API_BASE}/api/packages/search?${query.toString()}`, {
         headers: getHeaders(),
       });
       return handleResponse(response);
     },
-    get: async (id: string): Promise<{ package: StaticPackage; files: PackageFile[] }> => {
+    get: async (id: string): Promise<{ package: StaticPackage; files: PackageFile[]; total_files: number }> => {
       const response = await fetch(`${API_BASE}/api/packages/${id}`, {
         headers: getHeaders(),
       });
@@ -195,8 +203,29 @@ export const api = {
       });
       return handleResponse(response);
     },
+    batchDelete: async (ids: string[]): Promise<any> => {
+      const response = await fetch(`${API_BASE}/api/packages/batch-delete`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ package_ids: ids })
+      });
+      return handleResponse(response);
+    },
+    deleteAll: async (): Promise<any> => {
+      const response = await fetch(`${API_BASE}/api/packages/delete-all`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
     getStats: async (): Promise<{ statistics: PackageStats }> => {
       const response = await fetch(`${API_BASE}/api/packages/statistics`, {
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+    getArchitectures: async (): Promise<{ architectures: string[] }> => {
+      const response = await fetch(`${API_BASE}/api/packages/architectures`, {
         headers: getHeaders(),
       });
       return handleResponse(response);

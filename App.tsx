@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox } from 'lucide-react';
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
@@ -18,6 +18,7 @@ import { SecurityAssessmentPage } from './pages/SecurityAssessmentPage';
 import { ReleasePackagePage } from './pages/inputs/ReleasePackagePage';
 import { CodeAuditPage } from './pages/inputs/CodeAuditPage';
 import { DocAnalysisPage } from './pages/inputs/DocAnalysisPage';
+import { OtherInputPage } from './pages/inputs/OtherInputPage';
 
 // Env Pages
 import { EnvAgentPage } from './pages/env/EnvAgentPage';
@@ -28,6 +29,7 @@ import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
 // Pentest Pages
 import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
 import { ExecutionWorkPlatformPage } from './pages/pentest/ExecutionWorkPlatformPage';
+import { SecMateNGPage } from './pages/pentest/SecMateNGPage';
 import { ReportsPage } from './pages/pentest/ReportsPage';
 
 const App: React.FC = () => {
@@ -36,20 +38,17 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType | string>('dashboard');
   const [projects, setProjects] = useState<SecurityProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-  const [activeProjectId, setActiveProjectId] = useState<string>(''); // For detail view specifically
+  const [activeProjectId, setActiveProjectId] = useState<string>(''); 
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
-  const [resources, setResources] = useState<FileItem[]>([]);
-  const [resourceError, setResourceError] = useState<string | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [templates, setTemplates] = useState<EnvTemplate[]>([]);
-  const [tasks, setTasks] = useState<AsyncTask[]>([]);
   const [staticPackages, setStaticPackages] = useState<StaticPackage[]>([]);
   const [activePackageId, setActivePackageId] = useState<string>('');
   const [selectedStaticPkgIds, setSelectedStaticPkgIds] = useState<Set<string>>(new Set());
@@ -66,7 +65,6 @@ const App: React.FC = () => {
     }
   }, [token]);
 
-  // Aggregate service count across all agents for Dashboard
   const fetchDashboardServicesCount = async (onlineAgents: Agent[]) => {
     if (onlineAgents.length === 0) return;
     try {
@@ -81,13 +79,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (token) {
-      // Global/Dashboard required data
       if (currentView === 'dashboard') {
-        // Parallel load stats for dashboard
         api.environment.getAgents().then(d => {
           const agentList = d.agents || [];
           setAgents(agentList);
-          // Only fetch services for online agents to get an accurate "Deployed" count
           fetchDashboardServicesCount(agentList.filter(a => a.status === 'online'));
         }).catch(e => console.error(e));
         
@@ -96,12 +91,9 @@ const App: React.FC = () => {
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
       }
 
-      // Specific View Logic
       if (currentView === 'static-packages') {
         api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
-      } else if (currentView.startsWith('test-input-')) {
-        fetchResources();
       } else if (currentView === 'env-agent') {
         setIsLoading(true);
         api.environment.getAgents().then(d => setAgents(d.agents || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
@@ -110,7 +102,7 @@ const App: React.FC = () => {
         api.environment.getTemplates().then(d => setTemplates(d.templates || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
       } else if (currentView === 'env-tasks') {
         setIsLoading(true);
-        api.environment.getTasks().then(d => setTasks(d.task || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
+        api.environment.getTasks().then(d => { /* Tasks managed locally in page */ }).catch(e => console.error(e)).finally(() => setIsLoading(false));
       }
     }
   }, [selectedProjectId, currentView, token]);
@@ -127,37 +119,6 @@ const App: React.FC = () => {
       console.error("Failed to fetch projects", err);
     } finally {
       if (refresh) setIsRefreshing(false);
-    }
-  };
-
-  const fetchResources = async () => {
-    const typeMap: any = { 
-      'test-input-release': 'software_package', 
-      'test-input-code': 'code_package', 
-      'test-input-doc': 'document_package' 
-    };
-    const type = typeMap[currentView];
-    if (!type || !selectedProjectId) return;
-    setIsLoading(true);
-    setResourceError(null);
-    try {
-      const data = await api.resources.list(selectedProjectId, type);
-      if (Array.isArray(data)) {
-        setResources(data.map((r: any) => ({ 
-          id: r.id.toString(), 
-          name: r.file_name, 
-          type: 'file',
-          updatedAt: r.created_at?.split('T')[0], 
-          size: (r.file_size / 1024 / 1024).toFixed(2) + ' MB' 
-        })));
-      } else {
-        setResources([]);
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch resources", err);
-      setResourceError(err.message || "获取资源失败");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -204,9 +165,13 @@ const App: React.FC = () => {
       case 'static-packages': return <StaticPackagesPage staticPackages={staticPackages} packageStats={packageStats} fetchStaticPackages={() => api.staticPackages.list().then(d => setStaticPackages(d.packages))} setActivePackageId={setActivePackageId} setCurrentView={setCurrentView} selectedIds={selectedStaticPkgIds} setSelectedIds={setSelectedStaticPkgIds} />;
       case 'static-package-detail': return <StaticPackageDetailPage packageId={activePackageId} onBack={() => setCurrentView('static-packages')} />;
       case 'deploy-script-mgmt': return <DeployScriptPage />;
-      case 'test-input-release': return <ReleasePackagePage resources={resources} isLoading={isLoading} />;
-      case 'test-input-code': return <CodeAuditPage resources={resources} isLoading={isLoading} />;
-      case 'test-input-doc': return <DocAnalysisPage resources={resources} isLoading={isLoading} />;
+      
+      // Resource Management Pages
+      case 'test-input-release': return <ReleasePackagePage projectId={selectedProjectId} />;
+      case 'test-input-code': return <CodeAuditPage projectId={selectedProjectId} />;
+      case 'test-input-doc': return <DocAnalysisPage projectId={selectedProjectId} />;
+      case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
+      
       case 'env-agent': return <EnvAgentPage />;
       case 'env-service': return <ServiceMgmtPage />;
       case 'env-template': return <EnvTemplatePage />;
@@ -218,6 +183,7 @@ const App: React.FC = () => {
       case 'pentest-orch': return <WorkflowPlaceholder title="测试编排" icon={<Workflow />} />;
       case 'pentest-exec-code': return <ExecutionCodeAuditPage />;
       case 'pentest-exec-work': return <ExecutionWorkPlatformPage />;
+      case 'pentest-exec-secmate': return <SecMateNGPage />;
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
@@ -274,15 +240,6 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col min-w-0">
         <Header user={user} projects={projects} selectedProjectId={selectedProjectId} setSelectedProjectId={setSelectedProjectId} isProjectDropdownOpen={isProjectDropdownOpen} setIsProjectDropdownOpen={setIsProjectDropdownOpen} searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchProjects={fetchProjects} isRefreshing={isRefreshing} />
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">
-          {resourceError && currentView.startsWith('test-input-') && (
-            <div className="m-10 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-xs font-bold flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <AlertCircle size={16} />
-                <span>{resourceError}</span>
-              </div>
-              <button onClick={() => fetchResources()} className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all">重试</button>
-            </div>
-          )}
           {renderContent()}
         </div>
       </main>

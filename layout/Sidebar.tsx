@@ -16,7 +16,8 @@ import {
   Monitor,
   ClipboardCheck,
   FileText,
-  Play
+  Play,
+  Sparkles
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -64,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
         {!isSidebarCollapsed && isExpanded && children?.map((child: any) => (
-          <SidebarItem key={child.id} id={child.id} label={child.label} children={child.children} depth={depth + 1} />
+          <SidebarItem key={child.id} id={child.id} label={child.label} icon={child.icon} children={child.children} depth={depth + 1} />
         ))}
       </div>
     );
@@ -85,7 +86,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'deploy-script-mgmt', label: '部署脚本管理' }
             ]} />
             <SidebarItem id="project-mgmt" label="项目空间" icon={<Briefcase size={20} />} />
-            <SidebarItem id="test-input" label="测试输入" icon={<FileBox size={20} />} children={[{ id: 'test-input-release', label: '发布包' }, { id: 'test-input-code', label: '源代码' }, { id: 'test-input-doc', label: '需求文档' }]} />
+            <SidebarItem id="test-input" label="测试输入" icon={<FileBox size={20} />} children={[
+              { id: 'test-input-release', label: '发布包' }, 
+              { id: 'test-input-code', label: '源代码' }, 
+              { id: 'test-input-doc', label: '需求文档' },
+              { id: 'test-input-other', label: '其他' }
+            ]} />
             <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[
               { id: 'env-template', label: '模板管理' }, 
               { id: 'env-agent', label: 'Agent 管理' }, 
@@ -100,7 +106,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'pentest-orch', label: '测试编排' },
               { id: 'pentest-exec', label: '测试执行', icon: <Play size={14} />, children: [
                 { id: 'pentest-exec-code', label: '在线代码审计（VSCODE AI版）' },
-                { id: 'pentest-exec-work', label: '知微在线工作平台（AI版）' }
+                { id: 'pentest-exec-work', label: '知微在线工作平台（AI版）' },
+                { id: 'pentest-exec-secmate', label: 'SecMate-NG (AI 助手)', icon: <Sparkles size={12} className="text-amber-400" /> }
               ]},
               { id: 'pentest-report', label: '报告', icon: <FileText size={14} /> }
             ]} />
@@ -116,8 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
              </div>
              <div className="flex-1 min-w-0">
                <p className="text-sm font-black text-white truncate">{user?.username}</p>
-               {/* Fix: Changed handleLogout to onClick to resolve property error on HTML button element */}
-               <button onClick={handleLogout} className="text-[10px] text-red-400 font-bold hover:underline">退出登录</button>
+               <button onClick={handleLogout} className="text-[10px] text-red-400 font-bold hover:underline text-left">退出登录</button>
              </div>
              <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="p-2 text-slate-500">
                <PanelLeftClose size={18} />

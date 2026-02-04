@@ -1,7 +1,6 @@
 
 export type MenuStatus = 'available' | 'development' | 'planning';
 
-// Added DynamicMenuItem to support constants/constants.ts
 export interface DynamicMenuItem {
   id: string;
   label: string;
@@ -28,147 +27,73 @@ export interface SecurityProject {
   k8s_namespace?: string;
 }
 
+export interface ProjectResource {
+  id: number;
+  project_id: string;
+  resource_type: 'document' | 'software' | 'code' | 'other';
+  file_name: string;
+  file_size: number;
+  url?: string;
+  target_path: string;
+  extract_path?: string;
+  created_at: string;
+}
+
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  task_type: 'download' | 'extract';
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  progress: number;
+  message?: string;
+  created_at: string;
+  resource_id?: number;
+}
+
+export interface ProjectPVC {
+  pvc_name: string;
+  resource_type: string;
+  namespace: string;
+  capacity: string;
+  status: string;
+  mount_path: string;
+  resources_count: number;
+  storage_class: string;
+}
+
 export interface Agent {
   key: string;
   hostname: string;
-  ip_address: string;
-  workspace_id: string;
   status: 'online' | 'offline' | 'error' | 'timeout' | 'unknown';
-  last_seen: string;
-  version: string;
-  pod_id?: string;
-  full_name?: string;
-  system_info?: {
-    os_name: string;
-    os_version: string;
-    os_release: string;
-    kernel_version: string;
-    architecture: string;
-    uptime: number;
-    boot_time: string;
-    cpu: {
-      model: string;
-      logical_cores: number;
-      physical_cores: number;
-      usage_percent: number;
-      frequency_current: number;
-      load_average_1min: number;
-    };
-    memory: {
-      total: number;
-      used: number;
-      available: number;
-      usage_percent: number;
-    };
-    docker: {
-      version: string;
-      containers_running: number;
-      containers_total: number;
-      images_total: number;
-      is_docker_available: boolean;
-    };
-    disks: Array<{
-      device: string;
-      mountpoint: string;
-      total: number;
-      used: number;
-      usage_percent: number;
-    }>;
-    network_interfaces: Array<{
-      name: string;
-      ip_address: string;
-      mac_address: string;
-      is_up: boolean;
-    }>;
-    processes_top: Array<{
-      pid: number;
-      name: string;
-      cpu_percent: number;
-      memory_percent: number;
-      status: string;
-      cmdline: string[];
-    }>;
-    formatted: {
-      uptime: string;
-      memory: {
-        total: string;
-        used: string;
-        available: string;
-      };
-      docker: {
-        containers: string;
-      };
-      nacos_agent_version: string;
-    };
-  };
-}
-
-export interface AgentStats {
-  summary: {
-    total_agents: number;
-    offline_agents: number;
-    workspace_count: number;
-    status_distribution: Record<string, number>;
-  };
-  cleanup_info: {
-    can_cleanup: boolean;
-    offline_count: number;
-  };
+  ip_address: string;
+  system_info?: any;
+  // Additional properties used in the application
+  workspace_id?: string;
+  last_seen?: string;
 }
 
 export interface EnvTemplate {
   name: string;
-  type: 'yaml' | 'archive' | 'auto';
+  type: string;
   description: string;
   file_size: number;
-  created_at: string;
   updated_at: string;
-  created_by?: string;
-}
-
-// Added TemplateFile to support pages/env/EnvTemplatePage.tsx
-export interface TemplateFile {
-  path: string;
-  size: number;
-  modified: string;
 }
 
 export interface AsyncTask {
   id: string;
-  type: 'deploy' | 'undeploy';
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'success';
+  type: string;
+  status: string;
   service_name: string;
-  agent_key: string;
-  template_name?: string;
-  create_time: string;
-  end_time?: string;
   progress: number;
-  error?: string;
+  create_time: string;
+  agent_key: string;
 }
 
-// Added TaskLog to support pages/env/EnvTasksPage.tsx and environment api
 export interface TaskLog {
   timestamp: string;
   level: string;
   message: string;
-}
-
-export interface AgentService {
-  id: string;
-  name: string;
-  image: string;
-  status: string;
-  created_at: string;
-  ports: Record<string, number>;
-  agent_key?: string;
-}
-
-export interface FileItem {
-  id: string;
-  name: string;
-  type: string;
-  updatedAt?: string;
-  size?: string;
 }
 
 export interface StaticPackage {
@@ -180,18 +105,10 @@ export interface StaticPackage {
   total_size: number;
   download_count: number;
   check_status: string;
-  file_count: number;
-  // Added fields to fix pages/StaticPackageDetailPage.tsx errors
+  // Additional properties used in the application
+  file_count?: number;
   original_package_path?: string;
   upload_time?: string;
-}
-
-// Added PackageFile to support StaticPackage detail views and api
-export interface PackageFile {
-  name: string;
-  path: string;
-  size: number;
-  download_count: number;
 }
 
 export interface PackageStats {
@@ -200,19 +117,37 @@ export interface PackageStats {
     total_size_human: string;
     total_downloads: number;
   };
-  by_architecture: Array<{
-    architecture: string;
-    package_count: number;
-  }>;
+  by_architecture: Array<{ architecture: string; package_count: number }>;
 }
 
-// Added Workspace to support environment api
-export interface Workspace {
-  id: string;
+// Added missing types to resolve compilation errors across the application
+export interface FileItem {
+  id: number;
   name: string;
+  size: string;
+  updatedAt: string;
 }
 
-// Added NamespaceStatus to support projects api and detail page
+export interface AgentStats {
+  total: number;
+  online: number;
+  offline: number;
+  error: number;
+}
+
+export interface TemplateFile {
+  path: string;
+  size: number;
+  modified: string;
+}
+
+export interface PackageFile {
+  path: string;
+  name: string;
+  size: number;
+  download_count: number;
+}
+
 export interface NamespaceStatus {
   k8s_namespace: string;
   namespace: {
@@ -221,7 +156,6 @@ export interface NamespaceStatus {
   };
 }
 
-// Added K8sResourceList to support projects api and detail page
 export interface K8sResourceList {
   pods: Array<{
     name: string;
@@ -235,11 +169,6 @@ export interface K8sResourceList {
     cluster_ip: string;
     ports: string[];
   }>;
-  deployments: Array<{
-    name: string;
-    replica: number;
-    ready_replica: number;
-  }>;
   ingresses: Array<{
     name: string;
     host: string;
@@ -248,41 +177,39 @@ export interface K8sResourceList {
   pvcs: Array<{
     name: string;
     status: string;
-    capacity: { storage: string };
+    capacity: {
+      storage: string;
+    };
     storage_class: string;
+  }>;
+  deployments: Array<{
+    name: string;
+    replica: number;
+    ready_replica: number;
   }>;
   configmaps: any[];
   secrets: any[];
 }
 
-// Added ProjectResource to support resources api
-export interface ProjectResource {
-  id: number;
-  project_id: string;
-  resource_type: string;
-  file_name: string;
-  file_size: number;
-  created_at: string;
-}
-
-// Added ProjectTask to support resources api
-export interface ProjectTask {
+export interface AgentService {
   id: string;
   name: string;
+  image: string;
   status: string;
+  ports: Record<string, string>;
+  agent_key?: string;
+  agent_hostname?: string;
 }
 
-// Added ProjectPVC to support resources api
-export interface ProjectPVC {
+export interface Workspace {
+  id: string;
   name: string;
-  capacity: string;
-  status: string;
 }
 
 export type ViewType = 
   | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
-  | 'test-input-release' | 'test-input-code' | 'test-input-doc'
+  | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-other'
   | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
-  | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-report'
+  | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment';

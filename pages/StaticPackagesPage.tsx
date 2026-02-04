@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Package, CheckCircle2, Upload, HardDrive, Layers, Download, Trash2, CheckSquare, Square, Server, Search, Globe, Activity } from 'lucide-react';
+import { Package, CheckCircle2, Upload, HardDrive, Layers, Download, Trash2, CheckSquare, Square, Server, Search, Globe, Activity, AlertTriangle, Loader2, X } from 'lucide-react';
 import { StaticPackage, PackageStats } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
 import { api } from '../api/api';
@@ -20,6 +20,8 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
 }) => {
   const [localSearch, setLocalSearch] = useState('');
   const [filterArch, setFilterArch] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState<{show: boolean, ids: string[]}>({ show: false, ids: [] });
   
   const filteredPackages = staticPackages.filter(p => 
     p.name.toLowerCase().includes(localSearch.toLowerCase()) &&
@@ -28,14 +30,26 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
 
   const isAllSelected = filteredPackages.length > 0 && selectedIds.size === filteredPackages.length;
 
-  const handleBatchDelete = async () => {
-    if (!window.confirm(`确定要删除选中的 ${selectedIds.size} 个软件包吗？`)) return;
+  const handleDeleteClick = (ids: string[], e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setShowConfirm({ show: true, ids });
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
     try {
-      await api.staticPackages.batchDelete(Array.from(selectedIds));
+      if (showConfirm.ids.length === 1) {
+        await api.staticPackages.delete(showConfirm.ids[0]);
+      } else {
+        await api.staticPackages.batchDelete(showConfirm.ids);
+      }
       setSelectedIds(new Set());
       fetchStaticPackages();
     } catch (err) {
-      alert("批量删除失败");
+      alert("删除失败: " + (err instanceof Error ? err.message : "未知错误"));
+    } finally {
+      setIsDeleting(false);
+      setShowConfirm({ show: false, ids: [] });
     }
   };
 
@@ -66,7 +80,7 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
         </div>
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
           <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">累计下载</p>
-          <h3 className="text-3xl font-black mt-2 text-slate-800">{packageStats?.summary.total_downloads.toLocaleString()}</h3>
+          <h3 className="text-3xl font-black mt-2 text-slate-800">{packageStats?.summary.total_downloads.toLocaleString() || 0}</h3>
           <div className="flex items-center gap-1 text-green-500 text-[10px] font-bold mt-1">
             <Activity size={12} /> 实时分发中
           </div>
@@ -91,7 +105,7 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
           <input 
             type="text" 
             placeholder="搜索软件包名称、版本..." 
-            className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm outline-none focus:ring-2 ring-blue-500/20 transition-all"
+            className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-none rounded-2xl text-sm outline-none focus:ring-2 ring-blue-500/20 transition-all font-medium"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
           />
@@ -99,8 +113,8 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
         <div className="flex gap-2 shrink-0">
           {selectedIds.size > 0 && (
             <button 
-              onClick={handleBatchDelete}
-              className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-red-600 hover:text-white transition-all"
+              onClick={() => handleDeleteClick(Array.from(selectedIds))}
+              className="bg-red-50 text-red-600 px-6 py-3.5 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-red-600 hover:text-white transition-all shadow-sm shadow-red-500/5 animate-in slide-in-from-right-2"
             >
               <Trash2 size={16} /> 删除选中 ({selectedIds.size})
             </button>
@@ -113,7 +127,7 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <th className="px-6 py-5 w-10">
-                  <button onClick={() => setSelectedIds(isAllSelected ? new Set() : new Set(filteredPackages.map(p => p.id)))} className="p-2 hover:bg-slate-200 rounded-lg">
+                  <button onClick={() => setSelectedIds(isAllSelected ? new Set() : new Set(filteredPackages.map(p => p.id)))} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
                     {isAllSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
                   </button>
                 </th>
@@ -132,8 +146,8 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
                          const n = new Set(selectedIds); 
                          if (n.has(pkg.id)) n.delete(pkg.id); else n.add(pkg.id); 
                          setSelectedIds(n); 
-                       }}>
-                         {selectedIds.has(pkg.id) ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+                       }} className="p-2">
+                         {selectedIds.has(pkg.id) ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} className="text-slate-300 hover:text-slate-400" />}
                        </button>
                      </td>
                      <td className="px-4 py-6">
@@ -141,8 +155,8 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
                          <div className="w-12 h-12 bg-white border border-slate-200 text-blue-600 rounded-2xl flex items-center justify-center font-black shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
                            {pkg.name[0].toUpperCase()}
                          </div>
-                         <div>
-                           <p className="text-sm font-black text-slate-800">{pkg.name}</p>
+                         <div className="min-w-0">
+                           <p className="text-sm font-black text-slate-800 truncate">{pkg.name}</p>
                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">VERSION: {pkg.version}</p>
                          </div>
                        </div>
@@ -169,7 +183,10 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
                          <a href={api.staticPackages.getDownloadUrl(pkg.id)} className="p-3 text-slate-400 hover:text-indigo-600 bg-slate-50 rounded-xl border border-transparent hover:border-indigo-100 transition-all">
                            <Download size={18} />
                          </a>
-                         <button onClick={() => api.staticPackages.delete(pkg.id).then(fetchStaticPackages)} className="p-3 text-slate-400 hover:text-red-600 bg-slate-50 rounded-xl border border-transparent hover:border-red-100 transition-all">
+                         <button 
+                            onClick={(e) => handleDeleteClick([pkg.id], e)} 
+                            className="p-3 text-slate-400 hover:text-red-600 bg-slate-50 rounded-xl border border-transparent hover:border-red-100 transition-all"
+                         >
                            <Trash2 size={18} />
                          </button>
                        </div>
@@ -177,11 +194,46 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
                   </tr>
                ))}
                {filteredPackages.length === 0 && (
-                 <tr><td colSpan={6} className="py-20 text-center text-slate-400 font-bold">未找到匹配的软件包</td></tr>
+                 <tr><td colSpan={6} className="py-24 text-center text-slate-400 font-bold uppercase text-xs tracking-widest">未找到匹配的软件包</td></tr>
                )}
             </tbody>
          </table>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showConfirm.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-10 text-center">
+              <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
+                <AlertTriangle size={48} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight">确认删除资产？</h3>
+              <p className="text-slate-500 mt-4 font-medium leading-relaxed">
+                您正准备移除 <span className="text-red-600 font-black">{showConfirm.ids.length}</span> 个受信任的软件包资产。
+                此操作将永久清理二进制文件及其所有分发记录，且<span className="font-black">无法撤回</span>。
+              </p>
+            </div>
+            <div className="px-10 pb-10 flex gap-3">
+              <button 
+                onClick={() => setShowConfirm({ show: false, ids: [] })}
+                disabled={isDeleting}
+                className="flex-1 py-4 bg-slate-100 border border-slate-200 rounded-2xl font-black text-slate-600 hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button 
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                立即删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

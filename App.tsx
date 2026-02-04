@@ -55,6 +55,7 @@ const App: React.FC = () => {
   const [selectedStaticPkgIds, setSelectedStaticPkgIds] = useState<Set<string>>(new Set());
   const [packageStats, setPackageStats] = useState<PackageStats | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
 
   useEffect(() => {
     if (token) {
@@ -65,24 +66,51 @@ const App: React.FC = () => {
     }
   }, [token]);
 
+  // Aggregate service count across all agents for Dashboard
+  const fetchDashboardServicesCount = async (onlineAgents: Agent[]) => {
+    if (onlineAgents.length === 0) return;
+    try {
+      const promises = onlineAgents.map(a => api.environment.getAgentServices(a.key).catch(() => ({ services: [] })));
+      const results = await Promise.all(promises);
+      const total = results.reduce((acc, curr) => acc + (curr.services?.length || 0), 0);
+      setDashboardServicesCount(total);
+    } catch (e) {
+      console.error("Dashboard services count aggregation failed", e);
+    }
+  };
+
   useEffect(() => {
-    if (selectedProjectId && token) {
+    if (token) {
+      // Global/Dashboard required data
+      if (currentView === 'dashboard') {
+        // Parallel load stats for dashboard
+        api.environment.getAgents().then(d => {
+          const agentList = d.agents || [];
+          setAgents(agentList);
+          // Only fetch services for online agents to get an accurate "Deployed" count
+          fetchDashboardServicesCount(agentList.filter(a => a.status === 'online'));
+        }).catch(e => console.error(e));
+        
+        api.environment.getTemplates().then(d => setTemplates(d.templates || [])).catch(e => console.error(e));
+        api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
+        api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
+      }
+
+      // Specific View Logic
       if (currentView === 'static-packages') {
-        api.staticPackages.list().then(d => setStaticPackages(d.packages)).catch(e => console.error(e));
+        api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
       } else if (currentView.startsWith('test-input-')) {
         fetchResources();
       } else if (currentView === 'env-agent') {
         setIsLoading(true);
-        // Map agents from the response object
-        api.environment.getAgents().then(d => setAgents(d.agents)).catch(e => console.error(e)).finally(() => setIsLoading(false));
+        api.environment.getAgents().then(d => setAgents(d.agents || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
       } else if (currentView === 'env-template') {
         setIsLoading(true);
-        api.environment.getTemplates().then(d => setTemplates(d.templates)).catch(e => console.error(e)).finally(() => setIsLoading(false));
+        api.environment.getTemplates().then(d => setTemplates(d.templates || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
       } else if (currentView === 'env-tasks') {
         setIsLoading(true);
-        // Map task array from the response object
-        api.environment.getTasks().then(d => setTasks(d.task)).catch(e => console.error(e)).finally(() => setIsLoading(false));
+        api.environment.getTasks().then(d => setTasks(d.task || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
       }
     }
   }, [selectedProjectId, currentView, token]);
@@ -91,8 +119,8 @@ const App: React.FC = () => {
     try {
       if (refresh) setIsRefreshing(true);
       const data = await api.projects.list();
-      setProjects(data.projects);
-      if (data.projects.length > 0 && !selectedProjectId) {
+      setProjects(data.projects || []);
+      if (data.projects && data.projects.length > 0 && !selectedProjectId) {
         setSelectedProjectId(data.projects[0].id);
       }
     } catch (err) {
@@ -161,7 +189,16 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (currentView) {
-      case 'dashboard': return <DashboardPage projects={projects} agents={agents} staticPackages={staticPackages} setCurrentView={setCurrentView} />;
+      case 'dashboard': return (
+        <DashboardPage 
+          projects={projects} 
+          agents={agents} 
+          staticPackages={staticPackages} 
+          templates={templates}
+          servicesCount={dashboardServicesCount}
+          setCurrentView={setCurrentView} 
+        />
+      );
       case 'project-mgmt': return <ProjectMgmtPage projects={projects} setActiveProjectId={(id) => { setActiveProjectId(id); }} setCurrentView={setCurrentView} setIsProjectModalOpen={() => {}} />;
       case 'project-detail': return <ProjectDetailPage projectId={activeProjectId} projects={projects} onBack={() => setCurrentView('project-mgmt')} />;
       case 'static-packages': return <StaticPackagesPage staticPackages={staticPackages} packageStats={packageStats} fetchStaticPackages={() => api.staticPackages.list().then(d => setStaticPackages(d.packages))} setActivePackageId={setActivePackageId} setCurrentView={setCurrentView} selectedIds={selectedStaticPkgIds} setSelectedIds={setSelectedStaticPkgIds} />;
@@ -170,7 +207,6 @@ const App: React.FC = () => {
       case 'test-input-release': return <ReleasePackagePage resources={resources} isLoading={isLoading} />;
       case 'test-input-code': return <CodeAuditPage resources={resources} isLoading={isLoading} />;
       case 'test-input-doc': return <DocAnalysisPage resources={resources} isLoading={isLoading} />;
-      // Fix: Standalone pages handle their own data and don't require external props
       case 'env-agent': return <EnvAgentPage />;
       case 'env-service': return <ServiceMgmtPage />;
       case 'env-template': return <EnvTemplatePage />;

@@ -34,7 +34,7 @@ export const EnvTasksPage: React.FC = () => {
   const loadTasks = async () => {
     try {
       const data = await api.environment.getTasks();
-      setTasks(data.task);
+      setTasks(data?.task || []);
       setLoading(false);
     } catch (err) {
       console.error("Failed to load tasks", err);
@@ -47,7 +47,7 @@ export const EnvTasksPage: React.FC = () => {
     setLogs([]);
     try {
       const data = await api.environment.getTaskLogs(task.id);
-      setLogs(data.log);
+      setLogs(data?.log || []);
     } catch (err) {
       alert("获取日志失败");
     } finally {
@@ -55,10 +55,20 @@ export const EnvTasksPage: React.FC = () => {
     }
   };
 
-  const filteredTasks = tasks.filter(t => 
-    t.service_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.id.includes(searchTerm)
-  );
+  const filteredTasks = (tasks || []).filter(t => {
+    const serviceMatch = t?.service_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const idMatch = t?.id?.includes(searchTerm);
+    return serviceMatch || idMatch;
+  });
+
+  // Helper to safely format time
+  const formatTaskTime = (timeStr: string | undefined) => {
+    if (!timeStr) return { date: '-', time: '-' };
+    const parts = timeStr.split('T');
+    const datePart = parts[0] || '-';
+    const timePart = parts[1] ? parts[1].split('.')[0] : '-';
+    return { date: datePart, time: timePart };
+  };
 
   return (
     <div className="p-10 space-y-10 animate-in fade-in duration-500 pb-24">
@@ -102,58 +112,61 @@ export const EnvTasksPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {loading ? (
+              {loading && tasks.length === 0 ? (
                 <tr><td colSpan={6} className="py-24 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" /></td></tr>
-              ) : filteredTasks.map(t => (
-                <tr key={t.id} className="hover:bg-slate-50 transition-all group">
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.type === 'deploy' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                        <Workflow size={18} />
+              ) : filteredTasks.map(t => {
+                const timeInfo = formatTaskTime(t?.create_time);
+                return (
+                  <tr key={t.id} className="hover:bg-slate-50 transition-all group">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${t.type === 'deploy' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                          <Workflow size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-slate-800">{t.service_name || 'Unknown'}</p>
+                          <p className="text-[10px] font-mono text-slate-400 tracking-tighter">ID: {t.id}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-black text-slate-800">{t.service_name}</p>
-                        <p className="text-[10px] font-mono text-slate-400 tracking-tighter">ID: {t.id}</p>
+                    </td>
+                    <td className="px-6 py-5 uppercase text-[10px] font-black text-slate-500">{t.type}</td>
+                    <td className="px-6 py-5 text-xs font-bold text-slate-600 truncate max-w-[150px]">{t.agent_key}</td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden w-24">
+                          <div 
+                            className={`h-full transition-all duration-1000 ${t.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`} 
+                            style={{ width: `${t.progress || 0}%` }} 
+                          />
+                        </div>
+                        <span className="text-[10px] font-black text-slate-400">{t.progress || 0}%</span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-5 uppercase text-[10px] font-black text-slate-500">{t.type}</td>
-                  <td className="px-6 py-5 text-xs font-bold text-slate-600 truncate max-w-[150px]">{t.agent_key}</td>
-                  <td className="px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden w-24">
-                        <div 
-                          className={`h-full transition-all duration-1000 ${t.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`} 
-                          style={{ width: `${t.progress}%` }} 
-                        />
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          <Clock size={10} /> {timeInfo.date}
+                        </div>
+                        <div className="text-[10px] font-black text-slate-300 ml-4 font-mono">
+                          {timeInfo.time}
+                        </div>
                       </div>
-                      <span className="text-[10px] font-black text-slate-400">{t.progress}%</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-5">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        <Clock size={10} /> {t.create_time.split('T')[0]}
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                         <StatusBadge status={t.status} />
+                         <button 
+                           onClick={() => openLogViewer(t)}
+                           className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                           title="查看实时执行日志"
+                         >
+                           <Terminal size={18} />
+                         </button>
                       </div>
-                      <div className="text-[10px] font-black text-slate-300 ml-4 font-mono">
-                        {t.create_time.split('T')[1].split('.')[0]}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                       <StatusBadge status={t.status} />
-                       <button 
-                         onClick={() => openLogViewer(t)}
-                         className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                         title="查看实时执行日志"
-                       >
-                         <Terminal size={18} />
-                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredTasks.length === 0 && !loading && (
                 <tr>
                   <td colSpan={6} className="py-40 text-center">
@@ -179,7 +192,7 @@ export const EnvTasksPage: React.FC = () => {
                    <Terminal size={20} />
                  </div>
                  <div>
-                   <h3 className="text-sm font-black text-white uppercase tracking-widest">执行审计：{selectedTask.service_name}</h3>
+                   <h3 className="text-sm font-black text-white uppercase tracking-widest">执行审计：{selectedTask.service_name || 'Task'}</h3>
                    <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mt-0.5">Task ID: {selectedTask.id}</p>
                  </div>
                </div>
@@ -194,7 +207,7 @@ export const EnvTasksPage: React.FC = () => {
                {logs.map((log, i) => (
                  <div key={i} className="flex gap-6 group hover:bg-white/5 transition-colors p-1 rounded-lg">
                    <span className="text-slate-700 w-28 shrink-0 font-bold select-none text-[9px] uppercase tracking-tighter self-center">
-                     {log.timestamp.split('T')[1].split('.')[0]}
+                     {log?.timestamp?.split('T')[1]?.split('.')[0] || '00:00:00'}
                    </span>
                    <span className={`w-14 shrink-0 font-black text-[9px] uppercase px-1.5 py-0.5 rounded text-center self-center ${
                      log.level === 'INFO' ? 'bg-blue-900/40 text-blue-400' : 

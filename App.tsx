@@ -9,6 +9,8 @@ import { WorkflowPlaceholder } from './components/WorkflowPlaceholder';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectMgmtPage } from './pages/ProjectMgmtPage';
 import { StaticPackagesPage } from './pages/StaticPackagesPage';
+import { StaticPackageDetailPage } from './pages/StaticPackageDetailPage';
+import { DeployScriptPage } from './pages/DeployScriptPage';
 
 // Input Pages
 import { ReleasePackagePage } from './pages/inputs/ReleasePackagePage';
@@ -31,15 +33,16 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt']));
-  // Added state for project dropdown visibility
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
   const [resources, setResources] = useState<FileItem[]>([]);
+  const [resourceError, setResourceError] = useState<string | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [templates, setTemplates] = useState<EnvTemplate[]>([]);
   const [tasks, setTasks] = useState<AsyncTask[]>([]);
   const [staticPackages, setStaticPackages] = useState<StaticPackage[]>([]);
+  const [activePackageId, setActivePackageId] = useState<string>('');
   const [selectedStaticPkgIds, setSelectedStaticPkgIds] = useState<Set<string>>(new Set());
   const [packageStats, setPackageStats] = useState<PackageStats | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -56,19 +59,19 @@ const App: React.FC = () => {
   useEffect(() => {
     if (selectedProjectId && token) {
       if (currentView === 'static-packages') {
-        api.staticPackages.list().then(d => setStaticPackages(d.packages));
-        api.staticPackages.getStats().then(d => setPackageStats(d.statistics));
+        api.staticPackages.list().then(d => setStaticPackages(d.packages)).catch(e => console.error(e));
+        api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
       } else if (currentView.startsWith('test-input-')) {
         fetchResources();
       } else if (currentView === 'env-agent') {
         setIsLoading(true);
-        api.environment.getAgents().then(setAgents).finally(() => setIsLoading(false));
+        api.environment.getAgents().then(setAgents).catch(e => console.error(e)).finally(() => setIsLoading(false));
       } else if (currentView === 'env-template') {
         setIsLoading(true);
-        api.environment.getTemplates().then(d => setTemplates(d.templates)).finally(() => setIsLoading(false));
+        api.environment.getTemplates().then(d => setTemplates(d.templates)).catch(e => console.error(e)).finally(() => setIsLoading(false));
       } else if (currentView === 'env-tasks') {
         setIsLoading(true);
-        api.environment.getTasks().then(setTasks).finally(() => setIsLoading(false));
+        api.environment.getTasks().then(setTasks).catch(e => console.error(e)).finally(() => setIsLoading(false));
       }
     }
   }, [selectedProjectId, currentView, token]);
@@ -97,16 +100,24 @@ const App: React.FC = () => {
     const type = typeMap[currentView];
     if (!type || !selectedProjectId) return;
     setIsLoading(true);
+    setResourceError(null);
     try {
       const data = await api.resources.list(selectedProjectId, type);
-      setResources(data.map((r: any) => ({ 
-        id: r.id.toString(), 
-        name: r.file_name, 
-        updatedAt: r.created_at?.split('T')[0], 
-        size: (r.file_size / 1024 / 1024).toFixed(2) + ' MB' 
-      })));
-    } catch (err) {
+      if (Array.isArray(data)) {
+        // Fix: Add missing 'type' property to satisfy FileItem interface
+        setResources(data.map((r: any) => ({ 
+          id: r.id.toString(), 
+          name: r.file_name, 
+          type: 'file',
+          updatedAt: r.created_at?.split('T')[0], 
+          size: (r.file_size / 1024 / 1024).toFixed(2) + ' MB' 
+        })));
+      } else {
+        setResources([]);
+      }
+    } catch (err: any) {
       console.error("Failed to fetch resources", err);
+      setResourceError(err.message || "获取资源失败");
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +153,9 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'dashboard': return <DashboardPage projects={projects} agents={agents} staticPackages={staticPackages} setCurrentView={setCurrentView} />;
       case 'project-mgmt': return <ProjectMgmtPage projects={projects} setActiveProjectId={setSelectedProjectId} setCurrentView={setCurrentView} setIsProjectModalOpen={() => {}} />;
-      case 'static-packages': return <StaticPackagesPage staticPackages={staticPackages} packageStats={packageStats} fetchStaticPackages={() => api.staticPackages.list().then(d => setStaticPackages(d.packages))} setActivePackageId={() => {}} setCurrentView={setCurrentView} selectedIds={selectedStaticPkgIds} setSelectedIds={setSelectedStaticPkgIds} />;
+      case 'static-packages': return <StaticPackagesPage staticPackages={staticPackages} packageStats={packageStats} fetchStaticPackages={() => api.staticPackages.list().then(d => setStaticPackages(d.packages))} setActivePackageId={setActivePackageId} setCurrentView={setCurrentView} selectedIds={selectedStaticPkgIds} setSelectedIds={setSelectedStaticPkgIds} />;
+      case 'static-package-detail': return <StaticPackageDetailPage packageId={activePackageId} onBack={() => setCurrentView('static-packages')} />;
+      case 'deploy-script-mgmt': return <DeployScriptPage />;
       case 'test-input-release': return <ReleasePackagePage resources={resources} isLoading={isLoading} />;
       case 'test-input-code': return <CodeAuditPage resources={resources} isLoading={isLoading} />;
       case 'test-input-doc': return <DocAnalysisPage resources={resources} isLoading={isLoading} />;
@@ -158,10 +171,8 @@ const App: React.FC = () => {
     }
   };
 
-  // 登录页面
   if (!token) return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-950 relative overflow-hidden">
-      {/* 背景修饰 */}
       <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600 rounded-full blur-[120px]" />
@@ -186,66 +197,39 @@ const App: React.FC = () => {
         <form onSubmit={handleLogin} className="space-y-5">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-500 uppercase ml-2">账户名称</label>
-            <input 
-              name="username" 
-              required 
-              className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" 
-              placeholder="Username" 
-            />
+            <input name="username" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" placeholder="Username" />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-500 uppercase ml-2">身份凭证</label>
-            <input 
-              name="password" 
-              type="password" 
-              required 
-              className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" 
-              placeholder="Password" 
-            />
+            <input name="password" type="password" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" placeholder="Password" />
           </div>
-          <button 
-            disabled={isLoading} 
-            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-50 disabled:active:scale-100"
-          >
+          <button disabled={isLoading} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-50 disabled:active:scale-100">
             {isLoading ? <Loader2 className="animate-spin" size={20} /> : '进入平台'}
           </button>
         </form>
 
         <p className="mt-8 text-center text-[10px] text-slate-600 font-medium leading-relaxed">
-          &copy; 2025 SecFlow 极速安全测试平台 <br/> 
-          受信任的二进制分发与自动化渗透环境
+          &copy; 2025 SecFlow 极速安全测试平台 <br/> 受信任的二进制分发与自动化渗透环境
         </p>
       </div>
     </div>
   );
 
-  // 主界面
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      <Sidebar 
-        user={user} 
-        currentView={currentView} 
-        isSidebarCollapsed={isSidebarCollapsed} 
-        setIsSidebarCollapsed={setIsSidebarCollapsed} 
-        expandedMenus={expandedMenus} 
-        setExpandedMenus={setExpandedMenus} 
-        setCurrentView={setCurrentView} 
-        handleLogout={handleLogout} 
-      />
+      <Sidebar user={user} currentView={currentView} isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setIsSidebarCollapsed} expandedMenus={expandedMenus} setExpandedMenus={setExpandedMenus} setCurrentView={setCurrentView} handleLogout={handleLogout} />
       <main className="flex-1 flex flex-col min-w-0">
-        <Header 
-          user={user} 
-          projects={projects} 
-          selectedProjectId={selectedProjectId} 
-          setSelectedProjectId={setSelectedProjectId} 
-          isProjectDropdownOpen={isProjectDropdownOpen} 
-          setIsProjectDropdownOpen={setIsProjectDropdownOpen} 
-          searchQuery={searchQuery} 
-          setSearchQuery={setSearchQuery} 
-          fetchProjects={fetchProjects} 
-          isRefreshing={isRefreshing} 
-        />
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <Header user={user} projects={projects} selectedProjectId={selectedProjectId} setSelectedProjectId={setSelectedProjectId} isProjectDropdownOpen={isProjectDropdownOpen} setIsProjectDropdownOpen={setIsProjectDropdownOpen} searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchProjects={fetchProjects} isRefreshing={isRefreshing} />
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+          {resourceError && currentView.startsWith('test-input-') && (
+            <div className="m-10 p-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl text-xs font-bold flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertCircle size={16} />
+                <span>{resourceError}</span>
+              </div>
+              <button onClick={() => fetchResources()} className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all">重试</button>
+            </div>
+          )}
           {renderContent()}
         </div>
       </main>

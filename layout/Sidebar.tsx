@@ -77,7 +77,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div className="space-y-1">
             <SidebarItem id="dashboard" label="控制台" icon={<LayoutDashboard size={20} />} />
-            <SidebarItem id="base-mgmt" label="基础资源管理" icon={<Box size={20} />} children={[{ id: 'static-packages', label: '静态软件包管理' }]} />
+            <SidebarItem id="base-mgmt" label="基础资源管理" icon={<Box size={20} />} children={[
+              { id: 'static-packages', label: '静态软件包管理' },
+              { id: 'deploy-script-mgmt', label: '部署脚本管理' }
+            ]} />
             <SidebarItem id="project-mgmt" label="项目空间" icon={<Briefcase size={20} />} />
             <SidebarItem id="test-input" label="测试输入" icon={<FileBox size={20} />} children={[{ id: 'test-input-release', label: '发布包' }, { id: 'test-input-code', label: '源代码' }, { id: 'test-input-doc', label: '需求文档' }]} />
             <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[{ id: 'env-template', label: '模板管理' }, { id: 'env-agent', label: 'Agent 管理' }, { id: 'env-tasks', label: '任务管理' }]} />

@@ -79,15 +79,25 @@ export interface StaticPackage {
   version: string;
   system: string;
   architecture: string;
+  original_filename: string;
   total_size: number;
   file_count: number;
+  upload_time: string;
+  last_check_time: string;
   check_status: 'pending' | 'checking' | 'valid' | 'invalid';
+  download_count: number;
+  last_download_time: string;
+  storage_path?: string;
+  original_package_path?: string;
 }
 
 export interface PackageFile {
   path: string;
   name: string;
   size: number;
+  download_count: number;
+  last_download_time: string;
+  storage_path?: string;
 }
 
 export interface PackageStats {
@@ -96,11 +106,18 @@ export interface PackageStats {
     total_size_human: string;
     total_files: number;
     total_downloads: number;
+    avg_package_size?: number;
   };
+  by_architecture: Array<{
+    architecture: string;
+    package_count: number;
+    total_size_human: string;
+    download_count: number;
+  }>;
 }
 
 export type ViewType = 
-  | 'dashboard' | 'project-mgmt' | 'static-packages' 
+  | 'dashboard' | 'project-mgmt' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc'
   | 'env-agent' | 'env-template' | 'env-tasks'
   | 'engine-validation' | 'pentest-risk' | 'pentest-system' 

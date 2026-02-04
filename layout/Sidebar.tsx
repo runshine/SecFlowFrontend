@@ -13,7 +13,10 @@ import {
   PanelLeftClose, 
   PanelLeftOpen,
   ChevronRight,
-  Monitor
+  Monitor,
+  ClipboardCheck,
+  FileText,
+  Play
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -83,15 +86,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ]} />
             <SidebarItem id="project-mgmt" label="项目空间" icon={<Briefcase size={20} />} />
             <SidebarItem id="test-input" label="测试输入" icon={<FileBox size={20} />} children={[{ id: 'test-input-release', label: '发布包' }, { id: 'test-input-code', label: '源代码' }, { id: 'test-input-doc', label: '需求文档' }]} />
-            <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[{ id: 'env-template', label: '模板管理' }, { id: 'env-agent', label: 'Agent 管理' }, { id: 'env-tasks', label: '任务管理' }]} />
+            <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[
+              { id: 'env-template', label: '模板管理' }, 
+              { id: 'env-agent', label: 'Agent 管理' }, 
+              { id: 'env-service', label: '服务管理' },
+              { id: 'env-tasks', label: '任务管理' }
+            ]} />
             <SidebarItem id="engine-validation" label="安全验证" icon={<ShieldCheck size={20} />} />
-            <SidebarItem id="pentest-root" label="渗透测试" icon={<Target size={20} />} children={[{ id: 'pentest-risk', label: '风险评估' }, { id: 'pentest-system', label: '系统分析' }, { id: 'pentest-threat', label: '威胁分析' }, { id: 'pentest-orch', label: '测试编排' }]} />
+            <SidebarItem id="pentest-root" label="渗透测试" icon={<Target size={20} />} children={[
+              { id: 'pentest-risk', label: '风险评估' }, 
+              { id: 'pentest-system', label: '系统分析' }, 
+              { id: 'pentest-threat', label: '威胁分析' }, 
+              { id: 'pentest-orch', label: '测试编排' },
+              { id: 'pentest-exec', label: '测试执行', icon: <Play size={14} />, children: [
+                { id: 'pentest-exec-code', label: '在线代码审计（VSCODE AI版）' },
+                { id: 'pentest-exec-work', label: '知微在线工作平台（AI版）' }
+              ]},
+              { id: 'pentest-report', label: '报告', icon: <FileText size={14} /> }
+            ]} />
+            <SidebarItem id="security-assessment" label="安全评估" icon={<ClipboardCheck size={20} />} />
           </div>
         </div>
       </nav>
       <div className="p-6 border-t border-slate-800">
-         {!isSidebarCollapsed && <div className="flex items-center gap-4 p-4 bg-slate-800/40 rounded-3xl"><div className="w-11 h-11 rounded-2xl bg-blue-500 flex items-center justify-center text-white font-black">{user?.username?.[0]?.toUpperCase()}</div><div className="flex-1 min-w-0"><p className="text-sm font-black text-white truncate">{user?.username}</p><button onClick={handleLogout} className="text-[10px] text-red-400 font-bold hover:underline">退出登录</button></div><button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="p-2 text-slate-500"><PanelLeftClose size={18} /></button></div>}
-         {isSidebarCollapsed && <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="w-full flex justify-center p-3 text-slate-500"><PanelLeftOpen size={22} /></button>}
+         {!isSidebarCollapsed && (
+           <div className="flex items-center gap-4 p-4 bg-slate-800/40 rounded-3xl">
+             <div className="w-11 h-11 rounded-2xl bg-blue-500 flex items-center justify-center text-white font-black">
+               {user?.username?.[0]?.toUpperCase()}
+             </div>
+             <div className="flex-1 min-w-0">
+               <p className="text-sm font-black text-white truncate">{user?.username}</p>
+               {/* Fix: Changed handleLogout to onClick to resolve property error on HTML button element */}
+               <button onClick={handleLogout} className="text-[10px] text-red-400 font-bold hover:underline">退出登录</button>
+             </div>
+             <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="p-2 text-slate-500">
+               <PanelLeftClose size={18} />
+             </button>
+           </div>
+         )}
+         {isSidebarCollapsed && (
+           <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="w-full flex justify-center p-3 text-slate-500">
+             <PanelLeftOpen size={22} />
+           </button>
+         )}
       </div>
     </aside>
   );

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck } from 'lucide-react';
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
@@ -12,6 +12,7 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { StaticPackagesPage } from './pages/StaticPackagesPage';
 import { StaticPackageDetailPage } from './pages/StaticPackageDetailPage';
 import { DeployScriptPage } from './pages/DeployScriptPage';
+import { SecurityAssessmentPage } from './pages/SecurityAssessmentPage';
 
 // Input Pages
 import { ReleasePackagePage } from './pages/inputs/ReleasePackagePage';
@@ -22,6 +23,12 @@ import { DocAnalysisPage } from './pages/inputs/DocAnalysisPage';
 import { EnvAgentPage } from './pages/env/EnvAgentPage';
 import { EnvTemplatePage } from './pages/env/EnvTemplatePage';
 import { EnvTasksPage } from './pages/env/EnvTasksPage';
+import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
+
+// Pentest Pages
+import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
+import { ExecutionWorkPlatformPage } from './pages/pentest/ExecutionWorkPlatformPage';
+import { ReportsPage } from './pages/pentest/ReportsPage';
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
@@ -67,13 +74,15 @@ const App: React.FC = () => {
         fetchResources();
       } else if (currentView === 'env-agent') {
         setIsLoading(true);
-        api.environment.getAgents().then(setAgents).catch(e => console.error(e)).finally(() => setIsLoading(false));
+        // Map agents from the response object
+        api.environment.getAgents().then(d => setAgents(d.agents)).catch(e => console.error(e)).finally(() => setIsLoading(false));
       } else if (currentView === 'env-template') {
         setIsLoading(true);
         api.environment.getTemplates().then(d => setTemplates(d.templates)).catch(e => console.error(e)).finally(() => setIsLoading(false));
       } else if (currentView === 'env-tasks') {
         setIsLoading(true);
-        api.environment.getTasks().then(setTasks).catch(e => console.error(e)).finally(() => setIsLoading(false));
+        // Map task array from the response object
+        api.environment.getTasks().then(d => setTasks(d.task)).catch(e => console.error(e)).finally(() => setIsLoading(false));
       }
     }
   }, [selectedProjectId, currentView, token]);
@@ -161,14 +170,20 @@ const App: React.FC = () => {
       case 'test-input-release': return <ReleasePackagePage resources={resources} isLoading={isLoading} />;
       case 'test-input-code': return <CodeAuditPage resources={resources} isLoading={isLoading} />;
       case 'test-input-doc': return <DocAnalysisPage resources={resources} isLoading={isLoading} />;
-      case 'env-agent': return <EnvAgentPage agents={agents} isLoading={isLoading} />;
-      case 'env-template': return <EnvTemplatePage templates={templates} isLoading={isLoading} />;
-      case 'env-tasks': return <EnvTasksPage tasks={tasks} isLoading={isLoading} />;
+      // Fix: Standalone pages handle their own data and don't require external props
+      case 'env-agent': return <EnvAgentPage />;
+      case 'env-service': return <ServiceMgmtPage />;
+      case 'env-template': return <EnvTemplatePage />;
+      case 'env-tasks': return <EnvTasksPage />;
       case 'engine-validation': return <WorkflowPlaceholder title="安全验证" icon={<ShieldCheck />} />;
       case 'pentest-risk': return <WorkflowPlaceholder title="风险评估" icon={<ShieldAlert />} />;
       case 'pentest-system': return <WorkflowPlaceholder title="系统分析" icon={<FileSearch />} />;
       case 'pentest-threat': return <WorkflowPlaceholder title="威胁分析" icon={<Zap />} />;
       case 'pentest-orch': return <WorkflowPlaceholder title="测试编排" icon={<Workflow />} />;
+      case 'pentest-exec-code': return <ExecutionCodeAuditPage />;
+      case 'pentest-exec-work': return <ExecutionWorkPlatformPage />;
+      case 'pentest-report': return <ReportsPage />;
+      case 'security-assessment': return <SecurityAssessmentPage />;
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
     }
   };

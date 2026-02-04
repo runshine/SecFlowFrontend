@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React from 'reac';
 import { Loader2, Box } from 'lucide-react';
 import { Agent, EnvTemplate, AsyncTask } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -15,7 +15,8 @@ export const EnvAgentPage: React.FC<{ agents: Agent[]; isLoading: boolean }> = (
             <tr key={a.key} className="hover:bg-slate-50 transition-all">
               <td className="px-8 py-6 font-black text-slate-700">{a.hostname}</td>
               <td className="px-8 py-6 font-mono text-xs">{a.ip_address}</td>
-              <td className="px-8 py-6 text-xs text-slate-400">CPU: {a.system_info?.cpu} | Mem: {a.system_info?.memory}</td>
+              {/* Fix: Property names are accessed via the correct nested path in system_info as defined in types.ts */}
+              <td className="px-8 py-6 text-xs text-slate-400">CPU: {a.system_info?.cpu.logical_cores} | Mem: {a.system_info?.formatted.memory.total}</td>
               <td className="px-8 py-6"><StatusBadge status={a.status} /></td>
             </tr>
           ))}
@@ -51,7 +52,8 @@ export const EnvTasksPage: React.FC<{ tasks: AsyncTask[]; isLoading: boolean }> 
           {isLoading ? <tr><td colSpan={4} className="py-24 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" /></td></tr> : tasks.map(t => (
             <tr key={t.id} className="hover:bg-slate-50 transition-all">
               <td className="px-8 py-6 font-mono text-xs">{t.id}</td>
-              <td className="px-8 py-6 font-black text-sm">{t.task_type}</td>
+              {/* Fix: task_type does not exist on AsyncTask; using type */}
+              <td className="px-8 py-6 font-black text-sm">{t.type}</td>
               <td className="px-8 py-6"><div className="flex items-center gap-3"><div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-600" style={{ width: `${t.progress}%` }} /></div><span className="text-[10px] font-black text-slate-400">{t.progress}%</span></div></td>
               <td className="px-8 py-6"><StatusBadge status={t.status} /></td>
             </tr>

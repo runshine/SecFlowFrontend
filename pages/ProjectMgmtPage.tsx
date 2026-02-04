@@ -4,15 +4,17 @@ import {
   Plus, 
   Search, 
   Trash2, 
-  ExternalLink, 
   ChevronRight, 
-  CheckSquare, 
-  Square, 
   AlertTriangle, 
   Loader2,
   Calendar,
-  Hash,
-  Box
+  Box,
+  Settings2,
+  Activity,
+  User,
+  RefreshCw,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
 import { SecurityProject } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -28,64 +30,56 @@ interface ProjectMgmtPageProps {
 export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({ 
   projects, 
   setActiveProjectId, 
-  setCurrentView, 
-  setIsProjectModalOpen 
+  setCurrentView 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showConfirm, setShowConfirm] = useState<{show: boolean, ids: string[]}>({ show: false, ids: [] });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showConfirm, setShowConfirm] = useState<{show: boolean, id: string | null}>({ show: false, id: null });
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newProject, setNewProject] = useState({ name: '', description: '', k8s_namespace: '' });
+  const [error, setError] = useState<string | null>(null);
 
   const filteredProjects = useMemo(() => {
     return projects.filter(p => 
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.k8s_namespace?.toLowerCase().includes(searchTerm.toLowerCase())
+      p.k8s_namespace?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.owner_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [projects, searchTerm]);
 
-  const isAllSelected = filteredProjects.length > 0 && selectedIds.size === filteredProjects.length;
-
-  const toggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredProjects.map(p => p.id)));
-    }
-  };
-
-  const toggleSelect = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
-
-  const handleDeleteClick = (ids: string[], e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setShowConfirm({ show: true, ids });
-  };
-
-  const confirmDelete = async () => {
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsDeleting(true);
+    setError(null);
     try {
-      if (showConfirm.ids.length === 1) {
-        await api.projects.delete(showConfirm.ids[0]);
-      } else {
-        await api.projects.batchDelete(showConfirm.ids);
-      }
-      // 在实际应用中，这里应该调用父组件的刷新函数
-      // 为了演示，我们仅关闭弹窗并重置选中项
-      setSelectedIds(new Set());
-      window.location.reload(); // 临时方案：重新加载以获取最新列表
-    } catch (err) {
-      alert("删除失败: " + (err instanceof Error ? err.message : "未知错误"));
+      await api.projects.create(newProject);
+      setIsCreateModalOpen(false);
+      setNewProject({ name: '', description: '', k8s_namespace: '' });
+      window.location.reload();
+    } catch (err: any) {
+      setError(err.message || "创建项目失败");
     } finally {
       setIsDeleting(false);
-      setShowConfirm({ show: false, ids: [] });
+    }
+  };
+
+  const confirmDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setShowConfirm({ show: true, id });
+  };
+
+  const executeDelete = async () => {
+    if (!showConfirm.id) return;
+    setIsDeleting(true);
+    try {
+      await api.projects.delete(showConfirm.id);
+      setShowConfirm({ show: false, id: null });
+      window.location.reload();
+    } catch (err: any) {
+      alert("删除失败: " + err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -97,174 +91,253 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
   return (
     <div className="p-10 space-y-8 animate-in fade-in duration-500 pb-24">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">项目空间</h2>
-          <p className="text-slate-500 mt-1 font-medium">统一管理安全评估目标、Namespace 及资源生命周期</p>
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+             <div className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20">
+               <Layers size={24} />
+             </div>
+             <h2 className="text-3xl font-black text-slate-800 tracking-tight">项目空间</h2>
+          </div>
+          <p className="text-slate-500 font-medium">统一编排安全评估目标及其 K8S 运行环境上下文</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-4">
           <button 
-            onClick={() => setIsProjectModalOpen(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all active:scale-95"
+            onClick={() => { setIsRefreshing(true); window.location.reload(); }}
+            className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+          >
+            <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+          </button>
+          <button 
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-slate-800 shadow-xl shadow-slate-900/10 transition-all active:scale-95"
           >
             <Plus size={20} /> 初始化项目
           </button>
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-5 rounded-[2rem] border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="relative flex-1 md:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-            <input 
-              type="text" 
-              placeholder="搜索项目名称或命名空间..." 
-              className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl text-sm outline-none focus:ring-2 ring-blue-500/20 transition-all font-medium"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      {/* Stats Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">总项目数</p>
+            <h3 className="text-3xl font-black text-slate-800 mt-1">{projects.length}</h3>
           </div>
-          <button 
-            onClick={toggleSelectAll}
-            className="flex items-center gap-2 px-4 py-3 text-xs font-black text-slate-500 hover:bg-slate-50 rounded-xl transition-all"
-          >
-            {isAllSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
-            <span>全选</span>
-          </button>
+          <Box className="text-blue-100" size={40} />
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">活跃环境</p>
+            <h3 className="text-3xl font-black text-green-600 mt-1">{projects.filter(p => p.status === 'active').length}</h3>
+          </div>
+          <Activity className="text-green-100" size={40} />
+        </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">最近活动</p>
+            <p className="text-xs font-bold text-slate-600 mt-2 truncate max-w-[200px]">Admin 初始化了 3 个新项目</p>
+          </div>
+          <User className="text-slate-100" size={40} />
+        </div>
+      </div>
+
+      {/* Main List Section */}
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+          <input 
+            type="text" 
+            placeholder="搜索项目名称、K8S 命名空间或负责人..." 
+            className="w-full pl-16 pr-8 py-5 bg-white border border-slate-200 rounded-[2rem] text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 animate-in slide-in-from-right-4">
-            <span className="text-xs font-black text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">已选中 {selectedIds.size} 个项目</span>
-            <button 
-              onClick={() => handleDeleteClick(Array.from(selectedIds))}
-              className="flex items-center gap-2 bg-red-50 text-red-600 px-6 py-3 rounded-xl font-black text-xs hover:bg-red-600 hover:text-white transition-all shadow-sm"
-            >
-              <Trash2 size={16} /> 批量删除
-            </button>
-          </div>
-        )}
+        <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 border-b border-slate-100">
+              <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <th className="px-8 py-5">项目标识</th>
+                <th className="px-6 py-5">K8S 命名空间</th>
+                <th className="px-6 py-5">负责人</th>
+                <th className="px-6 py-5">状态</th>
+                <th className="px-6 py-5">创建日期</th>
+                <th className="px-8 py-5 text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredProjects.length > 0 ? (
+                filteredProjects.map((project) => (
+                  <tr 
+                    key={project.id}
+                    onClick={() => handleRowClick(project.id)}
+                    className="group hover:bg-slate-50/80 cursor-pointer transition-all relative border-l-4 border-transparent hover:border-blue-600"
+                  >
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black text-sm group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                          {project.name[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">{project.name}</p>
+                          <p className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">
+                            {project.description || "未提供项目详细描述..."}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                        <Settings2 size={14} className="text-slate-300" />
+                        <span>{project.k8s_namespace || 'default'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                        <User size={14} className="text-slate-300" />
+                        <span>{project.owner_name || 'Admin'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <StatusBadge status={project.status || 'Active'} />
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                        <Calendar size={14} />
+                        <span>{project.created_at?.split('T')[0]}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={(e) => confirmDelete(e, project.id)}
+                          className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                          title="删除项目"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <div className="p-2.5 text-blue-600 bg-blue-50 rounded-xl">
+                          <ArrowRight size={16} />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-24 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                      <Layers size={32} />
+                    </div>
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest">未检索到匹配项目</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Project List */}
-      <div className="space-y-4">
-        {filteredProjects.length > 0 ? (
-          filteredProjects.map((project) => (
-            <div 
-              key={project.id}
-              onClick={() => handleRowClick(project.id)}
-              className={`group relative flex flex-col md:flex-row items-start md:items-center gap-6 p-6 bg-white border rounded-[2rem] transition-all cursor-pointer hover:shadow-xl hover:shadow-slate-200/50 ${selectedIds.has(project.id) ? 'border-blue-200 bg-blue-50/10' : 'border-slate-100'}`}
-            >
-              {/* Checkbox */}
-              <button 
-                onClick={(e) => toggleSelect(project.id, e)}
-                className="absolute top-6 left-6 md:static p-1 text-slate-300 hover:text-blue-600 transition-all"
-              >
-                {selectedIds.has(project.id) ? <CheckSquare size={22} className="text-blue-600" /> : <Square size={22} />}
-              </button>
-
-              {/* Project Icon & Main Info */}
-              <div className="flex-1 flex items-center gap-5 min-w-0">
-                <div className="w-16 h-16 bg-gradient-to-br from-slate-50 to-slate-100 text-blue-600 rounded-2xl flex items-center justify-center font-black text-2xl border border-slate-100 group-hover:scale-105 transition-transform shrink-0">
-                  {project.name[0].toUpperCase()}
+      {/* Create Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-10 pb-0">
+               <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.5rem] flex items-center justify-center mb-6">
+                 <Plus size={32} />
+               </div>
+               <h3 className="text-3xl font-black text-slate-800 tracking-tight">初始化项目空间</h3>
+               <p className="text-slate-500 mt-2 font-medium">系统将自动在 K8S 集群中预置对应的安全沙箱 Namespace</p>
+            </div>
+            
+            <form onSubmit={handleCreateProject} className="p-10 space-y-6">
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-xs font-black flex items-center gap-3">
+                  <AlertTriangle size={16} /> {error}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-black text-slate-800 truncate">{project.name}</h3>
-                    <StatusBadge status={project.status || 'Active'} />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-y-1 gap-x-4 mt-1">
-                    <div className="flex items-center gap-1 text-xs text-slate-400 font-bold">
-                      <Hash size={12} />
-                      <span className="truncate max-w-[120px]">{project.id}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-blue-500 font-black">
-                      <Box size={12} />
-                      <span>{project.k8s_namespace || 'default'}</span>
-                    </div>
-                  </div>
-                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目名称 *</label>
+                <input 
+                  required
+                  placeholder="例如：核心业务 API 渗透测试"
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all"
+                  value={newProject.name}
+                  onChange={e => setNewProject({...newProject, name: e.target.value})}
+                />
               </div>
-
-              {/* Meta Data */}
-              <div className="flex items-center gap-8 px-6 md:border-l border-slate-100">
-                <div className="hidden lg:block">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">创建日期</p>
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600 mt-1">
-                    <Calendar size={14} className="text-slate-300" />
-                    <span>{project.created_at?.split('T')[0] || '2024-01-01'}</span>
-                  </div>
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">角色</p>
-                  <p className="text-xs font-black text-slate-700 mt-1">所有者</p>
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">K8S Namespace (可选)</label>
+                <input 
+                  placeholder="默认系统自动生成"
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all"
+                  value={newProject.k8s_namespace}
+                  onChange={e => setNewProject({...newProject, k8s_namespace: e.target.value})}
+                />
               </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目简述</label>
+                <textarea 
+                  rows={3}
+                  placeholder="描述该项目的评估目标与范围..."
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all resize-none"
+                  value={newProject.description}
+                  onChange={e => setNewProject({...newProject, description: e.target.value})}
+                />
+              </div>
+              
+              <div className="pt-4 flex gap-4">
                 <button 
-                  onClick={(e) => { e.stopPropagation(); handleRowClick(project.id); }}
-                  className="flex items-center gap-2 px-5 py-3 bg-slate-50 text-slate-600 rounded-xl font-black text-xs hover:bg-blue-600 hover:text-white transition-all"
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
                 >
-                  详情 <ChevronRight size={14} />
+                  取消
                 </button>
                 <button 
-                  onClick={(e) => handleDeleteClick([project.id], e)}
-                  className="p-3 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                  type="submit"
+                  disabled={isDeleting}
+                  className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
                 >
-                  <Trash2 size={18} />
+                  {isDeleting ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
+                  立即创建
                 </button>
               </div>
-            </div>
-          ))
-        ) : (
-          <div className="py-24 text-center bg-white border border-slate-100 rounded-[3rem] border-dashed">
-            <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-slate-300">
-              <Box size={40} />
-            </div>
-            <h3 className="text-xl font-black text-slate-800">暂无匹配项目</h3>
-            <p className="text-slate-400 mt-2 font-medium">您可以尝试调整搜索关键词或初始化一个新项目</p>
-            <button 
-              onClick={() => setIsProjectModalOpen(true)}
-              className="mt-8 text-blue-600 font-black flex items-center gap-2 mx-auto hover:underline"
-            >
-              <Plus size={18} /> 立即创建首个项目
-            </button>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation */}
       {showConfirm.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-8 text-center">
-              <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle size={40} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-10 text-center">
+              <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
+                <AlertTriangle size={48} />
               </div>
               <h3 className="text-2xl font-black text-slate-800">确认删除项目？</h3>
-              <p className="text-slate-500 mt-3 font-medium leading-relaxed">
-                您正在尝试删除 <span className="text-red-600 font-black">{showConfirm.ids.length}</span> 个项目。
-                此操作将移除所有关联的资源映射，且<span className="font-black">不可恢复</span>。
+              <p className="text-slate-500 mt-4 font-medium leading-relaxed">
+                此操作将同步销毁关联的 <span className="text-red-600 font-black">K8S Namespace</span> 及其中运行的所有容器资产。该过程<span className="font-black">不可逆</span>。
               </p>
             </div>
-            <div className="p-8 bg-slate-50 flex gap-3">
+            <div className="px-10 pb-10 flex gap-4">
               <button 
-                onClick={() => setShowConfirm({ show: false, ids: [] })}
+                onClick={() => setShowConfirm({ show: false, id: null })}
                 disabled={isDeleting}
-                className="flex-1 py-4 bg-white border border-slate-200 rounded-2xl font-black text-slate-600 hover:bg-slate-100 transition-all"
+                className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
               >
-                取消
+                保留
               </button>
               <button 
-                onClick={confirmDelete}
+                onClick={executeDelete}
                 disabled={isDeleting}
-                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-lg shadow-red-500/20 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-500/20 transition-all flex items-center justify-center gap-2"
               >
                 {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
-                确认删除
+                确认销毁
               </button>
             </div>
           </div>

@@ -13,7 +13,8 @@ interface DashboardPageProps {
 export const DashboardPage: React.FC<DashboardPageProps> = ({ projects, agents, staticPackages, setCurrentView }) => {
   const stats = [
     { id: 'project-mgmt', label: '活动项目', value: projects.length, icon: <Briefcase size={24} />, bg: 'bg-blue-100', text: 'text-blue-600' },
-    { id: 'env-agent', label: '存活 Agent', value: agents.filter(a => a.status === 'running').length, icon: <Monitor size={24} />, bg: 'bg-indigo-100', text: 'text-indigo-600' },
+    // Fix: status "online" is the correct value for online agents per types
+    { id: 'env-agent', label: '存活 Agent', value: agents.filter(a => a.status === 'online').length, icon: <Monitor size={24} />, bg: 'bg-indigo-100', text: 'text-indigo-600' },
     { id: 'static-packages', label: '受信任软件包', value: staticPackages.length, icon: <Package size={24} />, bg: 'bg-purple-100', text: 'text-purple-600' }
   ];
   return (

@@ -1,24 +1,29 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, 
-  FileBox, 
   Terminal, 
   Database, 
   Activity, 
   RefreshCw, 
-  Download, 
-  Trash2, 
-  Search, 
   Loader2, 
   Box, 
   Clock, 
   HardDrive,
   FileText,
   AlertCircle,
-  X
+  X,
+  Layers,
+  ShieldCheck,
+  Cpu,
+  Share2,
+  Lock,
+  Globe,
+  Settings,
+  // Added missing Info icon import
+  Info
 } from 'lucide-react';
-import { ProjectResource, ProjectTask, ProjectPVC, SecurityProject } from '../types/types';
+import { SecurityProject, K8sResourceList, NamespaceStatus } from '../types/types';
 import { api } from '../api/api';
 import { StatusBadge } from '../components/StatusBadge';
 
@@ -29,12 +34,11 @@ interface ProjectDetailPageProps {
 }
 
 export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId, projects, onBack }) => {
-  const [activeTab, setActiveTab] = useState<'resources' | 'tasks' | 'pvcs'>('resources');
+  const [activeTab, setActiveTab] = useState<'overview' | 'pods' | 'network' | 'storage'>('overview');
   const [loading, setLoading] = useState(true);
-  const [resources, setResources] = useState<ProjectResource[]>([]);
-  const [tasks, setTasks] = useState<ProjectTask[]>([]);
-  const [pvcs, setPvcs] = useState<ProjectPVC[]>([]);
-  const [logView, setLogView] = useState<{ show: boolean; taskId: string; logs: string }>({ show: false, taskId: '', logs: '' });
+  const [resources, setResources] = useState<K8sResourceList | null>(null);
+  const [nsStatus, setNsStatus] = useState<NamespaceStatus | null>(null);
+  const [logView, setLogView] = useState<{ show: boolean; podName: string; logs: string }>({ show: false, podName: '', logs: '' });
   const [logLoading, setLogLoading] = useState(false);
 
   const project = projects.find(p => p.id === projectId);
@@ -46,14 +50,12 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [resData, taskData, pvcData] = await Promise.all([
-        api.resources.listProjectResources(projectId),
-        api.resources.listProjectTasks(projectId),
-        api.resources.listProjectPVCs(projectId)
+      const [resData, statusData] = await Promise.all([
+        api.projects.getK8sResources(projectId),
+        api.projects.getNamespaceStatus(projectId)
       ]);
-      setResources(resData || []);
-      setTasks(taskData || []);
-      setPvcs(pvcData.pvcs || []);
+      setResources(resData);
+      setNsStatus(statusData);
     } catch (err) {
       console.error("Failed to load project details", err);
     } finally {
@@ -61,14 +63,14 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
     }
   };
 
-  const openLogViewer = async (taskId: string) => {
-    setLogView({ show: true, taskId, logs: 'Loading logs from POD...' });
+  const openLogViewer = async (podName: string) => {
+    setLogView({ show: true, podName, logs: 'Initializing stream from API...' });
     setLogLoading(true);
     try {
-      const { logs } = await api.resources.getTaskLogs(taskId);
+      const { logs } = await api.projects.getPodLogs(projectId, podName, { tail_lines: 500 });
       setLogView(prev => ({ ...prev, logs }));
-    } catch (err) {
-      setLogView(prev => ({ ...prev, logs: "Failed to fetch logs: " + (err instanceof Error ? err.message : 'Unknown error') }));
+    } catch (err: any) {
+      setLogView(prev => ({ ...prev, logs: "获取日志失败: " + err.message }));
     } finally {
       setLogLoading(false);
     }
@@ -78,7 +80,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
     return (
       <div className="h-full flex flex-col items-center justify-center p-20 animate-in fade-in">
         <Loader2 className="animate-spin text-blue-600 mb-6" size={48} />
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">正在同步 K8S 集群资源状态...</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">正在同步 K8S 集群资源实时状态...</p>
       </div>
     );
   }
@@ -94,35 +96,56 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-3xl font-black text-slate-800 tracking-tight">{project?.name || '未知项目'}</h2>
-              <StatusBadge status={project?.status || 'Active'} />
+              <StatusBadge status={nsStatus?.namespace.status || 'Active'} />
             </div>
             <div className="flex items-center gap-4 mt-2">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                <Box size={14} /> 命名空间: <span className="text-blue-600 font-black">{project?.k8s_namespace || 'default'}</span>
+                <Box size={14} /> 命名空间: <span className="text-blue-600 font-black">{nsStatus?.k8s_namespace}</span>
               </div>
               <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                <Activity size={14} /> ID: <span className="text-slate-600">{projectId}</span>
+                <Clock size={14} /> 创建于: <span className="text-slate-600">{nsStatus?.namespace.created_at.split('T')[0]}</span>
               </div>
             </div>
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={loadAllData} className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all">
+          <button onClick={loadAllData} className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm">
             <RefreshCw size={20} />
           </button>
-          <button className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10">
-            创建资源
+          <button className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20">
+            <Activity size={18} /> 发起渗透任务
           </button>
         </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {[
+          { label: 'POD 实例', value: resources?.pods.length, icon: <Layers size={20} />, color: 'text-blue-600' },
+          { label: '服务节点', value: resources?.services.length, icon: <Share2 size={20} />, color: 'text-indigo-600' },
+          { label: '存储卷', value: resources?.pvcs.length, icon: <Database size={20} />, color: 'text-amber-600' },
+          { label: '外部入口', value: resources?.ingresses.length, icon: <Globe size={20} />, color: 'text-purple-600' },
+        ].map((stat, i) => (
+          <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex items-center gap-5">
+             <div className={`w-12 h-12 rounded-2xl bg-slate-50 ${stat.color} flex items-center justify-center`}>
+               {stat.icon}
+             </div>
+             <div>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
+               <h4 className="text-2xl font-black text-slate-800">{stat.value || 0}</h4>
+             </div>
+          </div>
+        ))}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[1.5rem] w-fit">
         {[
-          { id: 'resources', label: '资源列表', icon: <FileBox size={16} /> },
-          { id: 'tasks', label: '任务日志', icon: <Terminal size={16} /> },
-          { id: 'pvcs', label: '存储资源', icon: <Database size={16} /> }
+          { id: 'overview', label: '环境概览', icon: <Info size={16} /> },
+          { id: 'pods', label: '工作负载 (Pods)', icon: <Layers size={16} /> },
+          { id: 'network', label: '网络服务', icon: <Share2 size={16} /> },
+          { id: 'storage', label: '持久化存储', icon: <Database size={16} /> }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -134,135 +157,203 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
         ))}
       </div>
 
-      {/* Content */}
-      <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden min-h-[500px]">
-        {activeTab === 'resources' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-             <table className="w-full text-left">
-               <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                 <tr>
-                   <th className="px-8 py-5">资源名称</th>
-                   <th className="px-6 py-5">类型</th>
-                   <th className="px-6 py-5">物理大小</th>
-                   <th className="px-6 py-5">PVC 映射</th>
-                   <th className="px-6 py-5">创建时间</th>
-                   <th className="px-8 py-5 text-right">操作</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-50">
-                 {resources.map(res => (
-                   <tr key={res.id} className="hover:bg-slate-50/50 transition-all group">
-                     <td className="px-8 py-5">
+      {/* Content Area */}
+      <div className="bg-white border border-slate-200 rounded-[3rem] shadow-sm overflow-hidden min-h-[500px]">
+        
+        {activeTab === 'overview' && (
+          <div className="p-10 space-y-10 animate-in fade-in slide-in-from-bottom-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+               <div className="space-y-6">
+                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                   <ShieldCheck size={20} className="text-blue-600" /> 安全审计摘要
+                 </h3>
+                 <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm font-bold text-slate-500">隔离状态</span>
+                     <span className="text-xs font-black text-green-600 bg-green-50 px-3 py-1 rounded-full uppercase">K8S Namespaced</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm font-bold text-slate-500">部署策略</span>
+                     <span className="text-xs font-black text-slate-700">Rolling Update</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm font-bold text-slate-500">关联 ConfigMaps</span>
+                     <span className="text-xs font-black text-slate-800">{resources?.configmaps.length || 0}</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm font-bold text-slate-500">关联 Secrets</span>
+                     <span className="text-xs font-black text-amber-600">{resources?.secrets.length || 0} 密文</span>
+                   </div>
+                 </div>
+               </div>
+
+               <div className="space-y-6">
+                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                   <Activity size={20} className="text-blue-600" /> 部署拓扑预览
+                 </h3>
+                 <div className="grid grid-cols-1 gap-4">
+                   {resources?.deployments.map(dep => (
+                     <div key={dep.name} className="p-6 bg-white border border-slate-100 rounded-2xl flex items-center justify-between hover:shadow-lg transition-all">
                        <div className="flex items-center gap-4">
-                         <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center shrink-0">
-                           <FileText size={18} />
+                         <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                           <Cpu size={18} />
                          </div>
-                         <span className="text-sm font-black text-slate-700 truncate max-w-[240px]">{res.file_name}</span>
+                         <div>
+                           <p className="text-sm font-black text-slate-800">{dep.name}</p>
+                           <p className="text-[10px] text-slate-400 font-bold uppercase">Deployment</p>
+                         </div>
                        </div>
-                     </td>
-                     <td className="px-6 py-5"><StatusBadge status={res.resource_type} /></td>
-                     <td className="px-6 py-5 font-mono text-xs text-slate-500">{(res.file_size / 1024 / 1024).toFixed(2)} MB</td>
-                     <td className="px-6 py-5 text-xs font-bold text-blue-500">{res.pvc_name}</td>
-                     <td className="px-6 py-5 text-xs text-slate-400 font-medium">{res.created_at.split('T')[0]}</td>
-                     <td className="px-8 py-5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                       <div className="flex justify-end gap-1">
-                         <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all"><Download size={16} /></button>
-                         <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-all"><Trash2 size={16} /></button>
+                       <div className="flex items-center gap-4">
+                         <div className="text-right">
+                           <p className="text-xs font-black text-slate-700">{dep.ready_replica} / {dep.replica}</p>
+                           <p className="text-[9px] text-slate-400 font-bold uppercase">Replicas Ready</p>
+                         </div>
+                         <div className={`w-2 h-2 rounded-full ${dep.ready_replica === dep.replica ? 'bg-green-500' : 'bg-amber-500'} animate-pulse`} />
                        </div>
-                     </td>
-                   </tr>
-                 ))}
-                 {resources.length === 0 && (
-                   <tr><td colSpan={6} className="py-24 text-center text-slate-400 font-black uppercase text-xs tracking-widest">No resources found in this project</td></tr>
-                 )}
-               </tbody>
-             </table>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             </div>
           </div>
         )}
 
-        {activeTab === 'tasks' && (
+        {activeTab === 'pods' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
              <table className="w-full text-left">
                <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
                  <tr>
-                   <th className="px-8 py-5">任务 ID / 类型</th>
-                   <th className="px-6 py-5 w-64">进度</th>
-                   <th className="px-6 py-5">耗时</th>
-                   <th className="px-6 py-5">状态</th>
-                   <th className="px-8 py-5 text-right">操作</th>
+                   <th className="px-8 py-6">Pod 实例名称</th>
+                   <th className="px-6 py-6">节点 (Node)</th>
+                   <th className="px-6 py-6">内网 IP</th>
+                   <th className="px-6 py-6">运行状态</th>
+                   <th className="px-8 py-6 text-right">操作</th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-slate-50">
-                 {tasks.map(task => (
-                   <tr key={task.task_id} className="hover:bg-slate-50/50 transition-all">
-                     <td className="px-8 py-5">
-                       <div>
-                         <p className="text-xs font-mono text-slate-400">{task.task_id}</p>
-                         <p className="text-sm font-black text-slate-800 uppercase mt-1 tracking-tight">{task.task_type}</p>
-                       </div>
-                     </td>
-                     <td className="px-6 py-5">
-                       <div className="flex items-center gap-3">
-                         <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                           <div className={`h-full transition-all duration-500 ${task.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${task.progress}%` }} />
+                 {resources?.pods.map(pod => (
+                   <tr key={pod.name} className="hover:bg-slate-50/50 transition-all">
+                     <td className="px-8 py-6">
+                       <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center">
+                           <Layers size={18} />
                          </div>
-                         <span className="text-[10px] font-black text-slate-400 w-8">{task.progress}%</span>
+                         <span className="text-sm font-black text-slate-700">{pod.name}</span>
                        </div>
                      </td>
-                     <td className="px-6 py-5 text-xs text-slate-400 font-medium">
-                        <div className="flex items-center gap-1.5"><Clock size={12} /> {task.created_at.split('T')[1].substring(0, 5)}</div>
-                     </td>
-                     <td className="px-6 py-5"><StatusBadge status={task.status} /></td>
-                     <td className="px-8 py-5 text-right">
+                     <td className="px-6 py-6 text-xs font-bold text-slate-500">{pod.node}</td>
+                     <td className="px-6 py-6 font-mono text-xs text-blue-600 font-bold">{pod.ip}</td>
+                     <td className="px-6 py-6"><StatusBadge status={pod.status} /></td>
+                     <td className="px-8 py-6 text-right">
                        <button 
-                         onClick={() => openLogViewer(task.task_id)}
-                         className="flex items-center gap-2 ml-auto px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase hover:bg-slate-800 transition-all"
+                         onClick={() => openLogViewer(pod.name)}
+                         className="flex items-center gap-2 ml-auto px-5 py-2.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-900/10"
                        >
-                         <Terminal size={14} /> 查看日志
+                         <Terminal size={14} /> 交互式日志
                        </button>
                      </td>
                    </tr>
                  ))}
-                 {tasks.length === 0 && (
-                   <tr><td colSpan={5} className="py-24 text-center text-slate-400 font-black uppercase text-xs tracking-widest">No background tasks found</td></tr>
+                 {(!resources?.pods || resources.pods.length === 0) && (
+                   <tr><td colSpan={5} className="py-32 text-center text-slate-400 font-black uppercase text-xs tracking-widest">No active pods found in this context</td></tr>
                  )}
                </tbody>
              </table>
           </div>
         )}
 
-        {activeTab === 'pvcs' && (
+        {activeTab === 'network' && (
+          <div className="p-10 space-y-10 animate-in fade-in slide-in-from-bottom-4">
+             <div className="space-y-6">
+               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                 <Share2 size={14} /> 内部服务暴露 (Services)
+               </h4>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 {resources?.services.map(svc => (
+                   <div key={svc.name} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                     <div className="flex justify-between items-center">
+                       <h5 className="text-sm font-black text-slate-800">{svc.name}</h5>
+                       <span className="text-[10px] font-black px-2 py-1 bg-white border border-slate-100 rounded-lg text-slate-500">{svc.type}</span>
+                     </div>
+                     <div className="space-y-2">
+                       <div className="flex justify-between text-xs">
+                         <span className="text-slate-400">Cluster IP</span>
+                         <span className="font-mono font-bold text-blue-600">{svc.cluster_ip}</span>
+                       </div>
+                       <div className="flex justify-between text-xs">
+                         <span className="text-slate-400">暴露端口</span>
+                         <span className="font-bold text-slate-700">{svc.ports.join(', ')}</span>
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+
+             <div className="space-y-6 pt-6 border-t border-slate-50">
+               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                 <Globe size={14} /> 外部网关入口 (Ingress)
+               </h4>
+               <div className="grid grid-cols-1 gap-4">
+                 {resources?.ingresses.map(ing => (
+                   <div key={ing.name} className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                     <div className="flex items-center gap-4">
+                       <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+                         <Globe size={18} />
+                       </div>
+                       <div>
+                         <p className="text-sm font-black text-slate-800">{ing.name}</p>
+                         <p className="text-xs font-bold text-blue-500">{ing.host}</p>
+                       </div>
+                     </div>
+                     <div className="flex items-center gap-2">
+                       {ing.tls?.length > 0 ? (
+                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-600 rounded-xl text-[10px] font-black uppercase">
+                           <Lock size={12} /> TLS Secured
+                         </div>
+                       ) : (
+                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase">
+                           <AlertCircle size={12} /> Plain HTTP
+                         </div>
+                       )}
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'storage' && (
           <div className="p-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {pvcs.map(pvc => (
-              <div key={pvc.pvc_name} className="p-8 bg-slate-50 rounded-[2rem] border border-slate-100 hover:border-blue-200 transition-all group">
+            {resources?.pvcs.map(pvc => (
+              <div key={pvc.name} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 hover:border-blue-200 transition-all group">
                 <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 bg-white border border-slate-100 text-blue-600 rounded-2xl flex items-center justify-center shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
+                  <div className="w-14 h-14 bg-white border border-slate-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm group-hover:bg-amber-600 group-hover:text-white transition-all">
                     <Database size={24} />
                   </div>
                   <StatusBadge status={pvc.status} />
                 </div>
-                <h4 className="text-lg font-black text-slate-800 break-all">{pvc.pvc_name}</h4>
-                <div className="mt-4 space-y-3">
-                  <div className="flex justify-between items-center text-xs font-bold">
-                    <span className="text-slate-400 uppercase tracking-widest text-[9px]">资源类型</span>
-                    <span className="text-slate-600">{pvc.resource_type}</span>
-                  </div>
+                <h4 className="text-lg font-black text-slate-800 break-all">{pvc.name}</h4>
+                <div className="mt-6 space-y-4">
                   <div className="flex justify-between items-center text-xs font-bold">
                     <span className="text-slate-400 uppercase tracking-widest text-[9px]">存储容量</span>
-                    <span className="text-slate-800 font-black">{pvc.capacity}</span>
+                    <span className="text-slate-800 font-black">{pvc.capacity.storage}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs font-bold">
-                    <span className="text-slate-400 uppercase tracking-widest text-[9px]">关联资源</span>
-                    <span className="text-blue-600 font-black">{pvc.resources_count} Files</span>
+                    <span className="text-slate-400 uppercase tracking-widest text-[9px]">存储类 (SC)</span>
+                    <span className="text-blue-600 font-black">{pvc.storage_class}</span>
                   </div>
-                </div>
-                <div className="mt-6 p-4 bg-white/60 rounded-xl border border-white text-[10px] font-mono text-slate-400 break-all">
-                  Mount: {pvc.mount_path || '/mnt/' + pvc.pvc_name}
                 </div>
               </div>
             ))}
-            {pvcs.length === 0 && (
-              <div className="col-span-3 py-24 text-center text-slate-400 font-black uppercase text-xs tracking-widest">No PVC instances mapped to this project</div>
+            {(!resources?.pvcs || resources.pvcs.length === 0) && (
+              <div className="col-span-3 py-32 text-center">
+                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200">
+                    <HardDrive size={32} />
+                 </div>
+                 <p className="text-slate-400 font-black uppercase text-xs tracking-widest">No persistent volumes mapped</p>
+              </div>
             )}
           </div>
         )}
@@ -270,35 +361,46 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
 
       {/* Log Terminal Overlay */}
       {logView.show && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-slate-900 w-full max-w-4xl h-[70vh] rounded-[2.5rem] shadow-2xl border border-slate-800 flex flex-col overflow-hidden animate-in zoom-in-95">
-             <div className="px-8 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-800/20">
-               <div className="flex items-center gap-3">
-                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white"><Terminal size={16} /></div>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-xl animate-in fade-in">
+          <div className="bg-[#0f172a] w-full max-w-5xl h-[80vh] rounded-[3rem] shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95">
+             <div className="px-10 py-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+               <div className="flex items-center gap-4">
+                 <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20"><Terminal size={20} /></div>
                  <div>
-                   <h3 className="text-sm font-black text-white">Pod Logs Viewer</h3>
-                   <p className="text-[10px] font-mono text-slate-500">{logView.taskId}</p>
+                   <h3 className="text-sm font-black text-white">实时容器日志审计 (Pod: {logView.podName})</h3>
+                   <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mt-0.5">Stream: K8S Namespaced Socket</p>
                  </div>
                </div>
-               <button onClick={() => setLogView({ show: false, taskId: '', logs: '' })} className="p-2 text-slate-500 hover:text-white transition-all">
+               <button onClick={() => setLogView({ show: false, podName: '', logs: '' })} className="p-3 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl transition-all">
                  <X size={20} />
                </button>
              </div>
-             <div className="flex-1 overflow-y-auto p-8 font-mono text-xs text-blue-400/90 space-y-1 bg-black/20 custom-scrollbar scroll-smooth">
+             <div className="flex-1 overflow-y-auto p-10 font-mono text-xs text-blue-300/80 space-y-1 bg-black/40 custom-scrollbar scroll-smooth">
                {logView.logs.split('\n').map((line, i) => (
-                 <div key={i} className="flex gap-4">
-                   <span className="text-slate-700 w-6 text-right select-none">{i+1}</span>
-                   <span className="whitespace-pre-wrap">{line}</span>
+                 <div key={i} className="flex gap-6 group">
+                   <span className="text-slate-700 w-8 text-right select-none font-bold group-hover:text-slate-500">{i+1}</span>
+                   <span className="whitespace-pre-wrap leading-relaxed">{line || ' '}</span>
                  </div>
                ))}
-               {logLoading && <div className="flex items-center gap-3 text-blue-600 font-black mt-4"><Loader2 className="animate-spin" size={14} /> FETCHING STREAMING LOGS...</div>}
+               {logLoading && (
+                 <div className="flex items-center gap-3 text-blue-500 font-black mt-8 bg-blue-500/10 p-4 rounded-2xl w-fit">
+                   <Loader2 className="animate-spin" size={16} /> 正在建立加密隧道并同步缓冲区...
+                 </div>
+               )}
              </div>
-             <div className="px-8 py-4 bg-slate-800/40 border-t border-slate-800 flex justify-between items-center">
-               <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> Connection Live
+             <div className="px-10 py-5 bg-white/5 border-t border-white/5 flex justify-between items-center">
+               <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-2 text-[10px] font-black text-green-500 uppercase tracking-widest">
+                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" /> Tunnel Established
+                 </div>
+                 <div className="h-4 w-[1px] bg-white/10" />
+                 <p className="text-[10px] font-black text-slate-500 uppercase">Lines: {logView.logs.split('\n').length}</p>
                </div>
-               <button onClick={() => openLogViewer(logView.taskId)} className="text-[10px] font-black text-blue-500 hover:underline flex items-center gap-1.5">
-                 <RefreshCw size={12} /> 手动刷新
+               <button 
+                onClick={() => openLogViewer(logView.podName)} 
+                className="px-6 py-2.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-blue-500 transition-all flex items-center gap-2"
+               >
+                 <RefreshCw size={12} /> 清理并重新捕获
                </button>
              </div>
           </div>

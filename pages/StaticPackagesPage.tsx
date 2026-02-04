@@ -46,8 +46,8 @@ export const StaticPackagesPage: React.FC<StaticPackagesPageProps> = ({
     setIsValidating(true);
     try {
       const ids = Array.from(selectedIds);
-      // Run checks in sequence or parallel. Backend documentation shows individual check per ID.
-      await Promise.all(ids.map(id => api.staticPackages.check(id)));
+      // Fix: Explicitly cast id to string to avoid "unknown" type error in map
+      await Promise.all(ids.map((id: string) => api.staticPackages.check(id)));
       alert(`已完成 ${ids.length} 个软件包的完整性校验`);
       fetchStaticPackages();
     } catch (err) {

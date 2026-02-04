@@ -17,7 +17,8 @@ import {
   ClipboardCheck,
   FileText,
   Play,
-  Sparkles
+  Sparkles,
+  ListTodo
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -90,7 +91,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'test-input-release', label: '发布包' }, 
               { id: 'test-input-code', label: '源代码' }, 
               { id: 'test-input-doc', label: '需求文档' },
-              { id: 'test-input-other', label: '其他' }
+              { id: 'test-input-other', label: '其他资源' },
+              { id: 'test-input-tasks', label: '任务管理' }
             ]} />
             <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[
               { id: 'env-template', label: '模板管理' }, 

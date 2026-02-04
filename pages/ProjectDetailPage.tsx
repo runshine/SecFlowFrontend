@@ -20,8 +20,10 @@ import {
   Lock,
   Globe,
   Settings,
-  // Added missing Info icon import
-  Info
+  Info,
+  Hash,
+  User,
+  History
 } from 'lucide-react';
 import { SecurityProject, K8sResourceList, NamespaceStatus } from '../types/types';
 import { api } from '../api/api';
@@ -113,7 +115,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
           <button onClick={loadAllData} className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm">
             <RefreshCw size={20} />
           </button>
-          <button className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20">
+          <button className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20">
             <Activity size={18} /> 发起渗透任务
           </button>
         </div>
@@ -142,7 +144,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
       {/* Tabs */}
       <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[1.5rem] w-fit">
         {[
-          { id: 'overview', label: '环境概览', icon: <Info size={16} /> },
+          { id: 'overview', label: '项目详情与概览', icon: <Info size={16} /> },
           { id: 'pods', label: '工作负载 (Pods)', icon: <Layers size={16} /> },
           { id: 'network', label: '网络服务', icon: <Share2 size={16} /> },
           { id: 'storage', label: '持久化存储', icon: <Database size={16} /> }
@@ -162,56 +164,109 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
         
         {activeTab === 'overview' && (
           <div className="p-10 space-y-10 animate-in fade-in slide-in-from-bottom-4">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-               <div className="space-y-6">
-                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                   <ShieldCheck size={20} className="text-blue-600" /> 安全审计摘要
-                 </h3>
-                 <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
-                   <div className="flex justify-between items-center">
-                     <span className="text-sm font-bold text-slate-500">隔离状态</span>
-                     <span className="text-xs font-black text-green-600 bg-green-50 px-3 py-1 rounded-full uppercase">K8S Namespaced</span>
-                   </div>
-                   <div className="flex justify-between items-center">
-                     <span className="text-sm font-bold text-slate-500">部署策略</span>
-                     <span className="text-xs font-black text-slate-700">Rolling Update</span>
-                   </div>
-                   <div className="flex justify-between items-center">
-                     <span className="text-sm font-bold text-slate-500">关联 ConfigMaps</span>
-                     <span className="text-xs font-black text-slate-800">{resources?.configmaps.length || 0}</span>
-                   </div>
-                   <div className="flex justify-between items-center">
-                     <span className="text-sm font-bold text-slate-500">关联 Secrets</span>
-                     <span className="text-xs font-black text-amber-600">{resources?.secrets.length || 0} 密文</span>
-                   </div>
-                 </div>
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+               {/* Project Info Card */}
+               <div className="lg:col-span-2 space-y-6">
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                    <Box size={20} className="text-blue-600" /> 项目元数据信息
+                  </h3>
+                  <div className="bg-slate-50 rounded-[2.5rem] border border-slate-100 p-8 space-y-8">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-1.5">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                              <Hash size={10} /> 项目唯一标识 ID
+                           </p>
+                           <p className="text-sm font-mono font-black text-blue-600 bg-white px-3 py-2 rounded-xl border border-slate-200 w-fit">
+                              {project?.id}
+                           </p>
+                        </div>
+                        <div className="space-y-1.5">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                              <User size={10} /> 项目负责人
+                           </p>
+                           <p className="text-sm font-black text-slate-700">
+                              {project?.owner_name || 'Administrator'} 
+                              <span className="text-[10px] text-slate-400 ml-2 font-mono">({project?.owner_id || '-'})</span>
+                           </p>
+                        </div>
+                        <div className="space-y-1.5">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                              <Box size={10} /> 集群 Namespace
+                           </p>
+                           <p className="text-sm font-black text-slate-700">{project?.k8s_namespace || 'default'}</p>
+                        </div>
+                        <div className="space-y-1.5">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                              <History size={10} /> 最后更新时间
+                           </p>
+                           <p className="text-sm font-black text-slate-700">{project?.updated_at?.replace('T', ' ') || '-'}</p>
+                        </div>
+                     </div>
+                     
+                     <div className="pt-6 border-t border-slate-200">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-3">
+                           <FileText size={10} /> 项目详细描述
+                        </p>
+                        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-inner">
+                           <p className="text-sm text-slate-600 leading-relaxed font-medium">
+                              {project?.description || "该项目暂未填写详细描述信息。项目空间用于隔离不同安全评估目标的 K8S 运行环境与存储卷。"}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
                </div>
 
-               <div className="space-y-6">
-                 <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                   <Activity size={20} className="text-blue-600" /> 部署拓扑预览
-                 </h3>
-                 <div className="grid grid-cols-1 gap-4">
-                   {resources?.deployments.map(dep => (
-                     <div key={dep.name} className="p-6 bg-white border border-slate-100 rounded-2xl flex items-center justify-between hover:shadow-lg transition-all">
-                       <div className="flex items-center gap-4">
-                         <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                           <Cpu size={18} />
-                         </div>
-                         <div>
-                           <p className="text-sm font-black text-slate-800">{dep.name}</p>
-                           <p className="text-[10px] text-slate-400 font-bold uppercase">Deployment</p>
-                         </div>
-                       </div>
-                       <div className="flex items-center gap-4">
-                         <div className="text-right">
-                           <p className="text-xs font-black text-slate-700">{dep.ready_replica} / {dep.replica}</p>
-                           <p className="text-[9px] text-slate-400 font-bold uppercase">Replicas Ready</p>
-                         </div>
-                         <div className={`w-2 h-2 rounded-full ${dep.ready_replica === dep.replica ? 'bg-green-500' : 'bg-amber-500'} animate-pulse`} />
-                       </div>
+               <div className="space-y-8">
+                 <div className="space-y-6">
+                   <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                     <ShieldCheck size={20} className="text-blue-600" /> 安全审计摘要
+                   </h3>
+                   <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
+                     <div className="flex justify-between items-center">
+                       <span className="text-sm font-bold text-slate-500">隔离状态</span>
+                       <span className="text-xs font-black text-green-600 bg-green-50 px-3 py-1 rounded-full uppercase">K8S Namespaced</span>
                      </div>
-                   ))}
+                     <div className="flex justify-between items-center">
+                       <span className="text-sm font-bold text-slate-500">部署策略</span>
+                       <span className="text-xs font-black text-slate-700">Rolling Update</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-sm font-bold text-slate-500">关联 ConfigMaps</span>
+                       <span className="text-xs font-black text-slate-800">{resources?.configmaps.length || 0}</span>
+                     </div>
+                     <div className="flex justify-between items-center">
+                       <span className="text-sm font-bold text-slate-500">关联 Secrets</span>
+                       <span className="text-xs font-black text-amber-600">{resources?.secrets.length || 0} 密文</span>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="space-y-6">
+                   <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                     <Activity size={20} className="text-blue-600" /> 活跃部署拓扑
+                   </h3>
+                   <div className="grid grid-cols-1 gap-4">
+                     {resources?.deployments.map(dep => (
+                       <div key={dep.name} className="p-6 bg-white border border-slate-100 rounded-2xl flex items-center justify-between hover:shadow-lg transition-all">
+                         <div className="flex items-center gap-4">
+                           <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                             <Cpu size={18} />
+                           </div>
+                           <div>
+                             <p className="text-sm font-black text-slate-800">{dep.name}</p>
+                             <p className="text-[10px] text-slate-400 font-bold uppercase">Deployment</p>
+                           </div>
+                         </div>
+                         <div className="flex items-center gap-4">
+                           <div className="text-right">
+                             <p className="text-xs font-black text-slate-700">{dep.ready_replica} / {dep.replica}</p>
+                             <p className="text-[9px] text-slate-400 font-bold uppercase">Replicas Ready</p>
+                           </div>
+                           <div className={`w-2 h-2 rounded-full ${dep.ready_replica === dep.replica ? 'bg-green-500' : 'bg-amber-500'} animate-pulse`} />
+                         </div>
+                       </div>
+                     ))}
+                   </div>
                  </div>
                </div>
              </div>

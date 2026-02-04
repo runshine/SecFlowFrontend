@@ -8,21 +8,28 @@ export const resourcesApi = {
     const url = new URL(`${API_BASE}/api/resource/resources`);
     url.searchParams.append('project_id', projectId);
     if (type) url.searchParams.append('resource_type', type);
-    return handleResponse(await fetch(url.toString(), { headers: getHeaders() }));
+    const res = await fetch(url.toString(), { headers: getHeaders() });
+    const data = await handleResponse(res);
+    return data.resources || [];
   },
 
-  create: async (data: { 
-    project_id: string; 
-    resource_type: string; 
-    url: string; 
-    target_path: string; 
-    extract?: boolean;
-    extract_path?: string;
-  }): Promise<{ task_id: string; resource_id: number }> => {
-    const response = await fetch(`${API_BASE}/api/resource/resources`, {
+  upload: async (formData: FormData): Promise<{ task_id: string; resource_uuid: string; message: string }> => {
+    const headers = getHeaders();
+    const uploadHeaders: any = { ...headers };
+    delete uploadHeaders['Content-Type']; // Let the browser set the boundary
+
+    const response = await fetch(`${API_BASE}/api/resource/resources/upload`, {
       method: 'POST',
+      headers: uploadHeaders,
+      body: formData,
+    });
+    return handleResponse(response);
+  },
+
+  getById: async (id: number): Promise<ProjectResource> => {
+    const response = await fetch(`${API_BASE}/api/resource/resources/${id}`, {
+      method: 'GET',
       headers: getHeaders(),
-      body: JSON.stringify(data),
     });
     return handleResponse(response);
   },
@@ -35,20 +42,8 @@ export const resourcesApi = {
     return handleResponse(response);
   },
 
-  extract: async (id: number, extractPath: string) => {
-    const response = await fetch(`${API_BASE}/api/resource/resources/${id}/extract?extract_path=${encodeURIComponent(extractPath)}`, {
-      method: 'POST',
-      headers: getHeaders(),
-    });
-    return handleResponse(response);
-  },
-
-  cleanup: async (id: number) => {
-    const response = await fetch(`${API_BASE}/api/resource/resources/${id}/cleanup`, {
-      method: 'POST',
-      headers: getHeaders(),
-    });
-    return handleResponse(response);
+  downloadFile: (uuid: string) => {
+    return `${API_BASE}/api/resource/resources/${uuid}/file?token=${localStorage.getItem('secflow_token')}`;
   },
 
   // Tasks
@@ -57,11 +52,26 @@ export const resourcesApi = {
     url.searchParams.append('project_id', projectId);
     if (params.task_type) url.searchParams.append('task_type', params.task_type);
     if (params.status) url.searchParams.append('status', params.status);
-    return handleResponse(await fetch(url.toString(), { headers: getHeaders() }));
+    const res = await fetch(url.toString(), { headers: getHeaders() });
+    const data = await handleResponse(res);
+    return data.tasks || [];
   },
 
-  getTaskLogs: async (taskId: string): Promise<{ logs: string }> => {
+  getTaskDetail: async (taskId: string): Promise<ProjectTask> => {
+    const response = await fetch(`${API_BASE}/api/resource/tasks/${taskId}`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
+  getTaskLogs: async (taskId: string): Promise<{ task_id: string; logs: string[] }> => {
     const response = await fetch(`${API_BASE}/api/resource/tasks/${taskId}/logs`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
+  deleteTask: async (taskId: string) => {
+    const response = await fetch(`${API_BASE}/api/resource/tasks/${taskId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
     return handleResponse(response);
   },
 

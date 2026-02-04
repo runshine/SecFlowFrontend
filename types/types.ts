@@ -29,25 +29,34 @@ export interface SecurityProject {
 
 export interface ProjectResource {
   id: number;
-  project_id: string;
+  resource_uuid: string;
+  name: string;
   resource_type: 'document' | 'software' | 'code' | 'other';
-  file_name: string;
-  file_size: number;
-  url?: string;
-  target_path: string;
+  original_file_name: string;
+  original_file_size: number;
+  original_file_format?: string;
+  upload_status: 'pending' | 'running' | 'completed' | 'failed';
+  upload_message?: string;
+  pvc_name?: string;
+  pvc_namespace?: string;
+  pvc_size?: number;
   extract_path?: string;
+  project_ids: string[];
   created_at: string;
+  updated_at: string;
 }
 
 export interface ProjectTask {
-  id: string;
+  task_id: string;
+  resource_id: number;
   project_id: string;
-  task_type: 'download' | 'extract';
-  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  task_type: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   progress: number;
   message?: string;
+  error_message?: string;
   created_at: string;
-  resource_id?: number;
+  updated_at: string;
 }
 
 export interface ProjectPVC {
@@ -56,9 +65,9 @@ export interface ProjectPVC {
   namespace: string;
   capacity: string;
   status: string;
-  mount_path: string;
-  resources_count: number;
   storage_class: string;
+  resource_id?: number;
+  resource_name?: string;
 }
 
 export interface Agent {
@@ -67,7 +76,6 @@ export interface Agent {
   status: 'online' | 'offline' | 'error' | 'timeout' | 'unknown';
   ip_address: string;
   system_info?: any;
-  // Additional properties used in the application
   workspace_id?: string;
   last_seen?: string;
 }
@@ -105,7 +113,6 @@ export interface StaticPackage {
   total_size: number;
   download_count: number;
   check_status: string;
-  // Additional properties used in the application
   file_count?: number;
   original_package_path?: string;
   upload_time?: string;
@@ -120,7 +127,6 @@ export interface PackageStats {
   by_architecture: Array<{ architecture: string; package_count: number }>;
 }
 
-// Added missing types to resolve compilation errors across the application
 export interface FileItem {
   id: number;
   name: string;
@@ -208,7 +214,7 @@ export interface Workspace {
 
 export type ViewType = 
   | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
-  | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-other'
+  | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other'
   | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'

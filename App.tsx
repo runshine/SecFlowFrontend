@@ -18,6 +18,7 @@ import { SecurityAssessmentPage } from './pages/SecurityAssessmentPage';
 import { ReleasePackagePage } from './pages/inputs/ReleasePackagePage';
 import { CodeAuditPage } from './pages/inputs/CodeAuditPage';
 import { DocAnalysisPage } from './pages/inputs/DocAnalysisPage';
+import { TaskMgmtPage } from './pages/inputs/TaskMgmtPage';
 import { OtherInputPage } from './pages/inputs/OtherInputPage';
 
 // Env Pages
@@ -160,7 +161,14 @@ const App: React.FC = () => {
           setCurrentView={setCurrentView} 
         />
       );
-      case 'project-mgmt': return <ProjectMgmtPage projects={projects} setActiveProjectId={(id) => { setActiveProjectId(id); }} setCurrentView={setCurrentView} setIsProjectModalOpen={() => {}} />;
+      case 'project-mgmt': return (
+        <ProjectMgmtPage 
+          projects={projects} 
+          setActiveProjectId={(id) => { setActiveProjectId(id); }} 
+          setCurrentView={setCurrentView} 
+          refreshProjects={fetchProjects}
+        />
+      );
       case 'project-detail': return <ProjectDetailPage projectId={activeProjectId} projects={projects} onBack={() => setCurrentView('project-mgmt')} />;
       case 'static-packages': return <StaticPackagesPage staticPackages={staticPackages} packageStats={packageStats} fetchStaticPackages={() => api.staticPackages.list().then(d => setStaticPackages(d.packages))} setActivePackageId={setActivePackageId} setCurrentView={setCurrentView} selectedIds={selectedStaticPkgIds} setSelectedIds={setSelectedStaticPkgIds} />;
       case 'static-package-detail': return <StaticPackageDetailPage packageId={activePackageId} onBack={() => setCurrentView('static-packages')} />;
@@ -170,6 +178,7 @@ const App: React.FC = () => {
       case 'test-input-release': return <ReleasePackagePage projectId={selectedProjectId} />;
       case 'test-input-code': return <CodeAuditPage projectId={selectedProjectId} />;
       case 'test-input-doc': return <DocAnalysisPage projectId={selectedProjectId} />;
+      case 'test-input-tasks': return <TaskMgmtPage projectId={selectedProjectId} />;
       case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
       
       case 'env-agent': return <EnvAgentPage />;

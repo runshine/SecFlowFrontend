@@ -14,7 +14,13 @@ import {
   User,
   RefreshCw,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Hash,
+  FileText,
+  CheckSquare,
+  Square,
+  X,
+  CheckCircle2
 } from 'lucide-react';
 import { SecurityProject } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -24,60 +30,107 @@ interface ProjectMgmtPageProps {
   projects: SecurityProject[];
   setActiveProjectId: (id: string) => void;
   setCurrentView: (view: string) => void;
-  setIsProjectModalOpen: (open: boolean) => void;
+  refreshProjects: (showRefresh?: boolean) => Promise<void>;
 }
 
 export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({ 
   projects, 
   setActiveProjectId, 
-  setCurrentView 
+  setCurrentView,
+  refreshProjects
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showConfirm, setShowConfirm] = useState<{show: boolean, id: string | null}>({ show: false, id: null });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState<{show: boolean, ids: string[]}>({ show: false, ids: [] });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProject, setNewProject] = useState({ name: '', description: '', k8s_namespace: '' });
   const [error, setError] = useState<string | null>(null);
+  
+  // Selection State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filteredProjects = useMemo(() => {
-    return projects.filter(p => 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.k8s_namespace?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.owner_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return (projects || []).filter(p => {
+      if (!p) return false;
+      const name = p.name || '';
+      const id = p.id || '';
+      const description = p.description || '';
+      const namespace = p.k8s_namespace || '';
+      const owner = p.owner_name || '';
+      const term = searchTerm.toLowerCase();
+      
+      return name.toLowerCase().includes(term) || 
+             id.toLowerCase().includes(term) ||
+             description.toLowerCase().includes(term) ||
+             namespace.toLowerCase().includes(term) ||
+             owner.toLowerCase().includes(term);
+    });
   }, [projects, searchTerm]);
 
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsDeleting(true);
-    setError(null);
+  const isAllSelected = filteredProjects.length > 0 && selectedIds.size === filteredProjects.length;
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
     try {
-      await api.projects.create(newProject);
-      setIsCreateModalOpen(false);
-      setNewProject({ name: '', description: '', k8s_namespace: '' });
-      window.location.reload();
-    } catch (err: any) {
-      setError(err.message || "创建项目失败");
+      await refreshProjects(true);
     } finally {
-      setIsDeleting(false);
+      setIsRefreshing(false);
     }
   };
 
-  const confirmDelete = async (e: React.MouseEvent, id: string) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await api.projects.create({
+        name: newProject.name,
+        description: newProject.description
+      });
+      setIsCreateModalOpen(false);
+      setNewProject({ name: '', description: '', k8s_namespace: '' });
+      await refreshProjects();
+    } catch (err: any) {
+      setError(err.message || "创建项目失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredProjects.map(p => p.id)));
+    }
+  };
+
+  const toggleSelect = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setShowConfirm({ show: true, id });
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, ids: string[]) => {
+    e.stopPropagation();
+    setShowConfirm({ show: true, ids });
   };
 
   const executeDelete = async () => {
-    if (!showConfirm.id) return;
+    if (showConfirm.ids.length === 0) return;
     setIsDeleting(true);
     try {
-      await api.projects.delete(showConfirm.id);
-      setShowConfirm({ show: false, id: null });
-      window.location.reload();
+      // Current API only supports single delete, we iterate for now
+      await Promise.all(showConfirm.ids.map(id => api.projects.delete(id)));
+      setShowConfirm({ show: false, ids: [] });
+      setSelectedIds(new Set());
+      await refreshProjects();
     } catch (err: any) {
-      alert("删除失败: " + err.message);
+      alert("部分或全部项目删除失败: " + err.message);
     } finally {
       setIsDeleting(false);
     }
@@ -89,7 +142,7 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
   };
 
   return (
-    <div className="p-10 space-y-8 animate-in fade-in duration-500 pb-24">
+    <div className="p-10 space-y-8 animate-in fade-in duration-500 pb-24 relative">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6">
         <div className="space-y-1">
@@ -103,8 +156,9 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
         </div>
         <div className="flex gap-4">
           <button 
-            onClick={() => { setIsRefreshing(true); window.location.reload(); }}
+            onClick={handleRefresh}
             className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+            title="刷新列表"
           >
             <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
           </button>
@@ -116,6 +170,32 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Batch Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-4 z-50 bg-slate-900 px-8 py-4 rounded-3xl shadow-2xl flex items-center justify-between animate-in slide-in-from-top-4 duration-300">
+           <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">
+                 <CheckCircle2 size={20} />
+              </div>
+              <span className="text-sm font-black text-white">已选中 {selectedIds.size} 个项目资源</span>
+           </div>
+           <div className="flex gap-4">
+              <button 
+                onClick={(e) => handleDeleteClick(e, Array.from(selectedIds))}
+                className="px-6 py-2.5 bg-red-500/10 text-red-400 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-red-500/20 transition-all"
+              >
+                 <Trash2 size={16} /> 批量销毁
+              </button>
+              <button 
+                onClick={() => setSelectedIds(new Set())}
+                className="px-6 py-2.5 bg-white/5 text-slate-400 rounded-xl text-xs font-black uppercase tracking-widest hover:text-white transition-all"
+              >
+                 取消选择
+              </button>
+           </div>
+        </div>
+      )}
 
       {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -136,7 +216,7 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">最近活动</p>
-            <p className="text-xs font-bold text-slate-600 mt-2 truncate max-w-[200px]">Admin 初始化了 3 个新项目</p>
+            <p className="text-xs font-bold text-slate-600 mt-2 truncate max-w-[200px]">系统就绪，等待评估指令</p>
           </div>
           <User className="text-slate-100" size={40} />
         </div>
@@ -148,7 +228,7 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
           <input 
             type="text" 
-            placeholder="搜索项目名称、K8S 命名空间或负责人..." 
+            placeholder="搜索项目 ID、名称、描述或负责人..." 
             className="w-full pl-16 pr-8 py-5 bg-white border border-slate-200 rounded-[2rem] text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -159,11 +239,19 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <th className="px-8 py-5">项目标识</th>
-                <th className="px-6 py-5">K8S 命名空间</th>
+                <th className="px-6 py-5 w-12">
+                   <button 
+                     onClick={toggleSelectAll}
+                     className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                   >
+                     {isAllSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+                   </button>
+                </th>
+                <th className="px-4 py-5">项目 ID / 名称</th>
+                <th className="px-6 py-5">项目描述</th>
+                <th className="px-6 py-5">命名空间</th>
                 <th className="px-6 py-5">负责人</th>
                 <th className="px-6 py-5">状态</th>
-                <th className="px-6 py-5">创建日期</th>
                 <th className="px-8 py-5 text-right">操作</th>
               </tr>
             </thead>
@@ -173,19 +261,33 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                   <tr 
                     key={project.id}
                     onClick={() => handleRowClick(project.id)}
-                    className="group hover:bg-slate-50/80 cursor-pointer transition-all relative border-l-4 border-transparent hover:border-blue-600"
+                    className={`group hover:bg-slate-50/80 cursor-pointer transition-all relative border-l-4 ${selectedIds.has(project.id) ? 'bg-blue-50/30 border-blue-600' : 'border-transparent hover:border-blue-600'}`}
                   >
-                    <td className="px-8 py-5">
+                    <td className="px-6 py-5" onClick={(e) => toggleSelect(e, project.id)}>
+                      <button className="p-2">
+                        {selectedIds.has(project.id) ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} className="text-slate-300 hover:text-slate-400" />}
+                      </button>
+                    </td>
+                    <td className="px-4 py-5">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black text-sm group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                          {project.name[0].toUpperCase()}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm transition-all shadow-sm ${selectedIds.has(project.id) ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'}`}>
+                          {(project.name || 'P')[0].toUpperCase()}
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">{project.name}</p>
-                          <p className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">
-                            {project.description || "未提供项目详细描述..."}
-                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <Hash size={10} className="text-slate-300" />
+                            <span className="text-[10px] font-mono text-slate-400 font-bold truncate max-w-[120px]">{project.id}</span>
+                          </div>
                         </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-start gap-2 max-w-[250px]">
+                        <FileText size={14} className="text-slate-300 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-slate-500 font-medium line-clamp-2 leading-relaxed">
+                          {project.description || "未提供项目详细描述..."}
+                        </p>
                       </div>
                     </td>
                     <td className="px-6 py-5">
@@ -203,16 +305,10 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                     <td className="px-6 py-5">
                       <StatusBadge status={project.status || 'Active'} />
                     </td>
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <Calendar size={14} />
-                        <span>{project.created_at?.split('T')[0]}</span>
-                      </div>
-                    </td>
                     <td className="px-8 py-5 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
-                          onClick={(e) => confirmDelete(e, project.id)}
+                          onClick={(e) => handleDeleteClick(e, [project.id])}
                           className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                           title="删除项目"
                         >
@@ -227,7 +323,7 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-24 text-center">
+                  <td colSpan={7} className="py-24 text-center">
                     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
                       <Layers size={32} />
                     </div>
@@ -269,15 +365,6 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">K8S Namespace (可选)</label>
-                <input 
-                  placeholder="默认系统自动生成"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all"
-                  value={newProject.k8s_namespace}
-                  onChange={e => setNewProject({...newProject, k8s_namespace: e.target.value})}
-                />
-              </div>
-              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目简述</label>
                 <textarea 
                   rows={3}
@@ -298,10 +385,10 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                 </button>
                 <button 
                   type="submit"
-                  disabled={isDeleting}
+                  disabled={isSubmitting}
                   className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
                 >
-                  {isDeleting ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
+                  {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
                   立即创建
                 </button>
               </div>
@@ -320,12 +407,13 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
               </div>
               <h3 className="text-2xl font-black text-slate-800">确认删除项目？</h3>
               <p className="text-slate-500 mt-4 font-medium leading-relaxed">
+                您正准备移除 <span className="text-red-600 font-black">{showConfirm.ids.length}</span> 个项目空间。
                 此操作将同步销毁关联的 <span className="text-red-600 font-black">K8S Namespace</span> 及其中运行的所有容器资产。该过程<span className="font-black">不可逆</span>。
               </p>
             </div>
             <div className="px-10 pb-10 flex gap-4">
               <button 
-                onClick={() => setShowConfirm({ show: false, id: null })}
+                onClick={() => setShowConfirm({ show: false, ids: [] })}
                 disabled={isDeleting}
                 className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
               >
@@ -334,7 +422,7 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
               <button 
                 onClick={executeDelete}
                 disabled={isDeleting}
-                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-500/20 transition-all flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
               >
                 {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
                 确认销毁

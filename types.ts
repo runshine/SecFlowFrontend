@@ -26,7 +26,6 @@ export interface SecurityProject {
   created_at?: string;
   updated_at?: string;
   roles?: ProjectRole[];
-  // Added missing k8s_namespace property
   k8s_namespace?: string;
 }
 
@@ -136,8 +135,10 @@ export type ViewType =
   | 'test-input-release' 
   | 'test-input-code' 
   | 'test-input-doc'
+  | 'env-dashboard'
   | 'env-template'
   | 'env-agent'
+  | 'env-service'
   | 'env-tasks'
   | 'pentest'
   | 'validation'

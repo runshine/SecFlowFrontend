@@ -44,6 +44,38 @@ export interface FileItem {
   updatedAt: string;
 }
 
+// New Resource Management Types
+export interface ProjectResource {
+  id: number;
+  project_id: string;
+  resource_type: 'document' | 'software' | 'code' | 'other';
+  file_name: string;
+  file_size: number;
+  file_format?: string;
+  pvc_name: string;
+  status: string;
+  created_at: string;
+}
+
+export interface ProjectTask {
+  task_id: string;
+  task_type: 'download' | 'extract' | 'cleanup';
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  progress: number;
+  message: string;
+  created_at: string;
+}
+
+export interface ProjectPVC {
+  pvc_name: string;
+  resource_type: string;
+  namespace: string;
+  capacity: string;
+  status: string;
+  resources_count: number;
+  mount_path?: string;
+}
+
 export interface Agent {
   key: string;
   ip_address: string;
@@ -117,7 +149,7 @@ export interface PackageStats {
 }
 
 export type ViewType = 
-  | 'dashboard' | 'project-mgmt' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
+  | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc'
   | 'env-agent' | 'env-template' | 'env-tasks'
   | 'engine-validation' | 'pentest-risk' | 'pentest-system' 

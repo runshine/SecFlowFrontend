@@ -8,6 +8,7 @@ import { Header } from './layout/Header';
 import { WorkflowPlaceholder } from './components/WorkflowPlaceholder';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectMgmtPage } from './pages/ProjectMgmtPage';
+import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { StaticPackagesPage } from './pages/StaticPackagesPage';
 import { StaticPackageDetailPage } from './pages/StaticPackageDetailPage';
 import { DeployScriptPage } from './pages/DeployScriptPage';
@@ -28,6 +29,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType | string>('dashboard');
   const [projects, setProjects] = useState<SecurityProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [activeProjectId, setActiveProjectId] = useState<string>(''); // For detail view specifically
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,7 +106,6 @@ const App: React.FC = () => {
     try {
       const data = await api.resources.list(selectedProjectId, type);
       if (Array.isArray(data)) {
-        // Fix: Add missing 'type' property to satisfy FileItem interface
         setResources(data.map((r: any) => ({ 
           id: r.id.toString(), 
           name: r.file_name, 
@@ -152,7 +153,8 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard': return <DashboardPage projects={projects} agents={agents} staticPackages={staticPackages} setCurrentView={setCurrentView} />;
-      case 'project-mgmt': return <ProjectMgmtPage projects={projects} setActiveProjectId={setSelectedProjectId} setCurrentView={setCurrentView} setIsProjectModalOpen={() => {}} />;
+      case 'project-mgmt': return <ProjectMgmtPage projects={projects} setActiveProjectId={(id) => { setActiveProjectId(id); }} setCurrentView={setCurrentView} setIsProjectModalOpen={() => {}} />;
+      case 'project-detail': return <ProjectDetailPage projectId={activeProjectId} projects={projects} onBack={() => setCurrentView('project-mgmt')} />;
       case 'static-packages': return <StaticPackagesPage staticPackages={staticPackages} packageStats={packageStats} fetchStaticPackages={() => api.staticPackages.list().then(d => setStaticPackages(d.packages))} setActivePackageId={setActivePackageId} setCurrentView={setCurrentView} selectedIds={selectedStaticPkgIds} setSelectedIds={setSelectedStaticPkgIds} />;
       case 'static-package-detail': return <StaticPackageDetailPage packageId={activePackageId} onBack={() => setCurrentView('static-packages')} />;
       case 'deploy-script-mgmt': return <DeployScriptPage />;

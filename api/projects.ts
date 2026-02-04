@@ -14,5 +14,20 @@ export const projectsApi = {
       body: JSON.stringify(project),
     });
     return handleResponse(response);
+  },
+  delete: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/project/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+  batchDelete: async (ids: string[]) => {
+    const response = await fetch(`${API_BASE}/api/project/batch`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+      body: JSON.stringify({ project_ids: ids })
+    });
+    return handleResponse(response);
   }
 };

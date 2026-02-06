@@ -1,5 +1,5 @@
 
-import React from 'reac';
+import React from 'react';
 import { Loader2, Box } from 'lucide-react';
 import { Agent, EnvTemplate, AsyncTask } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';

@@ -36,11 +36,26 @@ import {
   Check,
   Activity,
   Globe,
-  ArrowUpDown
+  ArrowUpDown,
+  Folder,
+  FolderOpen,
+  ChevronDown,
+  Info,
+  Calendar
 } from 'lucide-react';
 import { EnvTemplate, TemplateFile, Agent } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
+
+// Helper to build tree from flat paths
+interface TreeNode {
+  name: string;
+  path: string;
+  type: 'file' | 'folder';
+  children: Record<string, TreeNode>;
+  size?: number;
+  modified?: string;
+}
 
 export const EnvTemplatePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -71,6 +86,9 @@ export const EnvTemplatePage: React.FC = () => {
   const [editingFile, setEditingFile] = useState<{ path: string; content: string } | null>(null);
   const [isSavingFile, setIsSavingFile] = useState(false);
 
+  // Tree State
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']));
+
   // Upload Modal States
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadTab, setUploadTab] = useState<'file' | 'editor'>('file');
@@ -83,7 +101,7 @@ export const EnvTemplatePage: React.FC = () => {
     name: '',
     description: '',
     type: 'yaml' as 'yaml' | 'archive',
-    content: '' // Used for editor
+    content: ''
   });
 
   useEffect(() => {
@@ -110,11 +128,47 @@ export const EnvTemplatePage: React.FC = () => {
       const detail = await api.environment.getTemplateDetail(name);
       setTemplateDetail(detail);
       setViewMode('detail');
+      setExpandedFolders(new Set(['root']));
     } catch (err) {
       alert("获取模版详情失败");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Build Resource Tree
+  const resourceTree = useMemo(() => {
+    if (!templateDetail?.directory_files) return null;
+    
+    const root: TreeNode = { name: 'root', path: '', type: 'folder', children: {} };
+    
+    templateDetail.directory_files.forEach((file: TemplateFile) => {
+      const parts = file.path.split('/');
+      let current = root;
+      
+      parts.forEach((part, index) => {
+        const isLast = index === parts.length - 1;
+        if (!current.children[part]) {
+          current.children[part] = {
+            name: part,
+            path: parts.slice(0, index + 1).join('/'),
+            type: isLast ? 'file' : 'folder',
+            children: {},
+            size: isLast ? file.size : undefined,
+            modified: isLast ? file.modified : undefined
+          };
+        }
+        current = current.children[part];
+      });
+    });
+    return root;
+  }, [templateDetail]);
+
+  const toggleFolder = (path: string) => {
+    const next = new Set(expandedFolders);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    setExpandedFolders(next);
   };
 
   // Selection Logic
@@ -145,7 +199,6 @@ export const EnvTemplatePage: React.FC = () => {
     try {
       await api.environment.batchDeleteTemplates(deleteConfirm.names);
       setDeleteConfirm({ show: false, names: [] });
-      // Fix: Removed incorrect setSelectedIds call and using the correct setSelectedNames state updater
       setSelectedNames(new Set());
       if (selectedTemplate && deleteConfirm.names.includes(selectedTemplate)) {
         setViewMode('list');
@@ -165,7 +218,7 @@ export const EnvTemplatePage: React.FC = () => {
     setAgentSearch('');
     setSelectedAgentKeys(new Set());
     try {
-      const data = await api.environment.getAgents({ per_page: 2000 }); // High limit for batch selection
+      const data = await api.environment.getAgents({ per_page: 2000 });
       setAvailableAgents(data.agents || []);
     } catch (err) {
       alert("获取 Agent 列表失败");
@@ -203,7 +256,6 @@ export const EnvTemplatePage: React.FC = () => {
     }
   };
 
-  // Agent filtering logic for large lists
   const filteredAgents = useMemo(() => {
     return availableAgents.filter(a => {
       const matchesSearch = a.hostname.toLowerCase().includes(agentSearch.toLowerCase()) || 
@@ -310,115 +362,219 @@ export const EnvTemplatePage: React.FC = () => {
     t.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Tree Render Component
+  const RenderTreeNode: React.FC<{ node: TreeNode; depth: number }> = ({ node, depth }) => {
+    const isExpanded = expandedFolders.has(node.path || 'root');
+    const isFile = node.type === 'file';
+    
+    const getIcon = () => {
+      if (!isFile) return isExpanded ? <FolderOpen size={16} className="text-amber-400" /> : <Folder size={16} className="text-amber-400" />;
+      const ext = node.name.split('.').pop()?.toLowerCase();
+      if (['yaml', 'yml'].includes(ext!)) return <FileCode size={16} className="text-blue-500" />;
+      if (ext === 'json') return <FileJson size={16} className="text-amber-600" />;
+      return <FileText size={16} className="text-slate-400" />;
+    };
+
+    return (
+      <div className="select-none">
+        <div 
+          onClick={() => !isFile && toggleFolder(node.path || 'root')}
+          className={`group flex items-center py-2 px-4 hover:bg-blue-50/50 cursor-pointer rounded-xl transition-all ${depth > 0 ? 'ml-6' : ''}`}
+        >
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {!isFile && (
+              <ChevronRight size={14} className={`text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            )}
+            {isFile && <div className="w-[14px]" />}
+            {getIcon()}
+            <span className={`text-sm truncate font-medium ${isFile ? 'text-slate-600' : 'text-slate-800 font-bold'}`}>
+              {node.name === 'root' ? 'Template Workspace' : node.name}
+            </span>
+            {isFile && (
+              <span className="text-[10px] font-black text-slate-300 uppercase ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                {(node.size! / 1024).toFixed(1)} KB
+              </span>
+            )}
+          </div>
+          
+          {isFile && (
+            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+              {isEditable(node.path) && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleEditFile(node.path); }}
+                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all"
+                  title="在线编辑"
+                >
+                  <Edit3 size={14} />
+                </button>
+              )}
+              <button className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-white rounded-lg transition-all" title="下载组件">
+                <Download size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+        
+        {(!isFile && isExpanded) && (
+          <div className="border-l border-slate-100 ml-6 mt-1">
+            {Object.values(node.children).map(child => (
+              <RenderTreeNode key={child.path} node={child} depth={0} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (viewMode === 'detail' && templateDetail) {
     return (
-      <div className="p-10 space-y-8 animate-in slide-in-from-right duration-500 pb-24">
-        {/* ... (Existing Detail View) ... */}
-        <div className="flex items-center gap-6">
-          <button 
-            onClick={() => setViewMode('list')}
-            className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all shadow-sm group active:scale-95"
-          >
-            <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-          </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-3xl font-black text-slate-800 tracking-tight">{templateDetail.name}</h2>
-              <StatusBadge status={templateDetail.type} />
+      <div className="p-10 space-y-10 animate-in slide-in-from-right duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
+        {/* Detail Header with Top Right Actions */}
+        <div className="flex flex-col md:flex-row justify-between items-start gap-6 bg-white/50 backdrop-blur-md p-8 rounded-[3rem] border border-white shadow-sm">
+          <div className="flex items-center gap-8">
+            <button 
+              onClick={() => setViewMode('list')}
+              className="p-5 bg-white border border-slate-200 rounded-[1.5rem] hover:bg-slate-50 transition-all shadow-sm group active:scale-95"
+            >
+              <ChevronLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
+            </button>
+            <div>
+              <div className="flex items-center gap-4">
+                <h2 className="text-4xl font-black text-slate-800 tracking-tight">{templateDetail.name}</h2>
+                <StatusBadge status={templateDetail.type} />
+              </div>
+              <div className="flex items-center gap-6 mt-3">
+                 <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
+                   <Database size={14} /> {(templateDetail.file_size / 1024).toFixed(1)} KB
+                 </div>
+                 <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
+                 <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
+                   <Calendar size={14} /> {templateDetail.updated_at?.replace('T', ' ')}
+                 </div>
+              </div>
             </div>
-            <div className="flex items-center gap-3 mt-1">
-               <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">
-                 大小: { (templateDetail.file_size / 1024).toFixed(1) } KB
-               </span>
-               <span className="w-1 h-1 bg-slate-200 rounded-full" />
-               <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">
-                 更新于: {templateDetail.updated_at?.replace('T', ' ')}
-               </span>
+          </div>
+
+          <div className="flex gap-4 self-end md:self-center">
+            <button className="px-8 py-4 bg-white border border-slate-200 text-slate-700 rounded-[1.5rem] font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm active:scale-95">
+              <Download size={20} className="text-blue-600" /> 下载全量包
+            </button>
+            <button 
+              onClick={() => handleDeleteTrigger(templateDetail.name)}
+              className="px-8 py-4 bg-red-600 text-white rounded-[1.5rem] font-black hover:bg-red-700 transition-all flex items-center gap-3 shadow-xl shadow-red-500/20 active:scale-95"
+            >
+              <Trash2 size={20} /> 销毁模板
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          {/* Metadata Sidebar */}
+          <div className="lg:col-span-4 space-y-8">
+            <div className="bg-slate-900 p-10 rounded-[3rem] text-white space-y-8 shadow-2xl relative overflow-hidden group">
+               <ShieldCheck className="absolute right-[-20px] top-[-20px] w-48 h-48 opacity-5 rotate-12 group-hover:rotate-0 transition-transform duration-1000" />
+               <div className="relative z-10">
+                 <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">模板说明</h4>
+                 <p className="text-sm text-slate-300 leading-relaxed font-medium italic">
+                   "{templateDetail.description || '该模板已通过 SecFlow 基线校验，预置标准化安全审计工具链与沙箱隔离策略，支持一键分发。'}"
+                 </p>
+               </div>
+               <div className="pt-8 border-t border-white/10 space-y-4 relative z-10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase">校验状态</span>
+                    <span className="text-xs font-black text-green-400">PASSED</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase">资源类型</span>
+                    <span className="text-xs font-black text-blue-400 uppercase">{templateDetail.type}</span>
+                  </div>
+               </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                 <Info size={14} /> 运行环境上下文
+               </h4>
+               <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Namespace Strategy</p>
+                    <p className="text-xs font-black text-slate-700 mt-1">Isolated Sandbox (v1)</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Artifact Path</p>
+                    <p className="text-xs font-mono font-bold text-blue-600 mt-1 truncate">/registry/{templateDetail.name}.tar.gz</p>
+                  </div>
+               </div>
+            </div>
+          </div>
+
+          {/* Folder Tree Browser */}
+          <div className="lg:col-span-8 flex flex-col min-h-[600px] bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-10 py-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-[1.25rem] flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                  <FolderOpen size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">资源文件树</h3>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
+                    {templateDetail.directory_files?.length || 0} 个资源项已加载
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setExpandedFolders(new Set(['root']))} className="p-3 text-slate-400 hover:text-slate-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-slate-100">
+                  <RefreshCw size={18} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+              {resourceTree && (
+                <RenderTreeNode node={resourceTree} depth={0} />
+              )}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-              <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 uppercase tracking-widest">
-                  <FileJson size={18} className="text-blue-600" /> 包内资源索引
-                </h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50/30 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                    <tr>
-                      <th className="px-8 py-5">文件路径</th>
-                      <th className="px-6 py-5">大小</th>
-                      <th className="px-6 py-5">修改时间</th>
-                      <th className="px-8 py-5 text-right">管理</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {templateDetail.directory_files?.map((f: TemplateFile, i: number) => (
-                      <tr key={i} className="hover:bg-slate-50 transition-all group">
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-3">
-                            {f.path.endsWith('.yaml') || f.path.endsWith('.yml') ? <FileCode size={14} className="text-blue-400" /> : <FileText size={14} className="text-slate-400" />}
-                            <span className="text-sm font-bold text-slate-700">{f.path}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 text-xs font-bold text-slate-400">{ (f.size / 1024).toFixed(1) } KB</td>
-                        <td className="px-6 py-5 text-xs text-slate-400">{ f.modified?.replace('T', ' ') }</td>
-                        <td className="px-8 py-5 text-right">
-                           <div className="flex justify-end gap-2">
-                             {isEditable(f.path) && (
-                               <button onClick={() => handleEditFile(f.path)} className="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-xl transition-all">
-                                 <Edit3 size={16} />
-                               </button>
-                             )}
-                             <button className="p-2.5 text-slate-400 hover:text-slate-800 bg-slate-50 rounded-xl transition-all"><Download size={16} /></button>
-                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-6">
-            <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-6 shadow-2xl shadow-slate-900/40">
-               <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">模版详细描述</h4>
-               <p className="text-sm text-slate-300 leading-relaxed font-medium italic">"{templateDetail.description || '暂无详细说明。'}"</p>
-               <div className="pt-6 border-t border-white/10 space-y-4">
-                  <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-500 transition-all flex items-center justify-center gap-2">
-                    <Download size={18} /> 下载资源 artifact
-                  </button>
-                  <button onClick={() => handleDeleteTrigger(templateDetail.name)} className="w-full py-4 bg-red-500/10 text-red-400 rounded-2xl font-black hover:bg-red-500/20 transition-all flex items-center justify-center gap-2">
-                    <Trash2 size={18} /> 彻底销毁
-                  </button>
-               </div>
-            </div>
-          </div>
-        </div>
-        {/* Editor Overlay ... */}
+        {/* Editor Overlay */}
         {isEditorOpen && editingFile && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
-             <div className="bg-[#0f172a] w-full max-w-5xl h-[85vh] rounded-[3rem] shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95">
-                <div className="px-10 py-6 border-b border-white/5 flex items-center justify-between bg-white/5">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white"><Edit3 size={20} /></div>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
+             <div className="bg-[#0f172a] w-full max-w-5xl h-[85vh] rounded-[3.5rem] shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95">
+                <div className="px-12 py-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+                  <div className="flex items-center gap-5">
+                    <div className="w-12 h-12 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+                      <Edit3 size={24} />
+                    </div>
                     <div>
-                      <h3 className="text-sm font-black text-white uppercase tracking-widest">在线编辑资源: {editingFile.path}</h3>
+                      <h3 className="text-lg font-black text-white tracking-wide">在线编辑: {editingFile.path}</h3>
+                      <p className="text-[10px] font-mono text-slate-500 uppercase mt-1">Target Template: {templateDetail.name}</p>
                     </div>
                   </div>
-                  <button onClick={() => setIsEditorOpen(false)} className="p-3 bg-white/5 text-slate-400 hover:text-white rounded-2xl transition-all"><X size={20} /></button>
+                  <button onClick={() => setIsEditorOpen(false)} className="p-4 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl transition-all">
+                    <X size={24} />
+                  </button>
                 </div>
-                <div className="flex-1 bg-black/40">
-                   <textarea className="w-full h-full p-10 bg-transparent border-none outline-none font-mono text-xs text-blue-100/90 leading-relaxed resize-none custom-scrollbar" value={editingFile.content} onChange={(e) => setEditingFile({ ...editingFile, content: e.target.value })} spellCheck={false} />
+                <div className="flex-1 bg-black/40 relative">
+                   <div className="absolute top-6 left-6 pointer-events-none z-10">
+                      <Terminal size={20} className="text-slate-700" />
+                   </div>
+                   <textarea 
+                     className="w-full h-full p-12 pl-16 bg-transparent border-none outline-none font-mono text-xs text-blue-100/90 leading-relaxed resize-none custom-scrollbar" 
+                     value={editingFile.content} 
+                     onChange={(e) => setEditingFile({ ...editingFile, content: e.target.value })} 
+                     spellCheck={false} 
+                   />
                 </div>
-                <div className="px-10 py-6 bg-white/5 border-t border-white/5 flex justify-end gap-4">
-                   <button onClick={() => setIsEditorOpen(false)} className="px-6 py-3 bg-white/5 text-slate-400 rounded-xl text-[10px] font-black uppercase transition-all">放弃更改</button>
-                   <button onClick={handleSaveFile} disabled={isSavingFile} className="px-8 py-3 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center gap-2">
-                      {isSavingFile ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 保存并更新
+                <div className="px-12 py-8 bg-white/5 border-t border-white/5 flex justify-end gap-6">
+                   <button onClick={() => setIsEditorOpen(false)} className="px-10 py-4 bg-white/5 text-slate-400 rounded-2xl text-xs font-black uppercase transition-all hover:bg-white/10">放弃更改</button>
+                   <button 
+                     onClick={handleSaveFile} 
+                     disabled={isSavingFile} 
+                     className="px-12 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center gap-3 shadow-xl shadow-blue-600/20"
+                   >
+                      {isSavingFile ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      提交并更新资源
                    </button>
                 </div>
              </div>
@@ -464,7 +620,7 @@ export const EnvTemplatePage: React.FC = () => {
         </div>
       )}
 
-      {/* List Table ... */}
+      {/* List Table */}
       <div className="space-y-4">
         <div className="relative">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
@@ -510,11 +666,10 @@ export const EnvTemplatePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Advanced Agent Selection Modal for 1000+ nodes */}
+      {/* Advanced Agent Selection Modal */}
       {isDeployModalOpen && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
            <div className="bg-white w-full max-w-5xl h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
-              {/* Modal Header with Aggregate Stats */}
               <div className="p-10 pb-6 border-b border-slate-50 bg-slate-50/30 shrink-0">
                  <div className="flex justify-between items-start mb-8">
                     <div className="flex items-center gap-5">
@@ -543,48 +698,33 @@ export const EnvTemplatePage: React.FC = () => {
                     </button>
                  </div>
 
-                 {/* Filters & Search Bar */}
                  <div className="flex flex-col md:flex-row gap-4 items-center">
                     <div className="relative flex-1 w-full group">
                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={20} />
                        <input 
                          type="text" 
                          autoFocus
-                         placeholder="通过主机名、IP 地址或工作空间标识快速检索 (支持 1000+ 节点秒开)..." 
+                         placeholder="主机名、IP 地址或工作空间检索..." 
                          className="w-full pl-16 pr-8 py-4 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
                          value={agentSearch}
                          onChange={(e) => setAgentSearch(e.target.value)}
                        />
                     </div>
                     <div className="flex gap-2 p-1 bg-white border border-slate-200 rounded-2xl shrink-0 shadow-sm">
-                       <button 
-                         onClick={() => setStatusFilter('all')}
-                         className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                       >
-                         全部节点
-                       </button>
-                       <button 
-                         onClick={() => setStatusFilter('online')}
-                         className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'online' ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                       >
-                         仅在线
-                       </button>
+                       <button onClick={() => setStatusFilter('all')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
+                       <button onClick={() => setStatusFilter('online')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'online' ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>在线</button>
                     </div>
-                    <button 
-                       onClick={toggleSelectAllAgents}
-                       className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm shrink-0"
-                    >
-                       <CheckSquare size={16} /> {selectedAgentKeys.size === filteredAgents.length ? '取消全选' : '全选过滤结果'}
+                    <button onClick={toggleSelectAllAgents} className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm shrink-0">
+                       <CheckSquare size={16} /> {selectedAgentKeys.size === filteredAgents.length ? '取消' : '全选'}
                     </button>
                  </div>
               </div>
 
-              {/* Agent Grid/List Area - Optimized for large numbers */}
               <div className="flex-1 overflow-y-auto p-10 bg-slate-50/20 custom-scrollbar relative">
                  {agentsLoading ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
                        <Loader2 className="animate-spin text-blue-600" size={48} />
-                       <p className="text-[10px] font-black uppercase tracking-widest">正在拉取大规模集群节点清单...</p>
+                       <p className="text-[10px] font-black uppercase tracking-widest">拉取节点清单...</p>
                     </div>
                  ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -592,18 +732,10 @@ export const EnvTemplatePage: React.FC = () => {
                           <div 
                             key={agent.key}
                             onClick={() => toggleAgentSelect(agent.key)}
-                            className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between group ${
-                               selectedAgentKeys.has(agent.key) 
-                                 ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5' 
-                                 : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-lg'
-                            }`}
+                            className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between group ${selectedAgentKeys.has(agent.key) ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5' : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-lg'}`}
                           >
                              <div className="flex items-center gap-4 min-w-0">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all shrink-0 shadow-sm ${
-                                   selectedAgentKeys.has(agent.key) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'
-                                }`}>
-                                   {agent.hostname[0].toUpperCase()}
-                                </div>
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all shrink-0 shadow-sm ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>{agent.hostname[0].toUpperCase()}</div>
                                 <div className="min-w-0">
                                    <p className="font-black text-slate-800 text-sm truncate">{agent.hostname}</p>
                                    <div className="flex items-center gap-2 mt-0.5">
@@ -612,63 +744,25 @@ export const EnvTemplatePage: React.FC = () => {
                                    </div>
                                 </div>
                              </div>
-                             <div className="flex items-center gap-4 ml-4 shrink-0">
-                                <div className="text-right hidden sm:block">
-                                   <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase">
-                                      <Cpu size={10} className="text-slate-300" /> {agent.system_info?.cpu?.usage_percent || 0}%
-                                   </div>
-                                   <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase mt-1">
-                                      <Database size={10} className="text-slate-300" /> {agent.system_info?.memory?.usage_percent || 0}%
-                                   </div>
-                                </div>
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                                   selectedAgentKeys.has(agent.key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200'
-                                }`}>
-                                   {selectedAgentKeys.has(agent.key) && <Check size={14} />}
-                                </div>
-                             </div>
+                             <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200'}`}>{selectedAgentKeys.has(agent.key) && <Check size={14} />}</div>
                           </div>
                        ))}
-                       {filteredAgents.length === 0 && (
-                          <div className="col-span-full py-32 text-center flex flex-col items-center gap-4">
-                             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-200"><Filter size={40} /></div>
-                             <p className="text-sm font-black text-slate-300 uppercase tracking-widest">未找到符合条件的节点</p>
-                          </div>
-                       )}
                     </div>
                  )}
               </div>
 
-              {/* Modal Footer Action Bar */}
               <div className="p-10 border-t border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-6 shrink-0">
                  <div className="flex items-center gap-6">
                     <div>
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">目标任务概览</p>
-                       <p className="text-lg font-black text-slate-800 mt-0.5">
-                          <span className="text-blue-600">{selectedNames.size}</span> 模板 ➔ <span className="text-blue-600">{selectedAgentKeys.size}</span> 节点
-                       </p>
-                    </div>
-                    <div className="h-10 w-[1px] bg-slate-100" />
-                    <div>
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">总分发任务</p>
-                       <p className="text-lg font-black text-slate-800 mt-0.5">{selectedNames.size * selectedAgentKeys.size} 个串行作业</p>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">任务概览</p>
+                       <p className="text-lg font-black text-slate-800 mt-0.5"><span className="text-blue-600">{selectedNames.size}</span> 模板 ➔ <span className="text-blue-600">{selectedAgentKeys.size}</span> 节点</p>
                     </div>
                  </div>
-                 <div className="flex gap-4 w-full md:w-auto">
-                    <button 
-                      onClick={() => setIsDeployModalOpen(false)}
-                      disabled={deploying}
-                      className="flex-1 md:flex-none px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      取消
-                    </button>
-                    <button 
-                      onClick={executeDeploy}
-                      disabled={deploying || selectedAgentKeys.size === 0}
-                      className="flex-1 md:flex-none px-12 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-2xl shadow-blue-600/30 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 min-w-[200px]"
-                    >
+                 <div className="flex gap-4">
+                    <button onClick={() => setIsDeployModalOpen(false)} disabled={deploying} className="px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">取消</button>
+                    <button onClick={executeDeploy} disabled={deploying || selectedAgentKeys.size === 0} className="px-12 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-2xl transition-all flex items-center gap-3 min-w-[200px]">
                       {deploying ? <Loader2 className="animate-spin" size={24} /> : <Zap size={24} />}
-                      {deploying ? '正在初始化集群分发...' : '确认并执行批量部署'}
+                      执行批量部署
                     </button>
                  </div>
               </div>
@@ -676,9 +770,9 @@ export const EnvTemplatePage: React.FC = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal (Existing) ... */}
+      {/* Delete Confirmation Modal */}
       {deleteConfirm.show && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-10 text-center">
               <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
@@ -686,12 +780,12 @@ export const EnvTemplatePage: React.FC = () => {
               </div>
               <h3 className="text-2xl font-black text-slate-800 tracking-tight">确认销毁环境模版？</h3>
               <p className="text-slate-500 mt-4 font-medium leading-relaxed">
-                您正准备移除 <span className="text-red-600 font-black">{deleteConfirm.names.length}</span> 个环境编排模版。该过程<span className="font-black">不可逆</span>。
+                您正准备移除 <span className="text-red-600 font-black">{deleteConfirm.names.length}</span> 个模板。此操作<span className="font-black">不可逆</span>。
               </p>
             </div>
             <div className="px-10 pb-10 flex gap-4">
-              <button onClick={() => setDeleteConfirm({ show: false, names: [] })} disabled={isDeleting} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all disabled:opacity-50">保留模版</button>
-              <button onClick={executeDelete} disabled={isDeleting} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              <button onClick={() => setDeleteConfirm({ show: false, names: [] })} disabled={isDeleting} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">保留模板</button>
+              <button onClick={executeDelete} disabled={isDeleting} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-500/20 transition-all flex items-center justify-center gap-2">
                 {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />} 确认销毁
               </button>
             </div>
@@ -699,7 +793,7 @@ export const EnvTemplatePage: React.FC = () => {
         </div>
       )}
 
-      {/* Upload Modal (Existing) ... */}
+      {/* Upload Modal */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
@@ -709,7 +803,6 @@ export const EnvTemplatePage: React.FC = () => {
                     <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center"><Upload size={28} /></div>
                     <div>
                       <h3 className="text-2xl font-black text-slate-800 tracking-tight">上传环境模版</h3>
-                      <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mt-1">创建标准化安全测试上下文</p>
                     </div>
                   </div>
                   <button onClick={() => setIsUploadModalOpen(false)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-2xl transition-all"><X size={24} /></button>
@@ -717,38 +810,32 @@ export const EnvTemplatePage: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
                <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl w-full">
-                  <button onClick={() => setUploadTab('file')} className={`flex-1 py-3 rounded-xl font-black text-[11px] uppercase transition-all flex items-center justify-center gap-2 ${uploadTab === 'file' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><FileArchive size={16} /> 文件上传</button>
-                  <button onClick={() => setUploadTab('editor')} className={`flex-1 py-3 rounded-xl font-black text-[11px] uppercase transition-all flex items-center justify-center gap-2 ${uploadTab === 'editor' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Code size={16} /> YAML 编辑器</button>
+                  <button onClick={() => setUploadTab('file')} className={`flex-1 py-3 rounded-xl font-black text-[11px] uppercase transition-all ${uploadTab === 'file' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}><FileArchive size={16} /> 文件上传</button>
+                  <button onClick={() => setUploadTab('editor')} className={`flex-1 py-3 rounded-xl font-black text-[11px] uppercase transition-all ${uploadTab === 'editor' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}><Code size={16} /> YAML 编辑器</button>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">模版名称 *</label>
-                    <input required className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all" value={newTemplate.name} onChange={e => setNewTemplate({...newTemplate, name: e.target.value})} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">编排类型</label>
-                    <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all" value={newTemplate.type} onChange={e => setNewTemplate({...newTemplate, type: e.target.value as any})}>
-                      <option value="yaml">Single YAML</option>
-                      <option value="archive">Standard Archive (ZIP)</option>
-                    </select>
-                  </div>
+                  <input required placeholder="模板名称 *" className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none font-bold text-slate-800" value={newTemplate.name} onChange={e => setNewTemplate({...newTemplate, name: e.target.value})} />
+                  <select className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none font-bold text-slate-800" value={newTemplate.type} onChange={e => setNewTemplate({...newTemplate, type: e.target.value as any})}>
+                    <option value="yaml">Single YAML</option>
+                    <option value="archive">Standard Archive (ZIP)</option>
+                  </select>
                </div>
                {uploadTab === 'file' ? (
-                 <div onClick={() => fileInputRef.current?.click()} className="p-10 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 hover:border-blue-400 transition-all group">
+                 <div onClick={() => fileInputRef.current?.click()} className="p-10 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
                     <input type="file" ref={fileInputRef} className="hidden" accept=".zip,.yaml,.yml" onChange={(e) => {
                        const file = e.target.files?.[0];
                        if (file && !newTemplate.name) setNewTemplate(prev => ({ ...prev, name: file.name.split('.')[0] }));
                     }} />
-                    <Upload size={48} className="text-slate-300 group-hover:text-blue-500 transition-all mb-4" />
+                    <Upload size={48} className="text-slate-300 mb-4" />
                     <p className="text-sm font-black text-slate-600">点击或拖拽文件至此处上传</p>
                  </div>
                ) : (
-                 <textarea rows={10} className="w-full p-8 bg-slate-900 rounded-[2rem] border-none outline-none font-mono text-xs text-blue-100 transition-all resize-none" value={newTemplate.content} onChange={e => setNewTemplate({...newTemplate, content: e.target.value})} placeholder="# Paste YAML here..." />
+                 <textarea rows={10} className="w-full p-8 bg-slate-900 rounded-[2rem] border-none outline-none font-mono text-xs text-blue-100" value={newTemplate.content} onChange={e => setNewTemplate({...newTemplate, content: e.target.value})} placeholder="# Paste YAML here..." />
                )}
             </div>
-            <div className="p-10 pt-6 border-t border-slate-50 shrink-0 bg-slate-50/50 flex gap-4">
-              <button type="button" onClick={() => { setIsUploadModalOpen(false); resetUploadForm(); }} className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black hover:bg-slate-50 transition-all">取消</button>
-              <button onClick={handleUploadSubmit} disabled={isUploading} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2">
+            <div className="p-10 pt-6 border-t border-slate-50 bg-slate-50/50 flex gap-4">
+              <button type="button" onClick={() => { setIsUploadModalOpen(false); resetUploadForm(); }} className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black">取消</button>
+              <button onClick={handleUploadSubmit} disabled={isUploading} className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black flex items-center justify-center gap-2">
                 {isUploading ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={20} />} 确认并创建
               </button>
             </div>

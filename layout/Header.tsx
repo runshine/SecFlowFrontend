@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { ChevronDown, Search, RotateCw, ShieldCheck, Target, FolderTree, FileJson, Layers, Layout, Share2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronDown, Search, RotateCw, ShieldCheck, Target, FolderTree, FileJson, Layers, Layout, Share2, Clock } from 'lucide-react';
 import { SecurityProject, UserInfo } from '../types/types';
 
 interface HeaderProps {
@@ -22,7 +22,18 @@ export const Header: React.FC<HeaderProps> = ({
   fetchProjects, isRefreshing
 }) => {
   const [showStructure, setShowStructure] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
   const currentProject = projects.find(p => p.id === selectedProjectId) || { name: '选择项目' };
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('zh-CN', { hour12: false });
+  };
 
   const StructureNode = ({ name, icon: Icon, children }: any) => (
     <div className="ml-4 mt-2">
@@ -88,15 +99,20 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="h-8 w-[1px] bg-slate-200 mx-2" />
 
-        <div className="text-right hidden sm:block">
-          <p className="text-xs font-black text-slate-800">{user?.username}</p>
-          <div className="flex gap-1 justify-end">
-            <ShieldCheck size={10} className="text-blue-500" />
-            <span className="text-[8px] font-black uppercase text-slate-400">{user?.role?.[0]}</span>
+        <div className="flex items-center gap-4">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-black text-slate-800 leading-none">{user?.username}</p>
+            <p className="text-[10px] font-bold text-slate-400 mt-1 flex items-center justify-end gap-1.5">
+              <Clock size={10} className="text-blue-500" /> {formatTime(currentTime)}
+            </p>
+            <div className="flex gap-1 justify-end mt-0.5">
+              <ShieldCheck size={10} className="text-blue-500" />
+              <span className="text-[8px] font-black uppercase text-slate-400">{user?.role?.[0]}</span>
+            </div>
           </div>
-        </div>
-        <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-xs border-2 border-white shadow-sm">
-          {user?.username?.[0]?.toUpperCase()}
+          <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-xs border-2 border-white shadow-sm">
+            {user?.username?.[0]?.toUpperCase()}
+          </div>
         </div>
       </div>
     </header>

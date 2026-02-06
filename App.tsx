@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive } from 'lucide-react';
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
@@ -177,6 +177,7 @@ const App: React.FC = () => {
       case 'test-input-doc': return <DocAnalysisPage projectId={selectedProjectId} />;
       case 'test-input-tasks': return <TaskMgmtPage projectId={selectedProjectId} />;
       case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
+      case 'test-output-pvc': return <WorkflowPlaceholder title="输出-PVC资源管理" icon={<HardDrive />} />;
       
       case 'env-agent': return <EnvAgentPage projectId={selectedProjectId} />;
       case 'env-service': return <ServiceMgmtPage projectId={selectedProjectId} />;

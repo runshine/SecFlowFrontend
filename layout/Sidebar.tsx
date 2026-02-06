@@ -18,7 +18,8 @@ import {
   FileText,
   Play,
   Sparkles,
-  ListTodo
+  ListTodo,
+  HardDrive
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -87,11 +88,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'deploy-script-mgmt', label: '部署脚本管理' }
             ]} />
             <SidebarItem id="project-mgmt" label="项目空间" icon={<Briefcase size={20} />} />
-            <SidebarItem id="test-input" label="测试输入" icon={<FileBox size={20} />} children={[
-              { id: 'test-input-release', label: '发布包' }, 
-              { id: 'test-input-code', label: '源代码' }, 
-              { id: 'test-input-doc', label: '需求文档' },
-              { id: 'test-input-other', label: '其他资源' },
+            <SidebarItem id="test-input" label="公共资源管理" icon={<FileBox size={20} />} children={[
+              { id: 'test-input-release', label: '输入-发布包' }, 
+              { id: 'test-input-code', label: '输入-源代码' }, 
+              { id: 'test-input-doc', label: '输入-文档类' },
+              { id: 'test-input-other', label: '输入-其他资源' },
+              { id: 'test-output-pvc', label: '输出-PVC资源管理', icon: <HardDrive size={14} /> },
               { id: 'test-input-tasks', label: '任务管理' }
             ]} />
             <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[

@@ -15,29 +15,33 @@ import {
   Box,
   Trash2,
   Monitor,
-  Layout
+  Layout,
+  AlertCircle
 } from 'lucide-react';
 import { AgentService, Agent } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
-export const ServiceMgmtPage: React.FC = () => {
+export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const [loading, setLoading] = useState(true);
   const [allServices, setAllServices] = useState<AgentService[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    loadAllServices();
-  }, []);
+    if (projectId) {
+      loadAllServices();
+    }
+  }, [projectId]);
 
   const loadAllServices = async () => {
+    if (!projectId) return;
     setLoading(true);
     try {
-      const agentsData = await api.environment.getAgents();
-      setAgents(agentsData.agents);
+      const agentsData = await api.environment.getAgents(projectId);
+      setAgents(agentsData.agents || []);
       
-      const servicePromises = agentsData.agents
+      const servicePromises = (agentsData.agents || [])
         .filter(a => a.status === 'online')
         .map(async a => {
           try {
@@ -58,9 +62,9 @@ export const ServiceMgmtPage: React.FC = () => {
   };
 
   const handleUndeploy = async (agentKey: string, serviceName: string) => {
-    if (!confirm(`确认卸载服务 ${serviceName}？`)) return;
+    if (!projectId || !confirm(`确认卸载服务 ${serviceName}？`)) return;
     try {
-      await api.environment.undeploy({ agent_key: agentKey, service_name: serviceName });
+      await api.environment.undeploy({ agent_key: agentKey, service_name: serviceName, project_id: projectId });
       alert("卸载任务已提交");
       loadAllServices();
     } catch (err) {
@@ -73,11 +77,11 @@ export const ServiceMgmtPage: React.FC = () => {
     s.image.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
+  if (loading && projectId) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-20 animate-in fade-in">
         <Loader2 className="animate-spin text-blue-600 mb-6" size={48} />
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">正在跨 Agent 节点发现存活服务...</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">正在跨项目 Agent 节点发现存活服务...</p>
       </div>
     );
   }
@@ -92,15 +96,22 @@ export const ServiceMgmtPage: React.FC = () => {
         <div className="flex gap-4">
           <button 
             onClick={loadAllServices}
-            className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+            disabled={!projectId}
+            className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
           >
             <RefreshCw size={20} />
           </button>
-          <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-slate-900/10 hover:bg-slate-800 transition-all active:scale-95">
+          <button disabled={!projectId} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-slate-900/10 hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50">
             <Plus size={18} /> 部署新服务
           </button>
         </div>
       </div>
+
+      {!projectId && (
+        <div className="p-4 bg-amber-50 border border-amber-100 text-amber-700 rounded-2xl text-xs font-bold flex items-center gap-3">
+          <AlertCircle size={16} /> 请先在顶部菜单选择一个项目
+        </div>
+      )}
 
       {/* Grid Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -125,7 +136,7 @@ export const ServiceMgmtPage: React.FC = () => {
         <div className="bg-slate-900 p-8 rounded-[2.5rem] col-span-2 text-white flex items-center justify-between group overflow-hidden relative">
            <Zap className="absolute right-[-20px] top-[-20px] w-40 h-40 opacity-5 rotate-12 group-hover:opacity-10 transition-opacity" />
            <div>
-             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">服务网格一致性</p>
+             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">项目服务网格</p>
              <div className="flex items-center gap-4 mt-2">
                 <div className="h-2 w-48 bg-white/10 rounded-full overflow-hidden">
                    <div className="h-full bg-green-500" style={{ width: '100%' }} />
@@ -133,7 +144,7 @@ export const ServiceMgmtPage: React.FC = () => {
                 <span className="text-sm font-black text-green-500 uppercase tracking-tighter">Verified</span>
              </div>
            </div>
-           <button className="px-6 py-3 bg-white/10 rounded-xl text-xs font-black hover:bg-white/20 transition-all">
+           <button disabled={!projectId} className="px-6 py-3 bg-white/10 rounded-xl text-xs font-black hover:bg-white/20 transition-all disabled:opacity-50">
              快速扫描
            </button>
         </div>
@@ -145,7 +156,7 @@ export const ServiceMgmtPage: React.FC = () => {
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
           <input 
             type="text" 
-            placeholder="过滤服务名称、镜像定义或目标节点..." 
+            placeholder="过滤项目下服务名称、镜像定义或目标节点..." 
             className="w-full pl-16 pr-8 py-5 bg-white border border-slate-200 rounded-[2rem] text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -165,7 +176,7 @@ export const ServiceMgmtPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredServices.map(svc => (
+              {projectId && filteredServices.map(svc => (
                 <tr key={`${svc.agent_key}-${svc.id}`} className="hover:bg-slate-50 transition-all group">
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-4">
@@ -214,13 +225,15 @@ export const ServiceMgmtPage: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {filteredServices.length === 0 && (
+              {(!projectId || filteredServices.length === 0) && !loading && (
                 <tr>
                   <td colSpan={6} className="py-40 text-center">
                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
                         <Zap size={40} />
                      </div>
-                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest">未检索到任何活跃集群服务</p>
+                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest">
+                       {projectId ? '未检索到任何活跃集群服务' : '请先选择项目以发现服务'}
+                     </p>
                   </td>
                 </tr>
               )}

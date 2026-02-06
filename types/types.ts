@@ -73,11 +73,14 @@ export interface ProjectPVC {
 export interface Agent {
   key: string;
   hostname: string;
+  full_name?: string;
   status: 'online' | 'offline' | 'error' | 'timeout' | 'unknown';
   ip_address: string;
   system_info?: any;
-  workspace_id?: string;
+  project_id?: string;
   last_seen?: string;
+  pod_id?: string;
+  services?: any[];
 }
 
 export interface EnvTemplate {
@@ -134,11 +137,25 @@ export interface FileItem {
   updatedAt: string;
 }
 
+// Updated to match production nested structure
 export interface AgentStats {
-  total: number;
-  online: number;
-  offline: number;
-  error: number;
+  timestamp: string;
+  project_id: string;
+  summary: {
+    total_agents: number;
+    offline_agents: number;
+    status_distribution: {
+      online: number;
+      offline: number;
+      error: number;
+      unknown: number;
+    };
+  };
+  cleanup_info: {
+    can_cleanup: boolean;
+    offline_count: number;
+    suggested_action: string;
+  };
 }
 
 export interface TemplateFile {

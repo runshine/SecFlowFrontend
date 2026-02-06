@@ -38,7 +38,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [currentView, setCurrentView] = useState<ViewType | string>('dashboard');
   const [projects, setProjects] = useState<SecurityProject[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(localStorage.getItem('last_project_id') || '');
   const [activeProjectId, setActiveProjectId] = useState<string>(''); 
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -66,6 +66,12 @@ const App: React.FC = () => {
     }
   }, [token]);
 
+  useEffect(() => {
+    if (selectedProjectId) {
+      localStorage.setItem('last_project_id', selectedProjectId);
+    }
+  }, [selectedProjectId]);
+
   const fetchDashboardServicesCount = async (onlineAgents: Agent[]) => {
     if (onlineAgents.length === 0) return;
     try {
@@ -80,8 +86,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (token) {
-      if (currentView === 'dashboard') {
-        api.environment.getAgents().then(d => {
+      if (currentView === 'dashboard' && selectedProjectId) {
+        api.environment.getAgents(selectedProjectId).then(d => {
           const agentList = d.agents || [];
           setAgents(agentList);
           fetchDashboardServicesCount(agentList.filter(a => a.status === 'online'));
@@ -95,15 +101,6 @@ const App: React.FC = () => {
       if (currentView === 'static-packages') {
         api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
-      } else if (currentView === 'env-agent') {
-        setIsLoading(true);
-        api.environment.getAgents().then(d => setAgents(d.agents || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
-      } else if (currentView === 'env-template') {
-        setIsLoading(true);
-        api.environment.getTemplates().then(d => setTemplates(d.templates || [])).catch(e => console.error(e)).finally(() => setIsLoading(false));
-      } else if (currentView === 'env-tasks') {
-        setIsLoading(true);
-        api.environment.getTasks().then(d => { /* Tasks managed locally in page */ }).catch(e => console.error(e)).finally(() => setIsLoading(false));
       }
     }
   }, [selectedProjectId, currentView, token]);
@@ -181,16 +178,16 @@ const App: React.FC = () => {
       case 'test-input-tasks': return <TaskMgmtPage projectId={selectedProjectId} />;
       case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
       
-      case 'env-agent': return <EnvAgentPage />;
-      case 'env-service': return <ServiceMgmtPage />;
-      case 'env-template': return <EnvTemplatePage />;
-      case 'env-tasks': return <EnvTasksPage />;
+      case 'env-agent': return <EnvAgentPage projectId={selectedProjectId} />;
+      case 'env-service': return <ServiceMgmtPage projectId={selectedProjectId} />;
+      case 'env-template': return <EnvTemplatePage projectId={selectedProjectId} />;
+      case 'env-tasks': return <EnvTasksPage projectId={selectedProjectId} />;
       case 'engine-validation': return <WorkflowPlaceholder title="安全验证" icon={<ShieldCheck />} />;
       case 'pentest-risk': return <WorkflowPlaceholder title="风险评估" icon={<ShieldAlert />} />;
       case 'pentest-system': return <WorkflowPlaceholder title="系统分析" icon={<FileSearch />} />;
       case 'pentest-threat': return <WorkflowPlaceholder title="威胁分析" icon={<Zap />} />;
       case 'pentest-orch': return <WorkflowPlaceholder title="测试编排" icon={<Workflow />} />;
-      case 'pentest-exec-code': return <ExecutionCodeAuditPage />;
+      case 'pentest-exec-code': return <ExecutionCodeAuditPage projectId={selectedProjectId} />;
       case 'pentest-exec-work': return <ExecutionWorkPlatformPage />;
       case 'pentest-exec-secmate': return <SecMateNGPage />;
       case 'pentest-report': return <ReportsPage />;

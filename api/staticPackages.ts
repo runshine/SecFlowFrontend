@@ -1,8 +1,13 @@
-
 import { API_BASE, handleResponse, getHeaders } from './base';
 import { StaticPackage, PackageStats, PackageFile } from '../types/types';
 
 export const staticPackagesApi = {
+  // Health Check
+  getHealth: async (): Promise<{ status: string }> => {
+    const response = await fetch(`${API_BASE}/api/packages/health`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
   list: async (): Promise<{ packages: StaticPackage[] }> => 
     handleResponse(await fetch(`${API_BASE}/api/packages`, { headers: getHeaders() })),
   

@@ -1,8 +1,13 @@
-
 import { API_BASE, handleResponse, getHeaders } from './base';
 import { ProjectResource, ProjectTask, ProjectPVC } from '../types/types';
 
 export const resourcesApi = {
+  // Health Check
+  getHealth: async (): Promise<{ status: string }> => {
+    const response = await fetch(`${API_BASE}/api/resource/health`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
   // Resources
   list: async (projectId: string, type?: string): Promise<ProjectResource[]> => {
     const url = new URL(`${API_BASE}/api/resource/resources`);
@@ -44,6 +49,32 @@ export const resourcesApi = {
 
   downloadFile: (uuid: string) => {
     return `${API_BASE}/api/resource/resources/${uuid}/file?token=${localStorage.getItem('secflow_token')}`;
+  },
+
+  // Output PVC Specific
+  createOutputPvc: async (payload: { name: string; description?: string; project_id: string; pvc_size?: number }): Promise<any> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  },
+
+  getOutputPvcDetail: async (id: number): Promise<any> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${id}`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  deleteOutputPvc: async (id: number): Promise<any> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
   },
 
   // Tasks

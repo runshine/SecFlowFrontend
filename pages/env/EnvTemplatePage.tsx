@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Box, 
@@ -235,8 +234,9 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     if (selectedAgentKeys.size === 0 || !projectId) return;
     setDeploying(true);
     try {
-      const templatesToDeploy = Array.from(selectedNames);
-      const agentsToDeploy = Array.from(selectedAgentKeys);
+      // Fix: Explicitly cast Array.from results to string[] to avoid 'unknown' type errors during iteration
+      const templatesToDeploy = Array.from(selectedNames) as string[];
+      const agentsToDeploy = Array.from(selectedAgentKeys) as string[];
       
       let successCount = 0;
       for (const tName of templatesToDeploy) {
@@ -422,7 +422,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         
         {(!isFile && isExpanded) && (
           <div className="border-l border-slate-100 ml-6 mt-1">
-            {Object.values(node.children).map(child => (
+            {/* Fix: Cast Object.values results to TreeNode[] to avoid 'unknown' type errors during property access */}
+            {(Object.values(node.children) as TreeNode[]).map(child => (
               <RenderTreeNode key={child.path} node={child} depth={0} />
             ))}
           </div>

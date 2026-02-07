@@ -85,6 +85,9 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
 
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Track task IDs to detect when they finish
+  const prevActiveTaskIds = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (projectId) {
       loadData();
@@ -95,9 +98,34 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     }
   }, [projectId, type]);
 
-  const loadData = async () => {
+  // Monitor tasks for completion
+  useEffect(() => {
+    const currentTasks = Array.isArray(tasks) ? tasks : [];
+    const currentActiveTasks = currentTasks.filter(t => t && (t.status === 'pending' || t.status === 'running'));
+    const currentActiveIds = new Set(currentActiveTasks.map(t => t.task_id));
+
+    // Check if any task that was previously active is now missing from active set
+    let someTaskFinished = false;
+    prevActiveTaskIds.current.forEach(id => {
+      if (!currentActiveIds.has(id)) {
+        someTaskFinished = true;
+      }
+    });
+
+    if (someTaskFinished) {
+      console.log("Detected task completion, reloading resources in 1s...");
+      const timer = setTimeout(() => {
+        loadData(false); // Reload data without full screen spinner
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+
+    prevActiveTaskIds.current = currentActiveIds;
+  }, [tasks]);
+
+  const loadData = async (showSpinner = true) => {
     if (!projectId) return;
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     try {
       const [resData, pvcData] = await Promise.all([
         api.resources.list(projectId, type),
@@ -110,7 +138,7 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     } catch (err) {
       console.error("Failed to load input data", err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
@@ -145,9 +173,13 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     if (!projectId || uploadQueue.length === 0) return;
     
     setIsUploadingBatch(true);
+    let anyFailed = false;
     
-    for (let i = 0; i < uploadQueue.length; i++) {
-      const item = uploadQueue[i];
+    // Copy current queue to iterate without state closure issues
+    const currentQueue = [...uploadQueue];
+    
+    for (let i = 0; i < currentQueue.length; i++) {
+      const item = currentQueue[i];
       if (item.status === 'completed') continue;
 
       setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'uploading', progress: 30 } : q));
@@ -164,12 +196,20 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
         
         setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'completed', progress: 100 } : q));
       } catch (err: any) {
+        anyFailed = true;
         setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'failed', progress: 0, error: err.message } : q));
       }
     }
 
     setIsUploadingBatch(false);
-    loadData();
+    // After HTTP uploads are done, fetch tasks immediately so the monitor logic can see them
+    await loadTasks();
+
+    // Close only if all succeeded. If failures exist, modal stays open to show error details.
+    if (!anyFailed) {
+      setIsUploadModalOpen(false);
+      setUploadQueue([]);
+    }
   };
 
   const handleDeleteClick = (ids: number[], e?: React.MouseEvent) => {
@@ -273,7 +313,7 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
         </div>
         <div className="flex gap-4">
           <button 
-            onClick={loadData}
+            onClick={() => loadData()}
             className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95"
             title="手动刷新数据"
           >
@@ -570,26 +610,33 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
                       <div className="space-y-2">
                          {uploadQueue.map((item) => (
                             <div key={item.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between group/item">
-                               <div className="flex items-center gap-4 flex-1 min-w-0">
-                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                                     item.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                     item.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-white text-slate-400'
-                                  }`}>
-                                     {item.status === 'uploading' ? <Loader2 size={18} className="animate-spin" /> : <FileArchive size={18} />}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                     <p className="text-xs font-black text-slate-700 truncate">{item.file.name}</p>
-                                     <div className="flex items-center gap-2 mt-1">
-                                        <div className="flex-1 h-1 bg-white rounded-full overflow-hidden">
-                                           <div className={`h-full transition-all duration-300 ${item.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${item.progress}%` }} />
-                                        </div>
-                                        <span className="text-[9px] font-black text-slate-400">{(item.file.size / 1024 / 1024).toFixed(1)}MB</span>
-                                     </div>
-                                  </div>
+                               <div className="flex flex-col flex-1 min-w-0">
+                                 <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                       item.status === 'completed' ? 'bg-green-100 text-green-600' :
+                                       item.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-white text-slate-400'
+                                    }`}>
+                                       {item.status === 'uploading' ? <Loader2 size={18} className="animate-spin" /> : <FileArchive size={18} />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                       <p className="text-xs font-black text-slate-700 truncate">{item.file.name}</p>
+                                       <div className="flex items-center gap-2 mt-1">
+                                          <div className="flex-1 h-1 bg-white rounded-full overflow-hidden">
+                                             <div className={`h-full transition-all duration-300 ${item.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${item.progress}%` }} />
+                                          </div>
+                                          <span className="text-[9px] font-black text-slate-400">{(item.file.size / 1024 / 1024).toFixed(1)}MB</span>
+                                       </div>
+                                    </div>
+                                 </div>
+                                 {/* Display failure message prominently below the item if it exists */}
+                                 {item.status === 'failed' && item.error && (
+                                    <div className="mt-2 ml-14 p-2.5 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2 animate-in fade-in slide-in-from-top-1">
+                                       <AlertCircle size={12} className="text-red-500 mt-0.5 shrink-0" />
+                                       <p className="text-[10px] text-red-600 font-bold leading-tight">{item.error}</p>
+                                    </div>
+                                 )}
                                </div>
                                <div className="ml-4 shrink-0 flex items-center gap-2">
-                                  {/* Fix: Wrapped AlertCircle in a span with title because Lucide icons do not support the 'title' prop */}
-                                  {item.status === 'failed' && <span title={item.error}><AlertCircle size={14} className="text-red-500" /></span>}
                                   {item.status === 'completed' && <CheckCircle2 size={14} className="text-green-500" />}
                                   <button 
                                      onClick={() => removeFileFromQueue(item.id)}
@@ -653,9 +700,9 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
               <button 
                 onClick={executeDelete}
                 disabled={isDeleting}
-                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
               >
-                {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
                 确认销毁
               </button>
             </div>

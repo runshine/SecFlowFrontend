@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Shield, 
@@ -19,7 +18,12 @@ import {
   Play,
   Sparkles,
   ListTodo,
-  HardDrive
+  HardDrive,
+  Archive,
+  FileCode,
+  FolderTree,
+  Package,
+  Terminal
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -32,16 +36,30 @@ interface SidebarProps {
   setExpandedMenus: React.Dispatch<React.SetStateAction<Set<string>>>;
   setCurrentView: (v: ViewType | string) => void;
   handleLogout: () => void;
+  resourceHealth?: boolean | null;
+  staticPackageHealth?: boolean | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   user, currentView, isSidebarCollapsed, setIsSidebarCollapsed, 
-  expandedMenus, setExpandedMenus, setCurrentView, handleLogout
+  expandedMenus, setExpandedMenus, setCurrentView, handleLogout,
+  resourceHealth = null,
+  staticPackageHealth = null
 }) => {
-  const SidebarItem = ({ id, label, icon, children, depth = 0 }: any) => {
+  const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false }: any) => {
     const isExpanded = expandedMenus.has(id);
     const isActive = currentView === id;
     const hasChildren = children && children.length > 0;
+
+    // Determine icon color based on health status if specified
+    let iconElement = icon || <div className="w-5" />;
+    if (applyHealth && React.isValidElement(iconElement)) {
+      const healthColor = healthStatus === true ? 'text-green-500' : healthStatus === false ? 'text-red-500' : 'text-slate-400';
+      iconElement = React.cloneElement(iconElement as React.ReactElement, { 
+        className: `${(iconElement.props as any).className || ''} ${healthColor} transition-colors duration-500` 
+      });
+    }
+
     return (
       <div className="space-y-1">
         <div onClick={() => {
@@ -58,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }`}
           style={{ marginLeft: depth > 0 ? `${depth * 0.75}rem` : '0' }}
         >
-          {icon || <div className="w-5" />}
+          {iconElement}
           {!isSidebarCollapsed && (
             <div className="flex-1 flex items-center justify-between overflow-hidden">
               <span className={`${depth > 0 ? 'text-[11px]' : 'text-sm'} truncate`}>{label}</span>
@@ -67,7 +85,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
         {!isSidebarCollapsed && isExpanded && children?.map((child: any) => (
-          <SidebarItem key={child.id} id={child.id} label={child.label} icon={child.icon} children={child.children} depth={depth + 1} />
+          <SidebarItem 
+            key={child.id} 
+            id={child.id} 
+            label={child.label} 
+            icon={child.icon} 
+            children={child.children} 
+            depth={depth + 1} 
+            healthStatus={healthStatus}
+            applyHealth={applyHealth}
+          />
         ))}
       </div>
     );
@@ -83,19 +110,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div className="space-y-1">
             <SidebarItem id="dashboard" label="控制台" icon={<LayoutDashboard size={20} />} />
-            <SidebarItem id="base-mgmt" label="基础资源管理" icon={<Box size={20} />} children={[
-              { id: 'static-packages', label: '静态软件包管理' },
-              { id: 'deploy-script-mgmt', label: '部署脚本管理' }
-            ]} />
+            
+            <SidebarItem 
+              id="base-mgmt" 
+              label="基础资源管理" 
+              icon={<Box size={20} />} 
+              healthStatus={staticPackageHealth}
+              applyHealth={true}
+              children={[
+                { id: 'static-packages', label: '静态软件包管理', icon: <Package size={14} /> },
+                { id: 'deploy-script-mgmt', label: '部署脚本管理', icon: <Terminal size={14} /> }
+              ]} 
+            />
+
             <SidebarItem id="project-mgmt" label="项目空间" icon={<Briefcase size={20} />} />
-            <SidebarItem id="test-input" label="公共资源管理" icon={<FileBox size={20} />} children={[
-              { id: 'test-input-release', label: '输入-发布包' }, 
-              { id: 'test-input-code', label: '输入-源代码' }, 
-              { id: 'test-input-doc', label: '输入-文档类' },
-              { id: 'test-input-other', label: '输入-其他资源' },
-              { id: 'test-output-pvc', label: '输出-PVC资源管理', icon: <HardDrive size={14} /> },
-              { id: 'test-input-tasks', label: '任务管理' }
-            ]} />
+
+            <SidebarItem 
+              id="test-input" 
+              label="公共资源管理" 
+              healthStatus={resourceHealth}
+              applyHealth={true}
+              icon={<FileBox size={20} />} 
+              children={[
+                { id: 'test-input-release', label: '输入-发布包', icon: <Archive size={14} /> }, 
+                { id: 'test-input-code', label: '输入-源代码', icon: <FileCode size={14} /> }, 
+                { id: 'test-input-doc', label: '输入-文档类', icon: <FileText size={14} /> },
+                { id: 'test-input-other', label: '输入-其他资源', icon: <FolderTree size={14} /> },
+                { id: 'test-output-pvc', label: '输出-PVC资源管理', icon: <HardDrive size={14} /> },
+                { id: 'test-input-tasks', label: '任务管理', icon: <ListTodo size={14} /> }
+              ]} 
+            />
+
             <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[
               { id: 'env-template', label: '模板管理' }, 
               { id: 'env-agent', label: 'Agent 管理' }, 
@@ -110,7 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'pentest-orch', label: '测试编排' },
               { id: 'pentest-exec', label: '测试执行', icon: <Play size={14} />, children: [
                 { id: 'pentest-exec-code', label: '在线代码审计（VSCODE AI版）' },
-                { id: 'pentest-exec-work', label: '知微在线工作平台（AI版）' },
+                { id: 'pentest-exec-work', label: '知微' },
                 { id: 'pentest-exec-secmate', label: 'SecMate-NG (AI 助手)', icon: <Sparkles size={12} className="text-amber-400" /> }
               ]},
               { id: 'pentest-report', label: '报告', icon: <FileText size={14} /> }

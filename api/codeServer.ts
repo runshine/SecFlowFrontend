@@ -12,6 +12,9 @@ export const codeServerApi = {
   getStatus: async (projectId: string, name: string): Promise<any> => 
     handleResponse(await fetch(`${API_BASE}/api/app/code-server/projects/${projectId}/code-servers/${name}/status`, { headers: getHeaders() })),
   
+  getLogs: async (projectId: string, name: string, tailLines: number = 100): Promise<{ code_server_name: string; logs: string }> => 
+    handleResponse(await fetch(`${API_BASE}/api/app/code-server/projects/${projectId}/code-servers/${name}/logs?tail_lines=${tailLines}`, { headers: getHeaders() })),
+  
   create: async (projectId: string, payload: any): Promise<{ task_id: string; task_type: string }> => 
     handleResponse(await fetch(`${API_BASE}/api/app/code-server/projects/${projectId}/code-servers`, {
       method: 'POST',
@@ -39,4 +42,10 @@ export const codeServerApi = {
   
   getTaskDetail: async (projectId: string, taskId: string): Promise<any> => 
     handleResponse(await fetch(`${API_BASE}/api/app/code-server/projects/${projectId}/tasks/${taskId}`, { headers: getHeaders() })),
+
+  deleteTask: async (projectId: string, taskId: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/app/code-server/projects/${projectId}/tasks/${taskId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    }))
 };

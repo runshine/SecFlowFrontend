@@ -23,7 +23,8 @@ import {
   Info,
   Hash,
   User,
-  History
+  History,
+  ExternalLink
 } from 'lucide-react';
 import { SecurityProject, K8sResourceList, NamespaceStatus } from '../types/types';
 import { api } from '../api/api';
@@ -287,7 +288,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
                </thead>
                <tbody className="divide-y divide-slate-50">
                  {resources?.pods.map(pod => (
-                   <tr key={pod.name} className="hover:bg-slate-50/50 transition-all">
+                   <tr key={pod.name} className="hover:bg-slate-50/50 transition-all group">
                      <td className="px-8 py-6">
                        <div className="flex items-center gap-4">
                          <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center">
@@ -337,7 +338,7 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
                        </div>
                        <div className="flex justify-between text-xs">
                          <span className="text-slate-400">暴露端口</span>
-                         <span className="font-bold text-slate-700">{svc.ports.join(', ')}</span>
+                         <span className="font-bold text-slate-700">{Array.isArray(svc.ports) ? svc.ports.join(', ') : 'N/A'}</span>
                        </div>
                      </div>
                    </div>
@@ -380,36 +381,52 @@ export const ProjectDetailPage: React.FC<ProjectDetailPageProps> = ({ projectId,
         )}
 
         {activeTab === 'storage' && (
-          <div className="p-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {resources?.pvcs.map(pvc => (
-              <div key={pvc.name} className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 hover:border-blue-200 transition-all group">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 bg-white border border-slate-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm group-hover:bg-amber-600 group-hover:text-white transition-all">
-                    <Database size={24} />
-                  </div>
-                  <StatusBadge status={pvc.status} />
-                </div>
-                <h4 className="text-lg font-black text-slate-800 break-all">{pvc.name}</h4>
-                <div className="mt-6 space-y-4">
-                  <div className="flex justify-between items-center text-xs font-bold">
-                    <span className="text-slate-400 uppercase tracking-widest text-[9px]">存储容量</span>
-                    <span className="text-slate-800 font-black">{pvc.capacity.storage}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs font-bold">
-                    <span className="text-slate-400 uppercase tracking-widest text-[9px]">存储类 (SC)</span>
-                    <span className="text-blue-600 font-black">{pvc.storage_class}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {(!resources?.pvcs || resources.pvcs.length === 0) && (
-              <div className="col-span-3 py-32 text-center">
-                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200">
-                    <HardDrive size={32} />
-                 </div>
-                 <p className="text-slate-400 font-black uppercase text-xs tracking-widest">No persistent volumes mapped</p>
-              </div>
-            )}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+             <table className="w-full text-left">
+               <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
+                 <tr>
+                   <th className="px-8 py-6">存储卷名称 (PVC)</th>
+                   <th className="px-6 py-6">存储类 (Storage Class)</th>
+                   <th className="px-6 py-6">容量配额</th>
+                   <th className="px-6 py-6">运行状态</th>
+                   <th className="px-8 py-6 text-right">操作</th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-50">
+                 {resources?.pvcs.map(pvc => (
+                   <tr key={pvc.name} className="hover:bg-slate-50/50 transition-all group">
+                     <td className="px-8 py-6">
+                       <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+                           <Database size={18} />
+                         </div>
+                         <span className="text-sm font-black text-slate-700">{pvc.name}</span>
+                       </div>
+                     </td>
+                     <td className="px-6 py-6 text-xs font-bold text-blue-600">{pvc.storage_class}</td>
+                     <td className="px-6 py-6 font-mono text-xs text-slate-800 font-black">
+                        {pvc.capacity?.storage || 'Calculating...'}
+                     </td>
+                     <td className="px-6 py-6"><StatusBadge status={pvc.status} /></td>
+                     <td className="px-8 py-6 text-right">
+                        <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="查看详情">
+                           <ExternalLink size={16} />
+                        </button>
+                     </td>
+                   </tr>
+                 ))}
+                 {(!resources?.pvcs || resources.pvcs.length === 0) && (
+                   <tr>
+                     <td colSpan={5} className="py-32 text-center">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                           <HardDrive size={32} />
+                        </div>
+                        <p className="text-slate-400 font-black uppercase text-xs tracking-widest">No persistent volumes mapped</p>
+                     </td>
+                   </tr>
+                 )}
+               </tbody>
+             </table>
           </div>
         )}
       </div>

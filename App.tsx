@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive } from 'lucide-react';
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
@@ -20,6 +19,7 @@ import { CodeAuditPage } from './pages/inputs/CodeAuditPage';
 import { DocAnalysisPage } from './pages/inputs/DocAnalysisPage';
 import { TaskMgmtPage } from './pages/inputs/TaskMgmtPage';
 import { OtherInputPage } from './pages/inputs/OtherInputPage';
+import { OutputPvcPage } from './pages/inputs/OutputPvcPage';
 
 // Env Pages
 import { EnvAgentPage } from './pages/env/EnvAgentPage';
@@ -57,14 +57,48 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
 
+  // Health Status
+  const [resourceServiceHealthy, setResourceServiceHealthy] = useState<boolean | null>(null);
+  const [staticPackageHealthy, setStaticPackageHealthy] = useState<boolean | null>(null);
+
   useEffect(() => {
     if (token) {
       api.auth.validateToken()
         .then(setUser)
         .catch(() => handleLogout());
       fetchProjects();
+      
+      // Initial check
+      checkResourceHealth();
+      checkStaticPackageHealth();
+
+      // Set intervals
+      const healthInterval = setInterval(() => {
+        checkResourceHealth();
+        checkStaticPackageHealth();
+      }, 30000);
+
+      return () => clearInterval(healthInterval);
     }
   }, [token]);
+
+  const checkResourceHealth = async () => {
+    try {
+      const res = await api.resources.getHealth();
+      setResourceServiceHealthy(res.status === 'UP' || res.status === 'healthy' || res.status === 'active');
+    } catch (e) {
+      setResourceServiceHealthy(false);
+    }
+  };
+
+  const checkStaticPackageHealth = async () => {
+    try {
+      const res = await api.staticPackages.getHealth();
+      setStaticPackageHealthy(res.status === 'UP' || res.status === 'healthy' || res.status === 'active');
+    } catch (e) {
+      setStaticPackageHealthy(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -177,7 +211,7 @@ const App: React.FC = () => {
       case 'test-input-doc': return <DocAnalysisPage projectId={selectedProjectId} />;
       case 'test-input-tasks': return <TaskMgmtPage projectId={selectedProjectId} />;
       case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
-      case 'test-output-pvc': return <WorkflowPlaceholder title="输出-PVC资源管理" icon={<HardDrive />} />;
+      case 'test-output-pvc': return <OutputPvcPage projectId={selectedProjectId} />;
       
       case 'env-agent': return <EnvAgentPage projectId={selectedProjectId} />;
       case 'env-service': return <ServiceMgmtPage projectId={selectedProjectId} />;
@@ -243,7 +277,18 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      <Sidebar user={user} currentView={currentView} isSidebarCollapsed={isSidebarCollapsed} setIsSidebarCollapsed={setIsSidebarCollapsed} expandedMenus={expandedMenus} setExpandedMenus={setExpandedMenus} setCurrentView={setCurrentView} handleLogout={handleLogout} />
+      <Sidebar 
+        user={user} 
+        currentView={currentView} 
+        isSidebarCollapsed={isSidebarCollapsed} 
+        setIsSidebarCollapsed={setIsSidebarCollapsed} 
+        expandedMenus={expandedMenus} 
+        setExpandedMenus={setExpandedMenus} 
+        setCurrentView={setCurrentView} 
+        handleLogout={handleLogout}
+        resourceHealth={resourceServiceHealthy}
+        staticPackageHealth={staticPackageHealthy}
+      />
       <main className="flex-1 flex flex-col min-w-0">
         <Header user={user} projects={projects} selectedProjectId={selectedProjectId} setSelectedProjectId={setSelectedProjectId} isProjectDropdownOpen={isProjectDropdownOpen} setIsProjectDropdownOpen={setIsProjectDropdownOpen} searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchProjects={fetchProjects} isRefreshing={isRefreshing} />
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">

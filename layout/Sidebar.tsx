@@ -26,7 +26,8 @@ import {
   Terminal,
   Zap,
   Workflow,
-  Layout
+  Layout,
+  Code2
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -43,6 +44,7 @@ interface SidebarProps {
   staticPackageHealth?: boolean | null;
   projectHealth?: boolean | null;
   envHealth?: boolean | null;
+  codeAuditHealth?: boolean | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -51,7 +53,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   resourceHealth = null,
   staticPackageHealth = null,
   projectHealth = null,
-  envHealth = null
+  envHealth = null,
+  codeAuditHealth = null
 }) => {
   const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false }: any) => {
     const isExpanded = expandedMenus.has(id);
@@ -100,8 +103,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={child.icon} 
             children={child.children} 
             depth={depth + 1} 
-            healthStatus={healthStatus}
-            applyHealth={applyHealth}
+            // Handle conditional health status for specific items
+            healthStatus={child.id === 'pentest-exec-code' ? codeAuditHealth : (child.healthStatus !== undefined ? child.healthStatus : healthStatus)}
+            applyHealth={child.id === 'pentest-exec-code' ? true : (child.applyHealth !== undefined ? child.applyHealth : applyHealth)}
           />
         ))}
       </div>
@@ -176,7 +180,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'pentest-threat', label: '威胁分析' }, 
               { id: 'pentest-orch', label: '测试编排' },
               { id: 'pentest-exec', label: '测试执行', icon: <Play size={14} />, children: [
-                { id: 'pentest-exec-code', label: '在线代码审计（VSCODE AI版）' },
+                { id: 'pentest-exec-code', label: '在线代码审计（VSCODE AI版）', icon: <Code2 size={12} /> },
                 { id: 'pentest-exec-work', label: '知微' },
                 { id: 'pentest-exec-secmate', label: 'SecMate-NG (AI 助手)', icon: <Sparkles size={12} className="text-amber-400" /> }
               ]},

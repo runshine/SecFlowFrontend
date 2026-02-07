@@ -62,6 +62,7 @@ const App: React.FC = () => {
   const [staticPackageHealthy, setStaticPackageHealthy] = useState<boolean | null>(null);
   const [projectServiceHealthy, setProjectServiceHealthy] = useState<boolean | null>(null);
   const [envServiceHealthy, setEnvServiceHealthy] = useState<boolean | null>(null);
+  const [codeAuditServiceHealthy, setCodeAuditServiceHealthy] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (token) {
@@ -71,22 +72,21 @@ const App: React.FC = () => {
       fetchProjects();
       
       // Initial check
-      checkResourceHealth();
-      checkStaticPackageHealth();
-      checkProjectHealth();
-      checkEnvHealth();
+      checkAllHealth();
 
       // Set intervals
-      const healthInterval = setInterval(() => {
-        checkResourceHealth();
-        checkStaticPackageHealth();
-        checkProjectHealth();
-        checkEnvHealth();
-      }, 30000);
-
+      const healthInterval = setInterval(checkAllHealth, 30000);
       return () => clearInterval(healthInterval);
     }
   }, [token]);
+
+  const checkAllHealth = () => {
+    checkResourceHealth();
+    checkStaticPackageHealth();
+    checkProjectHealth();
+    checkEnvHealth();
+    checkCodeAuditHealth();
+  };
 
   const checkResourceHealth = async () => {
     try {
@@ -121,6 +121,15 @@ const App: React.FC = () => {
       setEnvServiceHealthy(res.status === 'healthy' || res.status === 'UP' || res.status === 'active');
     } catch (e) {
       setEnvServiceHealthy(false);
+    }
+  };
+
+  const checkCodeAuditHealth = async () => {
+    try {
+      const res = await api.codeServer.getHealth();
+      setCodeAuditServiceHealthy(res.status === 'healthy' || res.status === 'UP' || res.status === 'active');
+    } catch (e) {
+      setCodeAuditServiceHealthy(false);
     }
   };
 
@@ -314,6 +323,7 @@ const App: React.FC = () => {
         staticPackageHealth={staticPackageHealthy}
         projectHealth={projectServiceHealthy}
         envHealth={envServiceHealthy}
+        codeAuditHealth={codeAuditServiceHealthy}
       />
       <main className="flex-1 flex flex-col min-w-0">
         <Header user={user} projects={projects} selectedProjectId={selectedProjectId} setSelectedProjectId={setSelectedProjectId} isProjectDropdownOpen={isProjectDropdownOpen} setIsProjectDropdownOpen={setIsProjectDropdownOpen} searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchProjects={fetchProjects} isRefreshing={isRefreshing} />

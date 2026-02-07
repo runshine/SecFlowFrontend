@@ -1,7 +1,12 @@
-
 import { API_BASE, handleResponse, getHeaders } from './base';
 
 export const codeServerApi = {
+  // Health Check
+  getHealth: async (): Promise<{ status: string }> => {
+    const response = await fetch(`${API_BASE}/api/app/code-server/health`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
   // Instances
   list: async (projectId: string): Promise<{ total: number; items: any[] }> => 
     handleResponse(await fetch(`${API_BASE}/api/app/code-server/projects/${projectId}/code-servers`, { headers: getHeaders() })),

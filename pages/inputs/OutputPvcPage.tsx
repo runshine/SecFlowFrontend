@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Database, 
@@ -21,7 +20,6 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertCircle,
-  // Added missing Clock import
   Clock
 } from 'lucide-react';
 import { api } from '../../api/api';
@@ -47,7 +45,9 @@ export const OutputPvcPage: React.FC<{ projectId: string }> = ({ projectId }) =>
   const [detailLoading, setDetailLoading] = useState(false);
 
   // Deletion
-  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; id: number | null; name: string }>({ show: false, id: null, name: '' });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; id: number | null; name: string; error: string | null }>({ 
+    show: false, id: null, name: '', error: null 
+  });
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -61,7 +61,6 @@ export const OutputPvcPage: React.FC<{ projectId: string }> = ({ projectId }) =>
     setLoading(true);
     try {
       const res = await api.resources.list(projectId, 'output_pvc');
-      // For Output PVCs, we'll want to enrich them with full detail to show K8S status
       const detailedPromises = res.map(r => api.resources.getOutputPvcDetail(r.id).catch(() => r));
       const enriched = await Promise.all(detailedPromises);
       setResources(enriched);
@@ -92,18 +91,19 @@ export const OutputPvcPage: React.FC<{ projectId: string }> = ({ projectId }) =>
 
   const handleDeleteTrigger = (id: number, name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setDeleteConfirm({ show: true, id, name });
+    setDeleteConfirm({ show: true, id, name, error: null });
   };
 
   const executeDelete = async () => {
     if (!deleteConfirm.id) return;
     setIsDeleting(true);
+    setDeleteConfirm(prev => ({ ...prev, error: null }));
     try {
       await api.resources.deleteOutputPvc(deleteConfirm.id);
-      setDeleteConfirm({ show: false, id: null, name: '' });
+      setDeleteConfirm({ show: false, id: null, name: '', error: null });
       loadData();
     } catch (err: any) {
-      alert("删除失败: " + err.message);
+      setDeleteConfirm(prev => ({ ...prev, error: err.message }));
     } finally {
       setIsDeleting(false);
     }
@@ -335,80 +335,71 @@ export const OutputPvcPage: React.FC<{ projectId: string }> = ({ projectId }) =>
       {/* Create Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
-           <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
-              <div className="p-10 pb-6 border-b border-slate-50 bg-slate-50/30">
-                 <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+           <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col">
+              <div className="p-10 pb-6 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+                 <div className="flex items-center gap-5">
+                    <div className="w-14 h-14 bg-indigo-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-indigo-500/20">
                        <Plus size={28} />
                     </div>
                     <div>
-                       <h3 className="text-2xl font-black text-slate-800 tracking-tight">创建输出存储卷</h3>
-                       <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">自动编排 K8S 持久化存储配额</p>
+                       <h3 className="text-2xl font-black text-slate-800 tracking-tight">创建输出存储</h3>
+                       <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">为安全任务预置持久化存储空间</p>
                     </div>
                  </div>
+                 <button onClick={() => setIsCreateModalOpen(false)} className="p-4 text-slate-400 hover:text-slate-600 transition-colors">
+                    <X size={28} />
+                 </button>
               </div>
 
-              <form onSubmit={handleCreate} className="p-10 space-y-6">
+              <form onSubmit={handleCreate} className="flex-1 p-10 space-y-8">
                  <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">资源显示名称 *</label>
                     <input 
-                       required
-                       placeholder="例如：auth-service-report-storage"
-                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-indigo-500/10 font-bold text-slate-800 transition-all"
-                       value={formData.name}
-                       onChange={e => setFormData({...formData, name: e.target.value})}
+                      required 
+                      placeholder="e.g. 审计结果持久化存储" 
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-indigo-500/10 font-bold text-slate-800 transition-all"
+                      value={formData.name}
+                      onChange={e => setFormData({...formData, name: e.target.value})}
                     />
                  </div>
 
-                 <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex justify-between">
-                       <span>容量大小 (Gi) *</span>
-                       <span className="text-indigo-600 font-bold tracking-tight">Range: 1-500 Gi</span>
-                    </label>
+                 <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">存储配额 (GiB)</label>
+                       <span className="text-xs font-black text-indigo-600">{formData.pvc_size} Gi</span>
+                    </div>
                     <input 
-                       type="number"
-                       min="1"
-                       max="500"
-                       required
-                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-indigo-500/10 font-bold text-slate-800 transition-all"
-                       value={formData.pvc_size}
-                       onChange={e => setFormData({...formData, pvc_size: parseInt(e.target.value)})}
+                      type="range" min="1" max="100" step="1"
+                      className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      value={formData.pvc_size}
+                      onChange={(e) => setFormData({...formData, pvc_size: parseInt(e.target.value)})}
                     />
                  </div>
 
                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">资源描述</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">备注说明</label>
                     <textarea 
-                       placeholder="描述该存储卷的使用场景或关联任务..."
-                       rows={2}
-                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-indigo-500/10 font-bold text-slate-800 transition-all resize-none"
-                       value={formData.description}
-                       onChange={e => setFormData({...formData, description: e.target.value})}
+                      placeholder="描述该存储空间的用途..." 
+                      rows={3}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-indigo-500/10 font-bold text-slate-800 transition-all resize-none"
+                      value={formData.description}
+                      onChange={e => setFormData({...formData, description: e.target.value})}
                     />
-                 </div>
-
-                 <div className="p-6 bg-blue-50 border border-blue-100 rounded-3xl flex gap-4 items-start">
-                    <Info size={20} className="text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-blue-600 font-medium leading-relaxed">
-                       输出存储卷将自动创建在当前项目的 K8S Namespace 中。创建后，该卷可直接被后续的渗透测试任务、审计任务挂载使用。
-                    </p>
                  </div>
 
                  <div className="pt-4 flex gap-4">
                     <button 
-                       type="button"
-                       onClick={() => setIsCreateModalOpen(false)}
-                       className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all active:scale-95"
+                      type="button" onClick={() => setIsCreateModalOpen(false)}
+                      className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
                     >
                        取消
                     </button>
                     <button 
-                       type="submit"
-                       disabled={createLoading}
-                       className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                      type="submit" disabled={createLoading}
+                      className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
                     >
-                       {createLoading ? <Loader2 size={20} className="animate-spin" /> : <ShieldCheck size={20} />}
-                       确认创建并分配
+                       {createLoading ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
+                       确认创建
                     </button>
                  </div>
               </form>
@@ -430,28 +421,44 @@ export const OutputPvcPage: React.FC<{ projectId: string }> = ({ projectId }) =>
                 所有存储在其中的非持久化数据将<span className="font-bold underline text-red-600 uppercase">立即永久丢失</span>。
               </p>
               
-              <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl text-left">
-                 <div className="flex gap-3 text-amber-700 font-black text-xs items-center mb-1">
-                    <AlertCircle size={16} /> 注意：正在使用中的卷无法销毁
-                 </div>
-              </div>
+              {deleteConfirm.error && (
+                <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-left animate-in slide-in-from-top-2">
+                   <div className="flex gap-3 text-red-700 font-black text-xs items-start">
+                      <AlertCircle size={18} className="shrink-0" />
+                      <div className="space-y-1">
+                         <p className="uppercase tracking-widest">无法执行删除操作</p>
+                         <p className="font-medium text-[11px] leading-relaxed text-red-600/80">{deleteConfirm.error}</p>
+                      </div>
+                   </div>
+                </div>
+              )}
+
+              {!deleteConfirm.error && (
+                <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl text-left">
+                   <div className="flex gap-3 text-amber-700 font-black text-xs items-center mb-1">
+                      <AlertCircle size={16} /> 注意：正在使用中的卷无法销毁
+                   </div>
+                </div>
+              )}
             </div>
             <div className="px-10 pb-10 flex gap-4">
               <button 
-                onClick={() => setDeleteConfirm({ show: false, id: null, name: '' })}
+                onClick={() => setDeleteConfirm({ show: false, id: null, name: '', error: null })}
                 disabled={isDeleting}
                 className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
               >
-                保留资源
+                {deleteConfirm.error ? '关闭' : '保留资源'}
               </button>
-              <button 
-                onClick={executeDelete}
-                disabled={isDeleting}
-                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-              >
-                {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                确认销毁
-              </button>
+              {!deleteConfirm.error && (
+                <button 
+                  onClick={executeDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                  确认销毁
+                </button>
+              )}
             </div>
           </div>
         </div>

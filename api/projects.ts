@@ -1,8 +1,13 @@
-
 import { API_BASE, handleResponse, getHeaders } from './base';
 import { SecurityProject, K8sResourceList, NamespaceStatus } from '../types/types';
 
 export const projectsApi = {
+  // Health Check
+  getHealth: async (): Promise<{ status: string; service: string }> => {
+    const response = await fetch(`${API_BASE}/api/project/health`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
   list: async (): Promise<{ total: number; projects: SecurityProject[] }> => {
     const response = await fetch(`${API_BASE}/api/project`, { headers: getHeaders() });
     return handleResponse(response);

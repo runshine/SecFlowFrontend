@@ -23,7 +23,10 @@ import {
   FileCode,
   FolderTree,
   Package,
-  Terminal
+  Terminal,
+  Zap,
+  Workflow,
+  Layout
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -38,13 +41,17 @@ interface SidebarProps {
   handleLogout: () => void;
   resourceHealth?: boolean | null;
   staticPackageHealth?: boolean | null;
+  projectHealth?: boolean | null;
+  envHealth?: boolean | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   user, currentView, isSidebarCollapsed, setIsSidebarCollapsed, 
   expandedMenus, setExpandedMenus, setCurrentView, handleLogout,
   resourceHealth = null,
-  staticPackageHealth = null
+  staticPackageHealth = null,
+  projectHealth = null,
+  envHealth = null
 }) => {
   const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false }: any) => {
     const isExpanded = expandedMenus.has(id);
@@ -55,7 +62,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     let iconElement = icon || <div className="w-5" />;
     if (applyHealth && React.isValidElement(iconElement)) {
       const healthColor = healthStatus === true ? 'text-green-500' : healthStatus === false ? 'text-red-500' : 'text-slate-400';
-      iconElement = React.cloneElement(iconElement as React.ReactElement, { 
+      // Fix: Cast iconElement to React.ReactElement<any> to resolve TS error with className property
+      iconElement = React.cloneElement(iconElement as React.ReactElement<any>, { 
         className: `${(iconElement.props as any).className || ''} ${healthColor} transition-colors duration-500` 
       });
     }
@@ -123,7 +131,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ]} 
             />
 
-            <SidebarItem id="project-mgmt" label="项目空间" icon={<Briefcase size={20} />} />
+            <SidebarItem 
+              id="project-mgmt" 
+              label="项目空间" 
+              icon={<Briefcase size={20} />} 
+              healthStatus={projectHealth}
+              applyHealth={true}
+            />
 
             <SidebarItem 
               id="test-input" 
@@ -141,12 +155,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ]} 
             />
 
-            <SidebarItem id="env-mgmt" label="环境服务" icon={<Database size={20} />} children={[
-              { id: 'env-template', label: '模板管理' }, 
-              { id: 'env-agent', label: 'Agent 管理' }, 
-              { id: 'env-service', label: '服务管理' },
-              { id: 'env-tasks', label: '任务管理' }
-            ]} />
+            <SidebarItem 
+              id="env-mgmt" 
+              label="环境服务" 
+              icon={<Database size={20} />} 
+              healthStatus={envHealth}
+              applyHealth={true}
+              children={[
+                { id: 'env-template', label: '模板管理', icon: <Box size={14} /> }, 
+                { id: 'env-agent', label: 'Agent 管理', icon: <Monitor size={14} /> }, 
+                { id: 'env-service', label: '服务管理', icon: <Zap size={14} /> },
+                { id: 'env-tasks', label: '任务管理', icon: <Workflow size={14} /> }
+              ]} 
+            />
+            
             <SidebarItem id="engine-validation" label="安全验证" icon={<ShieldCheck size={20} />} />
             <SidebarItem id="pentest-root" label="渗透测试" icon={<Target size={20} />} children={[
               { id: 'pentest-risk', label: '风险评估' }, 

@@ -1,8 +1,13 @@
-
 import { API_BASE, handleResponse, getHeaders } from './base';
 import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace } from '../types/types';
 
 export const environmentApi = {
+  // Global Health Check
+  getHealth: async (): Promise<{ status: string }> => {
+    const response = await fetch(`${API_BASE}/api/agent/health`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
   // Workspaces
   getWorkspaces: async (): Promise<{ workspaces: Workspace[] }> => 
     handleResponse(await fetch(`${API_BASE}/api/agent/workspace`, { headers: getHeaders() })),

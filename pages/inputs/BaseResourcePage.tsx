@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Upload, 
@@ -25,7 +24,9 @@ import {
   FileText,
   CheckSquare,
   Square,
-  AlertCircle
+  AlertCircle,
+  // Added ShieldCheck to fix "Cannot find name 'ShieldCheck'" error on line 650
+  ShieldCheck
 } from 'lucide-react';
 import { ProjectResource, ProjectTask, ProjectPVC } from '../../types/types';
 import { api } from '../../api/api';
@@ -39,7 +40,7 @@ const RefreshCw = ({ size, className }: { size?: number, className?: string }) =
     <path d="M21 2v6h-6"></path>
     <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
     <path d="M3 22v-6h6"></path>
-    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+    <path d="M21 12a9 9 0 1-15 6.7L3 16"></path>
   </svg>
 );
 
@@ -68,7 +69,9 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   
   // Deletion State
-  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; ids: number[] }>({ show: false, ids: [] });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; ids: number[]; error: string | null }>({ 
+    show: false, ids: [], error: null 
+  });
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Upload Modal States
@@ -85,7 +88,6 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
 
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Track task IDs to detect when they finish
   const prevActiveTaskIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -98,13 +100,11 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     }
   }, [projectId, type]);
 
-  // Monitor tasks for completion
   useEffect(() => {
     const currentTasks = Array.isArray(tasks) ? tasks : [];
     const currentActiveTasks = currentTasks.filter(t => t && (t.status === 'pending' || t.status === 'running'));
     const currentActiveIds = new Set(currentActiveTasks.map(t => t.task_id));
 
-    // Check if any task that was previously active is now missing from active set
     let someTaskFinished = false;
     prevActiveTaskIds.current.forEach(id => {
       if (!currentActiveIds.has(id)) {
@@ -113,9 +113,8 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     });
 
     if (someTaskFinished) {
-      console.log("Detected task completion, reloading resources in 1s...");
       const timer = setTimeout(() => {
-        loadData(false); // Reload data without full screen spinner
+        loadData(false);
       }, 1000);
       return () => clearTimeout(timer);
     }
@@ -174,8 +173,6 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     
     setIsUploadingBatch(true);
     let anyFailed = false;
-    
-    // Copy current queue to iterate without state closure issues
     const currentQueue = [...uploadQueue];
     
     for (let i = 0; i < currentQueue.length; i++) {
@@ -202,10 +199,8 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     }
 
     setIsUploadingBatch(false);
-    // After HTTP uploads are done, fetch tasks immediately so the monitor logic can see them
     await loadTasks();
 
-    // Close only if all succeeded. If failures exist, modal stays open to show error details.
     if (!anyFailed) {
       setIsUploadModalOpen(false);
       setUploadQueue([]);
@@ -214,19 +209,22 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
 
   const handleDeleteClick = (ids: number[], e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setDeleteConfirm({ show: true, ids });
+    setDeleteConfirm({ show: true, ids, error: null });
   };
 
   const executeDelete = async () => {
     if (deleteConfirm.ids.length === 0) return;
     setIsDeleting(true);
+    setDeleteConfirm(prev => ({ ...prev, error: null }));
     try {
-      await Promise.all(deleteConfirm.ids.map(id => api.resources.delete(id)));
-      setDeleteConfirm({ show: false, ids: [] });
+      for (const id of deleteConfirm.ids) {
+        await api.resources.delete(id);
+      }
+      setDeleteConfirm({ show: false, ids: [], error: null });
       setSelectedIds(new Set());
       loadData();
     } catch (err: any) {
-      alert("删除失败: " + err.message);
+      setDeleteConfirm(prev => ({ ...prev, error: err.message }));
     } finally {
       setIsDeleting(false);
     }
@@ -268,39 +266,19 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
     }
   };
 
-  // Drag and Drop Handlers
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     setIsDragging(true);
-  };
-
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     setIsDragging(false);
     addFilesToQueue(e.dataTransfer.files);
   };
 
-  const safeTasks = Array.isArray(tasks) ? tasks : [];
-  const activeTasks = safeTasks.filter(t => t && (t.status === 'pending' || t.status === 'running'));
-  const currentPvc = Array.isArray(pvcs) && pvcs.length > 0 ? pvcs[0] : null;
-
   return (
     <div className="p-10 space-y-10 animate-in fade-in duration-500 pb-24 h-full overflow-y-auto relative">
-      {/* Header & Actions */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
@@ -358,69 +336,7 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
         </div>
       )}
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">已纳管资产</p>
-            <h3 className="text-3xl font-black text-slate-800 mt-1">{resources.length}</h3>
-          </div>
-          <FileBox className="text-blue-100" size={40} />
-        </div>
-        
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm md:col-span-2">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">存储配额状态 (PVC 集群)</p>
-            <span className="text-xs font-black text-blue-600 uppercase">{pvcs.length} 个活跃卷</span>
-          </div>
-          <div className="h-4 bg-slate-50 rounded-full overflow-hidden flex border border-slate-100">
-             <div className="h-full bg-blue-600 transition-all duration-1000" style={{ width: pvcs.length > 0 ? '45%' : '0%' }} />
-          </div>
-          <div className="flex justify-between mt-2 text-[10px] font-bold text-slate-400 uppercase">
-             <span>Storage Class: {currentPvc?.storage_class || 'Standard'}</span>
-             <span>Status: Distributed</span>
-          </div>
-        </div>
-
-        <div className="bg-slate-900 p-6 rounded-[2rem] text-white flex items-center justify-between group overflow-hidden relative">
-           <Workflow className="absolute right-[-10px] top-[-10px] w-24 h-24 opacity-5 rotate-12" />
-           <div className="relative z-10">
-             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">后台异步任务</p>
-             <h3 className="text-3xl font-black mt-1">{activeTasks.length}</h3>
-           </div>
-           <StatusBadge status={activeTasks.length > 0 ? 'Running' : 'Idle'} />
-        </div>
-      </div>
-
-      {/* Active Tasks Grid */}
-      {activeTasks.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">正在执行的任务流</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeTasks.map(task => (
-              <div key={task.task_id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4 animate-in slide-in-from-top-2">
-                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-                  <Loader2 className="animate-spin" size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-slate-800 uppercase truncate">{(task.task_type || 'Task').replace('_', ' ')}</p>
-                  <div className="h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
-                    <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${task.progress || 0}%` }} />
-                  </div>
-                </div>
-                <button 
-                  onClick={() => showTaskLogs(task.task_id)}
-                  className="p-2 text-slate-300 hover:text-blue-600 transition-all"
-                >
-                  <Terminal size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Main Resource List */}
+      {/* List Table */}
       <div className="space-y-4">
         <div className="relative">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
@@ -500,9 +416,7 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
                     </div>
                   </td>
                   <td className="px-6 py-6">
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={res.upload_status} />
-                    </div>
+                    <StatusBadge status={res.upload_status} />
                   </td>
                   <td className="px-8 py-6 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -525,159 +439,14 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
                   </td>
                 </tr>
               ))}
-              {filteredResources.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={6} className="py-40 text-center">
-                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
-                      <Upload size={32} />
-                    </div>
-                    <p className="text-sm font-black text-slate-300 uppercase tracking-widest">暂无资产，请先上传测试资源</p>
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Upload Modal */}
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
-             <div className="p-10 pb-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/30 shrink-0">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <Upload size={28} />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-800 tracking-tight">批量资产上传</h3>
-                    <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mt-1">支持多文件并行上传并自动解压至 K8S 独立 PVC</p>
-                  </div>
-                </div>
-                <button onClick={() => setIsUploadModalOpen(false)} className="p-3 text-slate-400 hover:bg-slate-100 rounded-2xl transition-all">
-                  <X size={24} />
-                </button>
-             </div>
-
-             <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">默认 PVC 配额 (Gi)</label>
-                    <input 
-                      type="number"
-                      min="1"
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all"
-                      value={globalPvcSize}
-                      onChange={e => setGlobalPvcSize(parseInt(e.target.value))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">关联项目 ID</label>
-                    <div className="w-full px-6 py-4 bg-slate-200 text-slate-500 rounded-2xl font-mono text-[10px] flex items-center">
-                       {projectId}
-                    </div>
-                  </div>
-                </div>
-
-                <div 
-                   onClick={() => fileInputRef.current?.click()}
-                   onDragOver={handleDragOver}
-                   onDragEnter={handleDragEnter}
-                   onDragLeave={handleDragLeave}
-                   onDrop={handleDrop}
-                   className={`p-10 border-2 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer transition-all group ${
-                     isDragging ? 'bg-blue-50 border-blue-500 scale-[1.01]' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-blue-400'
-                   }`}
-                >
-                    <input 
-                       type="file" 
-                       multiple
-                       ref={fileInputRef} 
-                       className="hidden" 
-                       onChange={(e) => addFilesToQueue(e.target.files)} 
-                    />
-                    <FileArchive size={48} className={`mb-3 transition-all ${isDragging ? 'text-blue-500 animate-bounce' : 'text-slate-300 group-hover:text-blue-500'}`} />
-                    <p className="text-sm font-black text-slate-600">点击或拖拽多个本地压缩包</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-widest">ZIP, TAR.GZ (MAX 500MB PER FILE)</p>
-                </div>
-
-                {uploadQueue.length > 0 && (
-                   <div className="space-y-3">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex justify-between">
-                         <span>待上传列表 ({uploadQueue.length})</span>
-                         <button onClick={() => !isUploadingBatch && setUploadQueue([])} className="text-blue-600 hover:underline">清空列表</button>
-                      </h4>
-                      <div className="space-y-2">
-                         {uploadQueue.map((item) => (
-                            <div key={item.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between group/item">
-                               <div className="flex flex-col flex-1 min-w-0">
-                                 <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                                       item.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                       item.status === 'failed' ? 'bg-red-100 text-red-600' : 'bg-white text-slate-400'
-                                    }`}>
-                                       {item.status === 'uploading' ? <Loader2 size={18} className="animate-spin" /> : <FileArchive size={18} />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                       <p className="text-xs font-black text-slate-700 truncate">{item.file.name}</p>
-                                       <div className="flex items-center gap-2 mt-1">
-                                          <div className="flex-1 h-1 bg-white rounded-full overflow-hidden">
-                                             <div className={`h-full transition-all duration-300 ${item.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${item.progress}%` }} />
-                                          </div>
-                                          <span className="text-[9px] font-black text-slate-400">{(item.file.size / 1024 / 1024).toFixed(1)}MB</span>
-                                       </div>
-                                    </div>
-                                 </div>
-                                 {/* Display failure message prominently below the item if it exists */}
-                                 {item.status === 'failed' && item.error && (
-                                    <div className="mt-2 ml-14 p-2.5 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2 animate-in fade-in slide-in-from-top-1">
-                                       <AlertCircle size={12} className="text-red-500 mt-0.5 shrink-0" />
-                                       <p className="text-[10px] text-red-600 font-bold leading-tight">{item.error}</p>
-                                    </div>
-                                 )}
-                               </div>
-                               <div className="ml-4 shrink-0 flex items-center gap-2">
-                                  {item.status === 'completed' && <CheckCircle2 size={14} className="text-green-500" />}
-                                  <button 
-                                     onClick={() => removeFileFromQueue(item.id)}
-                                     disabled={isUploadingBatch}
-                                     className="p-2 text-slate-300 hover:text-red-500 transition-all opacity-0 group-hover/item:opacity-100 disabled:hidden"
-                                  >
-                                     <Trash2 size={14} />
-                                  </button>
-                               </div>
-                            </div>
-                         ))}
-                      </div>
-                   </div>
-                )}
-             </div>
-
-             <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex gap-4 shrink-0">
-                <button 
-                  type="button"
-                  onClick={() => setIsUploadModalOpen(false)}
-                  disabled={isUploadingBatch}
-                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  取消
-                </button>
-                <button 
-                  onClick={handleUploadSubmit}
-                  disabled={isUploadingBatch || uploadQueue.length === 0}
-                  className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-                >
-                  {isUploadingBatch ? <Loader2 className="animate-spin" size={20} /> : <Upload size={20} />}
-                  开始批量上传
-                </button>
-             </div>
-          </div>
-        </div>
-      )}
-
       {/* Delete Confirmation Modal */}
       {deleteConfirm.show && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-10 text-center">
               <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
@@ -688,59 +457,217 @@ export const BaseResourcePage: React.FC<BaseResourcePageProps> = ({ type, title,
                 您正准备永久删除 <span className="text-red-600 font-black">{deleteConfirm.ids.length}</span> 项测试资产。
                 此操作将同步销毁关联的 <span className="text-red-600 font-black">K8S PVC 存储卷</span>。该过程<span className="font-black">不可逆</span>。
               </p>
+              {deleteConfirm.error && (
+                <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-left animate-in slide-in-from-top-2">
+                   <div className="flex gap-3 text-red-700 font-black text-xs items-start">
+                      <AlertCircle size={18} className="shrink-0" />
+                      <div className="space-y-1">
+                         <p className="uppercase tracking-widest">操作失败</p>
+                         <p className="font-medium text-[11px] leading-relaxed text-red-600/80">{deleteConfirm.error}</p>
+                      </div>
+                   </div>
+                </div>
+              )}
             </div>
             <div className="px-10 pb-10 flex gap-4">
               <button 
-                onClick={() => setDeleteConfirm({ show: false, ids: [] })}
+                onClick={() => setDeleteConfirm({ show: false, ids: [], error: null })}
                 disabled={isDeleting}
                 className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50"
               >
-                保留资产
+                {deleteConfirm.error ? '关闭' : '保留资产'}
               </button>
-              <button 
-                onClick={executeDelete}
-                disabled={isDeleting}
-                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-              >
-                {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                确认销毁
-              </button>
+              {!deleteConfirm.error && (
+                <button 
+                  onClick={executeDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                  确认销毁
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Log Viewer Modal */}
-      {logModal.show && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
-          <div className="bg-[#0f172a] w-full max-w-4xl h-[70vh] rounded-[3rem] shadow-2xl border border-white/10 flex flex-col overflow-hidden">
-             <div className="px-10 py-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+      {/* Batch Upload Modal */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[85vh]">
+            <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between shrink-0">
                <div className="flex items-center gap-4">
-                 <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white"><Terminal size={20} /></div>
+                 <div className="w-14 h-14 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-blue-500/20">
+                   <Upload size={28} />
+                 </div>
                  <div>
-                   <h3 className="text-sm font-black text-white uppercase tracking-widest">任务执行日志</h3>
-                   <p className="text-[10px] font-mono text-slate-500 uppercase mt-0.5">Task ID: {logModal.taskId}</p>
+                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">批量上传资产</h3>
+                   <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">自动配置隔离存储并解压资源</p>
                  </div>
                </div>
-               <button onClick={() => setLogModal({ ...logModal, show: false })} className="p-3 bg-white/5 text-slate-400 hover:text-white rounded-2xl transition-all">
-                 <X size={20} />
+               <button onClick={() => !isUploadingBatch && setIsUploadModalOpen(false)} className="p-4 text-slate-400 hover:text-slate-600">
+                 <X size={28} />
+               </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+               {/* Config Row */}
+               <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                  <div className="flex items-center justify-between">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">K8S 存储配额 (GiB)</label>
+                     <span className="text-xs font-black text-blue-600">{globalPvcSize} Gi</span>
+                  </div>
+                  <input 
+                    type="range" min="1" max="100" step="1"
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    value={globalPvcSize}
+                    onChange={(e) => setGlobalPvcSize(parseInt(e.target.value))}
+                  />
+                  <p className="text-[9px] text-slate-400 font-medium italic">注：配额将应用到本次上传的所有独立资源 PVC 实例中</p>
+               </div>
+
+               {/* Drop Zone */}
+               <div 
+                 onDragOver={handleDragOver}
+                 onDrop={handleDrop}
+                 onClick={() => fileInputRef.current?.click()}
+                 className={`border-4 border-dashed rounded-[3rem] p-12 text-center transition-all cursor-pointer group ${
+                   isDragging ? 'border-blue-600 bg-blue-50/50 scale-[0.98]' : 'border-slate-100 hover:border-blue-300 hover:bg-slate-50'
+                 }`}
+               >
+                  <input 
+                    type="file" multiple className="hidden" ref={fileInputRef}
+                    onChange={(e) => addFilesToQueue(e.target.files)}
+                  />
+                  <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                    <Plus size={40} />
+                  </div>
+                  <h4 className="text-lg font-black text-slate-800">点击或拖拽文件至此</h4>
+                  <p className="text-sm text-slate-400 mt-2 font-medium">支持 .zip, .tar, .gz 等压缩格式，将自动解压至安全沙箱</p>
+               </div>
+
+               {/* Upload Queue */}
+               {uploadQueue.length > 0 && (
+                 <div className="space-y-3">
+                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">待上传队列 ({uploadQueue.length})</h5>
+                    <div className="space-y-2">
+                       {uploadQueue.map(item => (
+                         <div key={item.id} className="p-4 bg-white border border-slate-100 rounded-2xl flex items-center justify-between group">
+                            <div className="flex items-center gap-4 min-w-0">
+                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                 item.status === 'completed' ? 'bg-green-50 text-green-600' :
+                                 item.status === 'failed' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'
+                               }`}>
+                                  {item.status === 'completed' ? <CheckCircle2 size={18} /> : <FileBox size={18} />}
+                               </div>
+                               <div className="min-w-0">
+                                  <p className="text-xs font-black text-slate-800 truncate">{item.file.name}</p>
+                                  <p className="text-[10px] text-slate-400">{(item.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-4 shrink-0">
+                               {item.status === 'uploading' && (
+                                 <div className="flex items-center gap-3">
+                                    <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                       <div className="h-full bg-blue-600 animate-pulse" style={{ width: `${item.progress}%` }} />
+                                    </div>
+                                    <span className="text-[10px] font-black text-blue-600">{item.progress}%</span>
+                                 </div>
+                               )}
+                               {item.status === 'failed' && (
+                                 <span className="text-[10px] font-black text-red-500 uppercase flex items-center gap-1">
+                                    <AlertCircle size={12} /> 上传失败
+                                 </span>
+                               )}
+                               <button 
+                                 onClick={(e) => { e.stopPropagation(); removeFileFromQueue(item.id); }}
+                                 disabled={isUploadingBatch}
+                                 className="p-2 text-slate-300 hover:text-red-500 transition-colors disabled:opacity-30"
+                               >
+                                  <Trash2 size={16} />
+                               </button>
+                            </div>
+                            {item.error && (
+                              <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-red-50 border border-red-100 rounded-xl text-[9px] text-red-600 font-bold z-10 animate-in fade-in">
+                                {item.error}
+                              </div>
+                            )}
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+               )}
+            </div>
+
+            <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex gap-4 shrink-0">
+               <button 
+                 type="button" onClick={() => setIsUploadModalOpen(false)} disabled={isUploadingBatch}
+                 className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black hover:bg-slate-50 transition-all"
+               >
+                 取消
+               </button>
+               <button 
+                 onClick={handleUploadSubmit} disabled={isUploadingBatch || uploadQueue.length === 0}
+                 className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+               >
+                  {isUploadingBatch ? <Loader2 className="animate-spin" size={20} /> : <Upload size={20} />}
+                  开始上传
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log Modal */}
+      {logModal.show && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-xl animate-in fade-in">
+          <div className="bg-[#0f172a] w-full max-w-4xl h-[75vh] rounded-[3.5rem] shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95">
+             <div className="px-10 py-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+               <div className="flex items-center gap-5">
+                 <div className="w-12 h-12 bg-blue-600 rounded-[1.25rem] flex items-center justify-center text-white shadow-lg shadow-blue-500/20"><Terminal size={24} /></div>
+                 <div>
+                   <h3 className="text-lg font-black text-white uppercase tracking-widest">任务执行详细审计日志</h3>
+                   <p className="text-[10px] font-mono text-slate-500 uppercase mt-1">Resource Context Task ID: {logModal.taskId}</p>
+                 </div>
+               </div>
+               <button onClick={() => setLogModal({ ...logModal, show: false })} className="p-4 bg-white/5 text-slate-400 hover:text-white rounded-2xl transition-all">
+                 <X size={24} />
                </button>
              </div>
-             <div className="flex-1 overflow-y-auto p-10 font-mono text-[11px] text-blue-300/80 space-y-1 bg-black/40 custom-scrollbar">
+             <div className="flex-1 overflow-y-auto p-12 font-mono text-[11px] text-blue-300/80 space-y-1.5 bg-black/40 custom-scrollbar">
                {logLoading ? (
                  <div className="flex items-center gap-3 text-blue-500 font-black py-20 justify-center">
-                   <Loader2 className="animate-spin" size={20} /> 正在同步 K8S Job 缓冲区...
+                   <Loader2 className="animate-spin" size={20} /> 正在同步后端任务缓冲区...
                  </div>
                ) : logModal.logs.length > 0 ? (
                   logModal.logs.map((line, i) => (
-                    <div key={i} className="flex gap-4 group">
-                      <span className="text-slate-700 w-6 text-right select-none opacity-50">{i+1}</span>
-                      <span className="whitespace-pre-wrap leading-relaxed">{line}</span>
+                    <div key={i} className="flex gap-6 group hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
+                      <span className="text-slate-700 w-8 text-right select-none opacity-50 font-bold">{i+1}</span>
+                      <span className="whitespace-pre-wrap leading-relaxed flex-1">{line}</span>
                     </div>
                   ))
                ) : (
-                 <div className="py-20 text-center text-slate-600 uppercase font-black tracking-widest">暂无日志输出</div>
+                 <div className="py-20 flex flex-col items-center justify-center text-slate-600 space-y-4 opacity-30">
+                    <ShieldCheck size={64} />
+                    <p className="text-sm uppercase font-black tracking-widest">暂无实时日志输出记录</p>
+                 </div>
                )}
+             </div>
+             <div className="px-12 py-6 bg-white/5 border-t border-white/5 flex justify-between items-center shrink-0">
+               <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-2 text-[10px] font-black text-green-500 uppercase tracking-widest">
+                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" /> Tunnel Established
+                 </div>
+                 <div className="h-4 w-[1px] bg-white/10" />
+                 <p className="text-[10px] font-black text-slate-500 uppercase">Buffer Size: {logModal.logs.length} Lines</p>
+               </div>
+               <button 
+                onClick={() => showTaskLogs(logModal.taskId)}
+                className="px-6 py-2.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-blue-500 transition-all flex items-center gap-2"
+               >
+                 <RefreshCw size={14} /> 刷新缓冲区
+               </button>
              </div>
           </div>
         </div>

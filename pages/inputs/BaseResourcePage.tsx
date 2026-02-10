@@ -25,24 +25,13 @@ import {
   CheckSquare,
   Square,
   AlertCircle,
-  // Added ShieldCheck to fix "Cannot find name 'ShieldCheck'" error on line 650
-  ShieldCheck
+  ShieldCheck,
+  // 从 lucide-react 引入 RefreshCw 替代受损的本地组件
+  RefreshCw
 } from 'lucide-react';
 import { ProjectResource, ProjectTask, ProjectPVC } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
-
-const RefreshCw = ({ size, className }: { size?: number, className?: string }) => (
-  <svg 
-    className={className}
-    width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-  >
-    <path d="M21 2v6h-6"></path>
-    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
-    <path d="M3 22v-6h6"></path>
-    <path d="M21 12a9 9 0 1-15 6.7L3 16"></path>
-  </svg>
-);
 
 interface BaseResourcePageProps {
   type: 'document' | 'software' | 'code' | 'other';

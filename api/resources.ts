@@ -10,10 +10,12 @@ export const resourcesApi = {
 
   // Resources
   list: async (projectId: string, type?: string): Promise<ProjectResource[]> => {
-    const url = new URL(`${API_BASE}/api/resource/resources`);
-    url.searchParams.append('project_id', projectId);
-    if (type) url.searchParams.append('resource_type', type);
-    const res = await fetch(url.toString(), { headers: getHeaders() });
+    const params = new URLSearchParams({ project_id: projectId });
+    if (type) params.append('resource_type', type);
+    
+    const res = await fetch(`${API_BASE}/api/resource/resources?${params.toString()}`, { 
+      headers: getHeaders() 
+    });
     const data = await handleResponse(res);
     return data.resources || [];
   },
@@ -79,11 +81,13 @@ export const resourcesApi = {
 
   // Tasks
   getTasks: async (projectId: string, params: { task_type?: string; status?: string } = {}): Promise<ProjectTask[]> => {
-    const url = new URL(`${API_BASE}/api/resource/tasks`);
-    url.searchParams.append('project_id', projectId);
-    if (params.task_type) url.searchParams.append('task_type', params.task_type);
-    if (params.status) url.searchParams.append('status', params.status);
-    const res = await fetch(url.toString(), { headers: getHeaders() });
+    const queryParams = new URLSearchParams({ project_id: projectId });
+    if (params.task_type) queryParams.append('task_type', params.task_type);
+    if (params.status) queryParams.append('status', params.status);
+    
+    const res = await fetch(`${API_BASE}/api/resource/tasks?${queryParams.toString()}`, { 
+      headers: getHeaders() 
+    });
     const data = await handleResponse(res);
     return data.tasks || [];
   },

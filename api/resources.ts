@@ -13,9 +13,9 @@ export const resourcesApi = {
     const params = new URLSearchParams({ project_id: projectId });
     if (type) params.append('resource_type', type);
     
-    const res = await fetch(`${API_BASE}/api/resource/resources?${params.toString()}`, { 
-      headers: getHeaders() 
-    });
+    // 使用模板字符串拼接，避免 new URL 在 base 为空时报错
+    const url = `${API_BASE}/api/resource/resources?${params.toString()}`;
+    const res = await fetch(url, { headers: getHeaders() });
     const data = await handleResponse(res);
     return data.resources || [];
   },
@@ -23,7 +23,7 @@ export const resourcesApi = {
   upload: async (formData: FormData): Promise<{ task_id: string; resource_uuid: string; message: string }> => {
     const headers = getHeaders();
     const uploadHeaders: any = { ...headers };
-    delete uploadHeaders['Content-Type']; // Let the browser set the boundary
+    delete uploadHeaders['Content-Type']; 
 
     const response = await fetch(`${API_BASE}/api/resource/resources/upload`, {
       method: 'POST',
@@ -53,7 +53,6 @@ export const resourcesApi = {
     return `${API_BASE}/api/resource/resources/${uuid}/file?token=${localStorage.getItem('secflow_token')}`;
   },
 
-  // Output PVC Specific
   createOutputPvc: async (payload: { name: string; description?: string; project_id: string; pvc_size?: number }): Promise<any> => {
     const response = await fetch(`${API_BASE}/api/resource/output-pvc`, {
       method: 'POST',
@@ -79,15 +78,13 @@ export const resourcesApi = {
     return handleResponse(response);
   },
 
-  // Tasks
   getTasks: async (projectId: string, params: { task_type?: string; status?: string } = {}): Promise<ProjectTask[]> => {
     const queryParams = new URLSearchParams({ project_id: projectId });
     if (params.task_type) queryParams.append('task_type', params.task_type);
     if (params.status) queryParams.append('status', params.status);
     
-    const res = await fetch(`${API_BASE}/api/resource/tasks?${queryParams.toString()}`, { 
-      headers: getHeaders() 
-    });
+    const url = `${API_BASE}/api/resource/tasks?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: getHeaders() });
     const data = await handleResponse(res);
     return data.tasks || [];
   },
@@ -110,7 +107,6 @@ export const resourcesApi = {
     return handleResponse(response);
   },
 
-  // PVCs
   getPVCs: async (projectId: string): Promise<{ pvcs: ProjectPVC[]; total: number }> => {
     const response = await fetch(`${API_BASE}/api/resource/pvcs?project_id=${projectId}`, { headers: getHeaders() });
     return handleResponse(response);

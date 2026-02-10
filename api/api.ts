@@ -5,6 +5,7 @@ import { resourcesApi } from './resources';
 import { staticPackagesApi } from './staticPackages';
 import { environmentApi } from './environment';
 import { codeServerApi } from './codeServer';
+import { deployScriptApi } from './deployScript';
 
 export const api = {
   auth: authApi,
@@ -12,5 +13,6 @@ export const api = {
   resources: resourcesApi,
   staticPackages: staticPackagesApi,
   environment: environmentApi,
-  codeServer: codeServerApi
+  codeServer: codeServerApi,
+  deployScript: deployScriptApi
 };

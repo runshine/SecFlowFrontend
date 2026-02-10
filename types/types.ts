@@ -137,7 +137,6 @@ export interface FileItem {
   updatedAt: string;
 }
 
-// Updated to match production nested structure
 export interface AgentStats {
   timestamp: string;
   project_id: string;
@@ -227,6 +226,21 @@ export interface AgentService {
 export interface Workspace {
   id: string;
   name: string;
+}
+
+// Deploy Script Management Types
+export interface DeployScriptItem {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  modified_at: number;
+}
+
+export interface DeployScriptListResponse {
+  path: string;
+  total: number;
+  items: DeployScriptItem[];
 }
 
 export type ViewType = 

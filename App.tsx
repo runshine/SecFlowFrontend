@@ -34,6 +34,13 @@ import { ExecutionWorkPlatformPage } from './pages/pentest/ExecutionWorkPlatform
 import { SecMateNGPage } from './pages/pentest/SecMateNGPage';
 import { ReportsPage } from './pages/pentest/ReportsPage';
 
+// User & Auth Pages
+import { UserMgmtPage } from './pages/user/UserMgmtPage';
+import { RoleMgmtPage } from './pages/user/RoleMgmtPage';
+import { PermMgmtPage } from './pages/user/PermMgmtPage';
+import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
+import { MachineTokenPage } from './pages/user/MachineTokenPage';
+
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -65,7 +72,6 @@ const App: React.FC = () => {
   const [envServiceHealthy, setEnvServiceHealthy] = useState<boolean | null>(null);
   const [codeAuditServiceHealthy, setCodeAuditServiceHealthy] = useState<boolean | null>(null);
 
-  // 监听 401 身份失效事件
   useEffect(() => {
     const handleUnauthorized = () => {
       handleLogout();
@@ -264,13 +270,14 @@ const App: React.FC = () => {
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
 
-      // New Admin Pages (Blank Placeholders)
+      // Admin Pages
       case 'sys-settings': return <WorkflowPlaceholder title="系统设置" icon={<Settings />} />;
       case 'change-password': return <WorkflowPlaceholder title="修改密码" icon={<Lock />} />;
-      case 'user-mgmt-users': return <WorkflowPlaceholder title="用户账号管理" icon={<Users />} />;
-      case 'user-mgmt-roles': return <WorkflowPlaceholder title="角色定义管理" icon={<UserCheck />} />;
-      case 'user-mgmt-perms': return <WorkflowPlaceholder title="功能权限分配" icon={<ShieldAlert />} />;
-      case 'user-mgmt-online': return <WorkflowPlaceholder title="在线会话监控" icon={<Globe />} />;
+      case 'user-mgmt-users': return <UserMgmtPage />;
+      case 'user-mgmt-roles': return <RoleMgmtPage />;
+      case 'user-mgmt-perms': return <PermMgmtPage />;
+      case 'user-mgmt-online': return <OnlineSessionPage />;
+      case 'user-mgmt-machine': return <MachineTokenPage />;
 
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
     }

@@ -13,6 +13,47 @@ export interface UserInfo {
   username: string;
   is_active: boolean;
   role: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Role {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  user_ids?: number[];
+}
+
+export interface UserSession {
+  user_id: number;
+  username: string;
+  role: string[];
+  ip_address: string;
+  user_agent: string;
+  login_at: string;
+  last_active_at: string;
+}
+
+export interface DetailedSession {
+  id: number;
+  token_jti: string;
+  ip_address: string;
+  user_agent: string;
+  status: 'active' | 'revoked' | 'expired';
+  created_at: string;
+  last_active_at: string;
+  expires_at: string;
+}
+
+export interface MachineToken {
+  id: number;
+  machine_code: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+  expires_at: string | null;
 }
 
 export interface SecurityProject {

@@ -31,12 +31,13 @@ import {
   Code2,
   Users,
   UserCheck,
-  /* Fix: Added missing UserCog import */
   UserCog,
   ShieldAlert,
   Globe,
   Settings,
-  ArrowLeftCircle
+  ArrowLeftCircle,
+  Cpu,
+  Key
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -65,7 +66,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   envHealth = null,
   codeAuditHealth = null
 }) => {
-  // 判断当前是否处于用户管理模式
   const isUserMgmtMode = currentView.startsWith('user-mgmt-');
 
   const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false }: any) => {
@@ -212,7 +212,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'user-mgmt-users', label: '用户账号管理', icon: <Users size={14} /> },
               { id: 'user-mgmt-roles', label: '角色定义管理', icon: <UserCheck size={14} /> },
               { id: 'user-mgmt-perms', label: '功能权限分配', icon: <Settings size={14} /> },
-              { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> }
+              { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> },
+              { id: 'user-mgmt-machine', label: '机机凭证管理', icon: <Cpu size={14} /> }
             ]} 
           />
        </div>
@@ -223,7 +224,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className={`${isSidebarCollapsed ? 'w-24' : 'w-80'} bg-slate-900 text-slate-300 flex flex-col transition-all duration-300 z-30 shadow-2xl shrink-0`}>
       <div className="p-8 flex items-center gap-4 shrink-0">
         <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/30">
-          {/* Fix: UserCog is now imported correctly */}
           {isUserMgmtMode ? <UserCog className="text-white" size={28} /> : <Shield className="text-white" size={28} />}
         </div>
         {!isSidebarCollapsed && (

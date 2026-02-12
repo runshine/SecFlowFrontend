@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Monitor, 
@@ -26,7 +25,8 @@ import {
   X,
   Sparkles,
   Command,
-  Info
+  Info,
+  ChevronDown
 } from 'lucide-react';
 import { Agent, AgentStats } from '../../types/types';
 import { api } from '../../api/api';
@@ -76,12 +76,23 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
   const [integrationType, setIntegrationType] = useState<'manual' | 'auto' | null>(null);
   const [copied, setCopied] = useState(false);
+  
+  // External IPs State
+  const [externalIps, setExternalIps] = useState<string[]>([]);
+  const [selectedIp, setSelectedIp] = useState<string>('');
+  const [ipsLoading, setIpsLoading] = useState(false);
 
   useEffect(() => {
     if (projectId) {
       loadData();
     }
   }, [projectId]);
+
+  useEffect(() => {
+    if (integrationType === 'manual' && externalIps.length === 0) {
+      loadExternalIps();
+    }
+  }, [integrationType]);
 
   const loadData = async () => {
     if (!projectId) return;
@@ -100,6 +111,22 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
+  const loadExternalIps = async () => {
+    setIpsLoading(true);
+    try {
+      const res = await api.environment.getExternalIps();
+      const ips = res.external_agent_ips || [];
+      setExternalIps(ips);
+      if (ips.length > 0) {
+        setSelectedIp(ips[0]);
+      }
+    } catch (err) {
+      console.error("Failed to load external IPs", err);
+    } finally {
+      setIpsLoading(false);
+    }
+  };
+
   const handleCleanup = async () => {
     if (!confirm("确认清理当前项目下掉线超过 5 分钟的 Agent？")) return;
     setIsCleaning(true);
@@ -113,8 +140,13 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
+  const getIntegrationCommand = () => {
+    const ip = selectedIp || '192.168.12.90';
+    return `wget http://${ip}/script/bootstrap.sh -O bootstrap.sh && chmod +x bootstrap.sh && ./bootstrap.sh -w ${projectId} -u ${ip}:80 -t /sothothv2`;
+  };
+
   const handleCopyCommand = () => {
-    const cmd = `wget http://192.168.12.90/script/bootstrap.sh -O bootstrap.sh && chmod +x bootstrap.sh && ./bootstrap.sh -w ${projectId} -u 192.168.12.90:80 -t /sothothv2`;
+    const cmd = getIntegrationCommand();
     navigator.clipboard.writeText(cmd);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -366,7 +398,6 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                              <span className="text-slate-600">{sys?.memory?.usage_percent || 0}%</span>
                            </div>
                            <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                             {/* Fix: Removed duplicate 'style' attribute */}
                              <div className={`h-full transition-all duration-700 ${isOnline ? 'bg-indigo-500' : 'bg-slate-300'}`} style={{ width: `${sys?.memory?.usage_percent || 0}%` }} />
                            </div>
                         </div>
@@ -460,15 +491,53 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                   </div>
                 ) : integrationType === 'manual' ? (
                   <div className="space-y-8 animate-in slide-in-from-bottom-4">
+                    {/* IP Selection UI */}
                     <div className="space-y-4">
                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                         <Command size={14} className="text-blue-500" /> 请在目标服务器终端执行
+                         <Globe size={14} className="text-blue-500" /> 选择接入代理 IP (External Gateway)
+                       </h5>
+                       
+                       {ipsLoading ? (
+                         <div className="flex items-center gap-3 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                           <Loader2 size={16} className="animate-spin text-blue-600" />
+                           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">正在拉取可用路由节点...</span>
+                         </div>
+                       ) : externalIps.length > 0 ? (
+                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {externalIps.map(ip => (
+                              <button 
+                                key={ip}
+                                onClick={() => setSelectedIp(ip)}
+                                className={`px-4 py-3 rounded-2xl border-2 transition-all font-mono text-xs font-black flex items-center justify-between group ${
+                                  selectedIp === ip 
+                                    ? 'bg-blue-50 border-blue-600 text-blue-700 shadow-sm' 
+                                    : 'bg-white border-slate-100 text-slate-500 hover:border-blue-200'
+                                }`}
+                              >
+                                {ip}
+                                <div className={`w-3 h-3 rounded-full border-2 transition-all ${
+                                  selectedIp === ip ? 'bg-blue-600 border-blue-600' : 'border-slate-200'
+                                }`} />
+                              </button>
+                            ))}
+                         </div>
+                       ) : (
+                         <div className="p-6 bg-red-50 rounded-2xl border border-red-100 flex items-center gap-3 text-red-500">
+                            <AlertCircle size={18} />
+                            <p className="text-xs font-bold">未获取到后台配置的接入 IP，请联系系统管理员。</p>
+                         </div>
+                       )}
+                    </div>
+
+                    <div className="space-y-4">
+                       <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                         <Command size={14} className="text-blue-500" /> 请在目标服务器终端执行 (Root Auth)
                        </h5>
                        <div className="relative group">
                           <div className="absolute inset-0 bg-blue-600/5 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                           <div className="relative bg-[#0f172a] p-8 rounded-[2rem] border border-white/5 font-mono text-[11px] leading-relaxed group shadow-inner">
                              <p className="text-blue-300/90 break-all select-all font-mono">
-                               wget http://192.168.12.90/script/bootstrap.sh -O bootstrap.sh && chmod +x bootstrap.sh && ./bootstrap.sh -w <span className="text-blue-400 font-black">{projectId}</span> -u 192.168.12.90:80 -t /sothothv2
+                               {getIntegrationCommand()}
                              </p>
                              <div className="absolute top-4 right-4">
                                 <button 
@@ -481,6 +550,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                           </div>
                        </div>
                     </div>
+                    
                     <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-3">
                        <div className="flex items-center gap-3 text-slate-600">
                           <AlertCircle size={18} className="text-blue-600" />
@@ -488,7 +558,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                        </div>
                        <ul className="text-[11px] text-slate-500 space-y-1.5 font-medium list-disc pl-5 leading-relaxed">
                           <li>脚本会自动配置 Docker 运行时并建立与 Nacos 的长连接。</li>
-                          <li>确保目标主机可以访问内网网关 <code className="bg-slate-200 px-1 rounded text-slate-800">192.168.12.90:80</code>。</li>
+                          <li>请确保目标主机可以访问所选 IP <code className="bg-slate-200 px-1 rounded text-slate-800 font-mono">{selectedIp || 'Gateway'}</code> 的 80 端口。</li>
                           <li>节点注册成功后，其状态将在此管理页面实时呈现。</li>
                        </ul>
                     </div>

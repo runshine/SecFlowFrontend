@@ -8,6 +8,10 @@ export const environmentApi = {
     return handleResponse(response);
   },
 
+  // System Config
+  getExternalIps: async (): Promise<{ external_agent_ips: string[]; count: number }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/system/external-agent-ips`, { headers: getHeaders() })),
+
   // Workspaces
   getWorkspaces: async (): Promise<{ workspaces: Workspace[] }> => 
     handleResponse(await fetch(`${API_BASE}/api/agent/workspace`, { headers: getHeaders() })),

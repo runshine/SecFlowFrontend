@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { ChevronDown, Search, RotateCw, ShieldCheck, Target, FolderTree, FileJson, Layers, Layout, Share2, Clock } from 'lucide-react';
-import { SecurityProject, UserInfo } from '../types/types';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronDown, Search, RotateCw, ShieldCheck, Clock, Settings, UserCog, Lock, LogOut } from 'lucide-react';
+import { SecurityProject, UserInfo, ViewType } from '../types/types';
 
 interface HeaderProps {
   user: UserInfo | null;
@@ -14,15 +14,18 @@ interface HeaderProps {
   setSearchQuery: (query: string) => void;
   fetchProjects: (showRefresh: boolean) => void;
   isRefreshing: boolean;
+  setCurrentView: (view: ViewType | string) => void;
+  handleLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   user, projects, selectedProjectId, setSelectedProjectId, 
   isProjectDropdownOpen, setIsProjectDropdownOpen, searchQuery, setSearchQuery, 
-  fetchProjects, isRefreshing
+  fetchProjects, isRefreshing, setCurrentView, handleLogout
 }) => {
-  const [showStructure, setShowStructure] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   
   const currentProject = projects.find(p => p.id === selectedProjectId) || { name: '选择项目' };
 
@@ -31,18 +34,20 @@ export const Header: React.FC<HeaderProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // 点击外部关闭用户菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('zh-CN', { hour12: false });
   };
-
-  const StructureNode = ({ name, icon: Icon, children }: any) => (
-    <div className="ml-4 mt-2">
-      <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-        <Icon size={14} className="text-blue-500" /> {name}
-      </div>
-      {children}
-    </div>
-  );
 
   return (
     <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 px-10 flex items-center justify-between shadow-sm z-20">
@@ -66,54 +71,61 @@ export const Header: React.FC<HeaderProps> = ({
         <button onClick={() => fetchProjects(true)} className="p-3 text-slate-400 hover:text-blue-600 transition-all"><RotateCw size={20} className={isRefreshing ? 'animate-spin' : ''} /></button>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* 源码结构可视化按钮 */}
-        <div className="relative">
-          <button 
-            onClick={() => setShowStructure(!showStructure)}
-            className={`p-3 rounded-xl transition-all ${showStructure ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}
-            title="查看重构后的源码结构"
-          >
-            <FolderTree size={20} />
-          </button>
-          
-          {showStructure && (
-            <div className="absolute top-full right-0 mt-3 w-72 bg-slate-900 text-slate-300 border border-slate-800 rounded-3xl shadow-2xl p-6 z-50 animate-in fade-in zoom-in-95 duration-200">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">当前重构后的文件夹结构</p>
-              <div className="space-y-1 border-l border-slate-800 ml-2">
-                <StructureNode name="api/" icon={Share2} />
-                <StructureNode name="types/" icon={FileJson} />
-                <StructureNode name="layout/" icon={Layers} />
-                <StructureNode name="components/" icon={Layers} />
-                <StructureNode name="pages/" icon={Layout}>
-                  <StructureNode name="inputs/" icon={FolderTree} />
-                  <StructureNode name="env/" icon={FolderTree} />
-                </StructureNode>
-              </div>
-              <p className="mt-6 text-[9px] text-slate-500 italic font-medium leading-relaxed">
-                注：根目录下的 *.ts 文件已迁移至子目录。重复文件建议在物理磁盘上执行删除。
-              </p>
-            </div>
-          )}
+      <div className="flex items-center gap-4 relative" ref={userMenuRef}>
+        <div className="text-right hidden sm:block">
+          <p className="text-xs font-black text-slate-800 leading-none">{user?.username}</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-1 flex items-center justify-end gap-1.5">
+            <Clock size={10} className="text-blue-500" /> {formatTime(currentTime)}
+          </p>
         </div>
+        
+        <button 
+          onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+          className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-xs border-2 border-white shadow-sm hover:scale-105 transition-transform active:scale-95"
+        >
+          {user?.username?.[0]?.toUpperCase()}
+        </button>
 
-        <div className="h-8 w-[1px] bg-slate-200 mx-2" />
-
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-black text-slate-800 leading-none">{user?.username}</p>
-            <p className="text-[10px] font-bold text-slate-400 mt-1 flex items-center justify-end gap-1.5">
-              <Clock size={10} className="text-blue-500" /> {formatTime(currentTime)}
-            </p>
-            <div className="flex gap-1 justify-end mt-0.5">
-              <ShieldCheck size={10} className="text-blue-500" />
-              <span className="text-[8px] font-black uppercase text-slate-400">{user?.role?.[0]}</span>
+        {isUserMenuOpen && (
+          <div className="absolute top-full right-0 mt-3 w-56 bg-white border border-slate-200 rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-50 p-2">
+            <div className="px-4 py-3 border-b border-slate-50 mb-1">
+               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">当前登录身份</p>
+               <p className="text-sm font-black text-slate-800 mt-0.5">{user?.username}</p>
+               <div className="flex gap-1 mt-1">
+                  <ShieldCheck size={10} className="text-blue-500" />
+                  <span className="text-[8px] font-black uppercase text-slate-400">{user?.role?.[0] || 'USER'}</span>
+               </div>
             </div>
+            
+            <button 
+              onClick={() => { setCurrentView('sys-settings'); setIsUserMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-2xl transition-all"
+            >
+              <Settings size={16} className="text-slate-400" /> 系统设置
+            </button>
+            <button 
+              onClick={() => { setCurrentView('user-mgmt-users'); setIsUserMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-2xl transition-all"
+            >
+              <UserCog size={16} className="text-slate-400" /> 用户管理
+            </button>
+            <button 
+              onClick={() => { setCurrentView('change-password'); setIsUserMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-2xl transition-all"
+            >
+              <Lock size={16} className="text-slate-400" /> 修改密码
+            </button>
+            
+            <div className="h-px bg-slate-50 my-1 mx-2" />
+            
+            <button 
+              onClick={() => { handleLogout(); setIsUserMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+            >
+              <LogOut size={16} /> 退出系统
+            </button>
           </div>
-          <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-xs border-2 border-white shadow-sm">
-            {user?.username?.[0]?.toUpperCase()}
-          </div>
-        </div>
+        )}
       </div>
     </header>
   );

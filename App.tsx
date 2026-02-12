@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
@@ -44,7 +45,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
@@ -64,6 +65,15 @@ const App: React.FC = () => {
   const [envServiceHealthy, setEnvServiceHealthy] = useState<boolean | null>(null);
   const [codeAuditServiceHealthy, setCodeAuditServiceHealthy] = useState<boolean | null>(null);
 
+  // 监听 401 身份失效事件
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      handleLogout();
+    };
+    window.addEventListener('secflow-unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('secflow-unauthorized', handleUnauthorized);
+  }, []);
+
   useEffect(() => {
     if (token) {
       api.auth.validateToken()
@@ -71,10 +81,7 @@ const App: React.FC = () => {
         .catch(() => handleLogout());
       fetchProjects();
       
-      // Initial check
       checkAllHealth();
-
-      // Set intervals
       const healthInterval = setInterval(checkAllHealth, 30000);
       return () => clearInterval(healthInterval);
     }
@@ -164,11 +171,6 @@ const App: React.FC = () => {
         api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
       }
-
-      if (currentView === 'static-packages') {
-        api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
-        api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
-      }
     }
   }, [selectedProjectId, currentView, token]);
 
@@ -211,6 +213,7 @@ const App: React.FC = () => {
     setUser(null);
     setProjects([]);
     setSelectedProjectId('');
+    setCurrentView('dashboard');
   };
 
   const renderContent = () => {
@@ -260,6 +263,15 @@ const App: React.FC = () => {
       case 'pentest-exec-secmate': return <SecMateNGPage />;
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
+
+      // New Admin Pages (Blank Placeholders)
+      case 'sys-settings': return <WorkflowPlaceholder title="系统设置" icon={<Settings />} />;
+      case 'change-password': return <WorkflowPlaceholder title="修改密码" icon={<Lock />} />;
+      case 'user-mgmt-users': return <WorkflowPlaceholder title="用户账号管理" icon={<Users />} />;
+      case 'user-mgmt-roles': return <WorkflowPlaceholder title="角色定义管理" icon={<UserCheck />} />;
+      case 'user-mgmt-perms': return <WorkflowPlaceholder title="功能权限分配" icon={<ShieldAlert />} />;
+      case 'user-mgmt-online': return <WorkflowPlaceholder title="在线会话监控" icon={<Globe />} />;
+
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
     }
   };
@@ -326,7 +338,20 @@ const App: React.FC = () => {
         codeAuditHealth={codeAuditServiceHealthy}
       />
       <main className="flex-1 flex flex-col min-w-0">
-        <Header user={user} projects={projects} selectedProjectId={selectedProjectId} setSelectedProjectId={setSelectedProjectId} isProjectDropdownOpen={isProjectDropdownOpen} setIsProjectDropdownOpen={setIsProjectDropdownOpen} searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchProjects={fetchProjects} isRefreshing={isRefreshing} />
+        <Header 
+          user={user} 
+          projects={projects} 
+          selectedProjectId={selectedProjectId} 
+          setSelectedProjectId={setSelectedProjectId} 
+          isProjectDropdownOpen={isProjectDropdownOpen} 
+          setIsProjectDropdownOpen={setIsProjectDropdownOpen} 
+          searchQuery={searchQuery} 
+          setSearchQuery={setSearchQuery} 
+          fetchProjects={fetchProjects} 
+          isRefreshing={isRefreshing}
+          setCurrentView={setCurrentView}
+          handleLogout={handleLogout}
+        />
         <div className="flex-1 overflow-y-auto custom-scrollbar relative">
           {renderContent()}
         </div>

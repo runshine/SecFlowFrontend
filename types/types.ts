@@ -249,4 +249,6 @@ export type ViewType =
   | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
-  | 'security-assessment';
+  | 'security-assessment'
+  | 'sys-settings' | 'change-password' 
+  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online';

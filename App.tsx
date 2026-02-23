@@ -28,6 +28,12 @@ import { EnvTemplatePage } from './pages/env/EnvTemplatePage';
 import { EnvTasksPage } from './pages/env/EnvTasksPage';
 import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
 
+// Workflow Pages
+import { WorkflowInstancePage } from './pages/workflow/WorkflowInstancePage';
+import { WorkflowTemplatePage } from './pages/workflow/WorkflowTemplatePage';
+import { JobTemplatePage } from './pages/workflow/JobTemplatePage';
+import { AppTemplatePage } from './pages/workflow/AppTemplatePage';
+
 // Pentest Pages
 import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
 import { ExecutionWorkPlatformPage } from './pages/pentest/ExecutionWorkPlatformPage';
@@ -52,7 +58,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'workflow-root']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
@@ -71,6 +77,7 @@ const App: React.FC = () => {
   const [projectServiceHealthy, setProjectServiceHealthy] = useState<boolean | null>(null);
   const [envServiceHealthy, setEnvServiceHealthy] = useState<boolean | null>(null);
   const [codeAuditServiceHealthy, setCodeAuditServiceHealthy] = useState<boolean | null>(null);
+  const [workflowServiceHealthy, setWorkflowServiceHealthy] = useState<boolean | null>(null);
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -99,6 +106,7 @@ const App: React.FC = () => {
     checkProjectHealth();
     checkEnvHealth();
     checkCodeAuditHealth();
+    checkWorkflowHealth();
   };
 
   const checkResourceHealth = async () => {
@@ -143,6 +151,15 @@ const App: React.FC = () => {
       setCodeAuditServiceHealthy(res.status === 'healthy' || res.status === 'UP' || res.status === 'active');
     } catch (e) {
       setCodeAuditServiceHealthy(false);
+    }
+  };
+
+  const checkWorkflowHealth = async () => {
+    try {
+      const res = await api.workflow.getHealth();
+      setWorkflowServiceHealthy(res.status === 'ok' || res.status === 'UP' || res.status === 'healthy');
+    } catch (e) {
+      setWorkflowServiceHealthy(false);
     }
   };
 
@@ -259,6 +276,13 @@ const App: React.FC = () => {
       case 'env-service': return <ServiceMgmtPage projectId={selectedProjectId} />;
       case 'env-template': return <EnvTemplatePage projectId={selectedProjectId} />;
       case 'env-tasks': return <EnvTasksPage projectId={selectedProjectId} />;
+
+      // Workflow Management
+      case 'workflow-instances': return <WorkflowInstancePage projectId={selectedProjectId} />;
+      case 'workflow-templates': return <WorkflowTemplatePage projectId={selectedProjectId} />;
+      case 'workflow-jobs': return <JobTemplatePage projectId={selectedProjectId} />;
+      case 'workflow-apps': return <AppTemplatePage projectId={selectedProjectId} />;
+
       case 'engine-validation': return <WorkflowPlaceholder title="安全验证" icon={<ShieldCheck />} />;
       case 'pentest-risk': return <WorkflowPlaceholder title="风险评估" icon={<ShieldAlert />} />;
       case 'pentest-system': return <WorkflowPlaceholder title="系统分析" icon={<FileSearch />} />;
@@ -343,6 +367,7 @@ const App: React.FC = () => {
         projectHealth={projectServiceHealthy}
         envHealth={envServiceHealthy}
         codeAuditHealth={codeAuditServiceHealthy}
+        workflowHealth={workflowServiceHealthy}
       />
       <main className="flex-1 flex flex-col min-w-0">
         <Header 

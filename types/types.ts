@@ -17,6 +17,138 @@ export interface UserInfo {
   updated_at?: string;
 }
 
+// --- Workflow Service Types ---
+
+export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped';
+export type TemplateScope = 'global' | 'project';
+export type NodeType = 'app' | 'job';
+
+export interface VolumeMount {
+  pvc_name: string;
+  mount_path: string;
+  sub_path?: string;
+  read_only?: boolean;
+}
+
+export interface EnvVarInput {
+  name: string;
+  source_key: string;
+  default_value?: string;
+}
+
+export interface EnvVarOutput {
+  name: string;
+  description?: string;
+}
+
+export interface VolumeMountInput {
+  mount_path: string;
+  sub_path?: string;
+  read_only?: boolean;
+}
+
+export interface VolumeMountOutput {
+  mount_path: string;
+  sub_path?: string;
+  description?: string;
+}
+
+export interface ResourceRequirements {
+  requests?: { cpu?: string; memory?: string };
+  limits?: { cpu?: string; memory?: string };
+}
+
+export interface HealthCheck {
+  type: 'http' | 'tcp' | 'exec';
+  port?: number;
+  path?: string;
+  command?: string[];
+  initial_delay_seconds?: number;
+  period_seconds?: number;
+  timeout_seconds?: number;
+  failure_threshold?: number;
+  success_threshold?: number;
+}
+
+export interface WorkflowContainer {
+  name: string;
+  image: string;
+  command?: string[];
+  args?: string[];
+  env_vars?: Array<{ name: string; value: string }>;
+  volume_mounts?: VolumeMount[];
+  input_env_vars?: EnvVarInput[];
+  input_volume_mounts?: VolumeMountInput[];
+  output_env_vars?: EnvVarOutput[];
+  output_volume_mounts?: VolumeMountOutput[];
+  privileged?: boolean;
+  image_pull_policy?: 'Always' | 'IfNotPresent' | 'Never';
+  resources?: ResourceRequirements;
+  health_check?: HealthCheck;
+}
+
+export interface AppTemplate {
+  id: string;
+  name: string;
+  description: string;
+  scope: TemplateScope;
+  project_id?: string;
+  containers: WorkflowContainer[];
+  service_ports?: number[];
+  replicas: number;
+  created_at: string;
+}
+
+export interface JobTemplate {
+  id: string;
+  name: string;
+  description: string;
+  scope: TemplateScope;
+  project_id?: string;
+  containers: WorkflowContainer[];
+  backoff_limit: number;
+  created_at: string;
+}
+
+export interface WorkflowNode {
+  node_id: string;
+  node_type: NodeType;
+  template_id: string;
+  name: string;
+  position: { x: number; y: number };
+  status?: WorkflowStatus;
+}
+
+export interface WorkflowEdge {
+  edge_id: string;
+  source: string;
+  target: string;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  scope: TemplateScope;
+  project_id?: string;
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  created_at: string;
+}
+
+export interface WorkflowInstance {
+  id: string;
+  name: string;
+  description: string;
+  status: WorkflowStatus;
+  template_id: string;
+  project_id: string;
+  started_at?: string;
+  finished_at?: string;
+}
+
+// --- End Workflow Types ---
+
 export interface Role {
   id: number;
   name: string;
@@ -287,7 +419,8 @@ export interface DeployScriptListResponse {
 export type ViewType = 
   | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
-  | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
+  | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
+  | 'workflow-instances' | 'workflow-templates' | 'workflow-jobs' | 'workflow-apps'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'

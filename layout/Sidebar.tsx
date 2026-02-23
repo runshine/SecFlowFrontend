@@ -37,7 +37,10 @@ import {
   Settings,
   ArrowLeftCircle,
   Cpu,
-  Key
+  Key,
+  Layers,
+  Activity,
+  GitBranch
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -55,6 +58,7 @@ interface SidebarProps {
   projectHealth?: boolean | null;
   envHealth?: boolean | null;
   codeAuditHealth?: boolean | null;
+  workflowHealth?: boolean | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -64,7 +68,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   staticPackageHealth = null,
   projectHealth = null,
   envHealth = null,
-  codeAuditHealth = null
+  codeAuditHealth = null,
+  workflowHealth = null
 }) => {
   const isUserMgmtMode = currentView.startsWith('user-mgmt-');
 
@@ -174,6 +179,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { id: 'env-service', label: '服务管理', icon: <Zap size={14} /> },
             { id: 'env-tasks', label: '任务管理', icon: <Workflow size={14} /> }
           ]} 
+        />
+
+        <SidebarItem 
+          id="workflow-root" 
+          label="安全测试工作流" 
+          icon={<Workflow size={20} />} 
+          healthStatus={workflowHealth}
+          applyHealth={true}
+          children={[
+            { id: 'workflow-apps', label: '应用模板', icon: <Layers size={14} /> },
+            { id: 'workflow-jobs', label: '任务模板', icon: <Zap size={14} /> },
+            { id: 'workflow-templates', label: '工作流模板', icon: <GitBranch size={14} /> },
+            { id: 'workflow-instances', label: '工作流实例', icon: <Activity size={14} /> }
+          ]}
         />
         
         <SidebarItem id="engine-validation" label="安全验证" icon={<ShieldCheck size={20} />} />

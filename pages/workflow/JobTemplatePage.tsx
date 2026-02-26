@@ -1,13 +1,61 @@
 
-import React, { useState, useEffect } from 'react';
-import { Zap, Plus, Trash2, Search, Loader2, RefreshCw, Box, Terminal, Database, ShieldAlert } from 'lucide-react';
-import { JobTemplate } from '../../types/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Zap, 
+  Plus, 
+  Trash2, 
+  Search, 
+  Loader2, 
+  RefreshCw, 
+  Box, 
+  Terminal, 
+  Database, 
+  ShieldAlert,
+  X,
+  Container,
+  Settings,
+  Clock,
+  Hash,
+  ExternalLink,
+  Layers
+} from 'lucide-react';
+import { JobTemplate, TemplateScope } from '../../types/types';
 import { api } from '../../api/api';
 
 export const JobTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scope, setScope] = useState<'project' | 'global'>('project');
+  const [scope, setScope] = useState<TemplateScope>('project');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Registration Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const defaultContainer = { 
+    name: 'main', 
+    image: '', 
+    command: '', 
+    args: '', 
+    env_vars: [{ name: '', value: '' }],
+    volume_mounts: [{ pvc_name: '', mount_path: '', sub_path: '', read_only: false }],
+    input_env_vars: [{ name: '', default_value: '' }],
+    input_volume_mounts: [{ mount_path: '', sub_path: '', read_only: true }],
+    privileged: false,
+    image_pull_policy: 'IfNotPresent',
+    resources: { requests: { cpu: '', memory: '' }, limits: { cpu: '', memory: '' } },
+    liveness_probe: { type: 'http', port: '', path: '', initial_delay_seconds: 0, period_seconds: 10, timeout_seconds: 1, failure_threshold: 3, success_threshold: 1 },
+    readiness_probe: { type: 'http', port: '', path: '', initial_delay_seconds: 0, period_seconds: 10, timeout_seconds: 1, failure_threshold: 3, success_threshold: 1 }
+  };
+
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    scope: 'project' as TemplateScope,
+    backoff_limit: 3,
+    ttl_seconds_after_finished: 3600,
+    containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
+  });
 
   useEffect(() => {
     loadTemplates();
@@ -18,7 +66,7 @@ export const JobTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     try {
       const res = await api.workflow.listJobTemplates({ 
         scope, 
-        project_id: scope === 'project' ? projectId : undefined 
+        project_id: scope === 'project' ? projectId : 'all' 
       });
       setTemplates(res.items || []);
     } catch (e) {
@@ -28,45 +76,966 @@ export const JobTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
+  const filteredTemplates = useMemo(() => {
+    return templates.filter(t => 
+      t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [templates, searchTerm]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("确定要注销此任务组件模板吗？")) return;
+    try {
+      await api.workflow.deleteJobTemplate(id);
+      loadTemplates();
+    } catch (e: any) {
+      alert("删除失败: " + e.message);
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.containers.some(c => !c.image)) {
+      alert("请确保所有容器都已指定镜像");
+      return;
+    }
+    
+    const payload = {
+      ...formData,
+      project_id: formData.scope === 'project' ? projectId : undefined,
+      containers: formData.containers.map((c: any) => {
+        const formatProbe = (p: any) => {
+          if (!p.port && p.type !== 'exec') return undefined;
+          return {
+            ...p,
+            port: p.port ? parseInt(p.port) : undefined,
+            initial_delay_seconds: parseInt(p.initial_delay_seconds || 0),
+            period_seconds: parseInt(p.period_seconds || 10),
+            timeout_seconds: p.timeout_seconds ? parseInt(p.timeout_seconds) : undefined,
+            failure_threshold: p.failure_threshold ? parseInt(p.failure_threshold) : undefined,
+            success_threshold: p.success_threshold ? parseInt(p.success_threshold) : undefined,
+            command: p.type === 'exec' && typeof p.command === 'string' ? p.command.split(',').map((s: string) => s.trim()) : p.command
+          };
+        };
+
+        return {
+          ...c,
+          command: c.command ? c.command.split(',').map((s: string) => s.trim()) : undefined,
+          args: c.args ? c.args.split(',').map((s: string) => s.trim()) : undefined,
+          env_vars: c.env_vars.filter((e: any) => e.name && e.value),
+          volume_mounts: c.volume_mounts.filter((v: any) => v.pvc_name && v.mount_path),
+          input_env_vars: c.input_env_vars.filter((e: any) => e.name),
+          input_volume_mounts: c.input_volume_mounts.filter((v: any) => v.mount_path),
+          resources: (c.resources?.requests?.cpu || c.resources?.limits?.cpu) ? c.resources : undefined,
+          liveness_probe: formatProbe(c.liveness_probe),
+          readiness_probe: formatProbe(c.readiness_probe)
+        };
+      })
+    };
+    
+    setIsSubmitting(true);
+    try {
+      await api.workflow.createJobTemplate(payload);
+      setIsModalOpen(false);
+      setFormData({
+        name: '', description: '', scope: 'project', backoff_limit: 3, ttl_seconds_after_finished: 3600,
+        containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
+      });
+      loadTemplates();
+    } catch (err: any) {
+      alert("创建失败: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="p-10 space-y-10 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end">
+    <div className="p-10 space-y-10 animate-in fade-in duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">任务模板</h2>
           <p className="text-slate-500 mt-1 font-medium italic">管理一次性安全探测任务（扫描、爆破、Fuzzing）的容器运行规范</p>
         </div>
         <div className="flex gap-4">
+          <button 
+            onClick={loadTemplates}
+            className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 group"
+          >
+            <RefreshCw size={20} className={loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
+          </button>
           <div className="flex bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
-            <button onClick={() => setScope('project')} className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${scope === 'project' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>当前项目</button>
-            <button onClick={() => setScope('global')} className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${scope === 'global' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>全局库</button>
+            <button onClick={() => setScope('project')} className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${scope === 'project' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500 hover:bg-slate-50'}`}>当前项目</button>
+            <button onClick={() => setScope('global')} className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${scope === 'global' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500 hover:bg-slate-50'}`}>全局库</button>
           </div>
-          <button className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-slate-900/10 hover:bg-slate-800 transition-all active:scale-95">
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-slate-900/10 hover:bg-slate-800 transition-all active:scale-95"
+          >
             <Plus size={20} /> 注册任务组件
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {loading ? (
-          <div className="col-span-full py-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" size={48} /></div>
-        ) : templates.map(t => (
-          <div key={t.id} className="bg-white rounded-[2rem] border border-slate-200 p-6 hover:shadow-xl hover:border-amber-300 transition-all group flex flex-col justify-between">
-             <div>
-                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mb-6 shadow-sm group-hover:bg-amber-600 group-hover:text-white transition-all">
-                   <Zap size={24} />
-                </div>
-                <h4 className="text-lg font-black text-slate-800 truncate">{t.name}</h4>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-tighter truncate">IMAGE: {t.containers?.[0]?.image}</p>
-             </div>
-             <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase">
-                   <ShieldAlert size={12} className="text-amber-500" /> TTL: 3600s
-                </div>
-                <button onClick={() => api.workflow.deleteJobTemplate(t.id).then(loadTemplates)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16} /></button>
-             </div>
-          </div>
-        ))}
+      {/* Filter Bar */}
+      <div className="relative group">
+        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={20} />
+        <input 
+          type="text" 
+          placeholder="搜索任务模板名称或 ID..." 
+          className="w-full pl-16 pr-8 py-5 bg-white border border-slate-200 rounded-[2rem] text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
+
+      {/* List Content */}
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">任务组件信息</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">容器编排</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">运行策略</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">注册时间</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-32 text-center">
+                    <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
+                  </td>
+                </tr>
+              ) : filteredTemplates.length > 0 ? filteredTemplates.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm group-hover:bg-amber-600 group-hover:text-white transition-all">
+                        <Zap size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black text-slate-800 tracking-tight truncate">{t.name}</h4>
+                          <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-mono font-bold uppercase tracking-tighter">
+                            {t.id.slice(0, 8)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-1 font-medium italic">
+                          {t.description || '暂无描述信息'}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-wrap gap-1.5 max-w-xs">
+                      {t.containers?.map((c, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-100 text-[9px] font-black uppercase whitespace-nowrap">
+                          {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center justify-center gap-6">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Retry</span>
+                        <span className="text-[11px] font-black text-slate-600">{t.backoff_limit}</span>
+                      </div>
+                      <div className="w-px h-4 bg-slate-100"></div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">TTL</span>
+                        <span className="text-[11px] font-black text-slate-600">{t.ttl_seconds_after_finished}s</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex flex-col items-end">
+                      <span className="text-[11px] font-bold text-slate-500">{t.created_at?.split('T')[0]}</span>
+                      <span className="text-[9px] font-medium text-slate-300">{t.created_at?.split('T')[1]?.slice(0, 5)}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                        <ExternalLink size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(t.id)}
+                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={5} className="py-40 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                      <Zap size={32} />
+                    </div>
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的任务模板资产</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Registration Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between shrink-0">
+               <div className="flex items-center gap-4">
+                 <div className="w-14 h-14 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg">
+                   <Plus size={28} />
+                 </div>
+                 <div>
+                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">注册任务组件</h3>
+                   <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-0.5">Job Execution Blueprint</p>
+                 </div>
+               </div>
+               <button onClick={() => setIsModalOpen(false)} className="p-4 text-slate-400 hover:text-slate-600 transition-colors">
+                 <X size={28} />
+               </button>
+            </div>
+
+            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+               {/* Basic Info */}
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">模板名称 *</label>
+                    <input 
+                      required placeholder="e.g. nmap-scanner" 
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all"
+                      value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">发布范围</label>
+                    <select 
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800"
+                      value={formData.scope} onChange={e => setFormData({...formData, scope: e.target.value as any})}
+                    >
+                      <option value="project">仅限当前项目 (Project-only)</option>
+                      <option value="global">公共资源库 (Global)</option>
+                    </select>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">重试次数 (Backoff Limit)</label>
+                    <input 
+                      type="number" min="0" max="10"
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all"
+                      value={formData.backoff_limit} onChange={e => setFormData({...formData, backoff_limit: parseInt(e.target.value)})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">完成后保留时间 (TTL Seconds)</label>
+                    <input 
+                      type="number" min="0"
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all"
+                      value={formData.ttl_seconds_after_finished} onChange={e => setFormData({...formData, ttl_seconds_after_finished: parseInt(e.target.value)})}
+                    />
+                  </div>
+               </div>
+
+               <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">组件描述</label>
+                  <textarea 
+                    placeholder="描述该任务组件的功能、输入输出要求..." rows={2}
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all resize-none"
+                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
+                  />
+               </div>
+
+               {/* Container Stack */}
+               <div className="pt-4 border-t border-slate-100 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                      <Container size={16} className="text-amber-500" /> 容器编排栈 (Container Stack)
+                    </h4>
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData({...formData, containers: [...formData.containers, JSON.parse(JSON.stringify(defaultContainer))]})}
+                      className="text-[10px] font-black text-blue-600 hover:underline uppercase tracking-widest"
+                    >
+                       + 添加辅助容器
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {formData.containers.map((container: any, idx) => (
+                      <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 relative group/c space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">容器名称</label>
+                            <input 
+                              required placeholder="e.g. main-task"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-bold"
+                              value={container.name}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].name = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">镜像 (Image) *</label>
+                            <input 
+                              required placeholder="e.g. nmap:latest"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono font-bold text-blue-600"
+                              value={container.image}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].image = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">启动命令 (Command)</label>
+                            <input 
+                              placeholder="e.g. /bin/sh, -c (逗号分隔)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.command}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].command = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">命令参数 (Args)</label>
+                            <input 
+                              placeholder="e.g. -p, 80 (逗号分隔)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.args}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].args = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">拉取策略 (Image Pull Policy)</label>
+                            <select 
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-bold"
+                              value={container.image_pull_policy}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].image_pull_policy = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            >
+                              <option value="IfNotPresent">IfNotPresent</option>
+                              <option value="Always">Always</option>
+                              <option value="Never">Never</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1.5 flex items-center pt-5">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                checked={container.privileged}
+                                onChange={e => {
+                                  const n = [...formData.containers];
+                                  n[idx].privileged = e.target.checked;
+                                  setFormData({...formData, containers: n});
+                                }}
+                              />
+                              <span className="text-xs font-black text-slate-700 uppercase">特权模式 (Privileged)</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">环境变量 (Env Vars)</label>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const n = [...formData.containers];
+                                n[idx].env_vars.push({ name: '', value: '' });
+                                setFormData({...formData, containers: n});
+                              }}
+                              className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                            >
+                              + 添加变量
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {container.env_vars.map((env: any, envIdx: number) => (
+                              <div key={envIdx} className="flex gap-2 items-center">
+                                <input 
+                                  placeholder="Name"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={env.name}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].env_vars[envIdx].name = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <input 
+                                  placeholder="Value"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={env.value}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].env_vars[envIdx].value = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const n = [...formData.containers];
+                                    n[idx].env_vars = n[idx].env_vars.filter((_: any, i: number) => i !== envIdx);
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">固定挂载 (Volume Mounts)</label>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const n = [...formData.containers];
+                                n[idx].volume_mounts.push({ pvc_name: '', mount_path: '', sub_path: '', read_only: false });
+                                setFormData({...formData, containers: n});
+                              }}
+                              className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                            >
+                              + 添加挂载
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {container.volume_mounts.map((vol: any, volIdx: number) => (
+                              <div key={volIdx} className="flex gap-2 items-center">
+                                <input 
+                                  placeholder="PVC Name"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={vol.pvc_name}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts[volIdx].pvc_name = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <input 
+                                  placeholder="Mount Path"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={vol.mount_path}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts[volIdx].mount_path = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <input 
+                                  placeholder="Sub Path"
+                                  className="w-24 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={vol.sub_path}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts[volIdx].sub_path = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <label className="flex items-center gap-1 cursor-pointer shrink-0">
+                                  <input 
+                                    type="checkbox"
+                                    className="w-3 h-3 rounded border-slate-300 text-blue-600"
+                                    checked={vol.read_only}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].volume_mounts[volIdx].read_only = e.target.checked;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <span className="text-[9px] font-bold text-slate-400 uppercase">RO</span>
+                                </label>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts = n[idx].volume_mounts.filter((_: any, i: number) => i !== volIdx);
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输入环境变量依赖 (Input Env Vars)</label>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const n = [...formData.containers];
+                                  n[idx].input_env_vars.push({ name: '', default_value: '' });
+                                  setFormData({...formData, containers: n});
+                                }}
+                                className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                              >
+                                + 添加依赖
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {container.input_env_vars.map((env: any, envIdx: number) => (
+                                <div key={envIdx} className="flex gap-2 items-center">
+                                  <input 
+                                    placeholder="Name"
+                                    className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={env.name}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_env_vars[envIdx].name = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Default Value"
+                                    className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={env.default_value}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_env_vars[envIdx].default_value = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_env_vars = n[idx].input_env_vars.filter((_: any, i: number) => i !== envIdx);
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输入挂载依赖 (Input Mounts)</label>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const n = [...formData.containers];
+                                  n[idx].input_volume_mounts.push({ mount_path: '', sub_path: '', read_only: true });
+                                  setFormData({...formData, containers: n});
+                                }}
+                                className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                              >
+                                + 添加依赖
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {container.input_volume_mounts.map((vol: any, volIdx: number) => (
+                                <div key={volIdx} className="flex gap-2 items-center">
+                                  <input 
+                                    placeholder="Mount Path"
+                                    className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={vol.mount_path}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_volume_mounts[volIdx].mount_path = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Sub Path"
+                                    className="w-24 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={vol.sub_path}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_volume_mounts[volIdx].sub_path = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <label className="flex items-center gap-1 cursor-pointer shrink-0">
+                                    <input 
+                                      type="checkbox"
+                                      className="w-3 h-3 rounded border-slate-300 text-blue-600"
+                                      checked={vol.read_only}
+                                      onChange={e => {
+                                        const n = [...formData.containers];
+                                        n[idx].input_volume_mounts[volIdx].read_only = e.target.checked;
+                                        setFormData({...formData, containers: n});
+                                      }}
+                                    />
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase">RO</span>
+                                  </label>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_volume_mounts = n[idx].input_volume_mounts.filter((_: any, i: number) => i !== volIdx);
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-black text-slate-400 uppercase ml-1">资源限制 (Resources)</label>
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                            <input 
+                              placeholder="Req CPU (100m)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.requests.cpu}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].resources.requests.cpu = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                            <input 
+                              placeholder="Req Mem (128Mi)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.requests.memory}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].resources.requests.memory = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                            <input 
+                              placeholder="Lim CPU (500m)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.limits.cpu}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].resources.limits.cpu = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                            <input 
+                              placeholder="Lim Mem (512Mi)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.limits.memory}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].resources.limits.memory = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                          <div className="space-y-2 p-3 bg-white rounded-2xl border border-slate-100">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">存活探针 (Liveness Probe)</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              <select 
+                                className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-bold"
+                                value={container.liveness_probe.type}
+                                onChange={e => {
+                                  const n = [...formData.containers];
+                                  n[idx].liveness_probe.type = e.target.value;
+                                  setFormData({...formData, containers: n});
+                                }}
+                              >
+                                <option value="http">HTTP</option>
+                                <option value="tcp">TCP</option>
+                                <option value="exec">Exec</option>
+                              </select>
+                              {container.liveness_probe.type !== 'exec' ? (
+                                <>
+                                  <input 
+                                    placeholder="Port" type="number"
+                                    className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                    value={container.liveness_probe.port}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].liveness_probe.port = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  {container.liveness_probe.type === 'http' && (
+                                    <input 
+                                      placeholder="Path"
+                                      className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                      value={container.liveness_probe.path}
+                                      onChange={e => {
+                                        const n = [...formData.containers];
+                                        n[idx].liveness_probe.path = e.target.value;
+                                        setFormData({...formData, containers: n});
+                                      }}
+                                    />
+                                  )}
+                                </>
+                              ) : (
+                                <input 
+                                  placeholder="Command (comma separated)"
+                                  className="col-span-2 px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                  value={container.liveness_probe.command}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].liveness_probe.command = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Delay</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.initial_delay_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.initial_delay_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Period</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.period_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.period_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Timeout</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.timeout_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.timeout_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Fail</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.failure_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.failure_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Succ</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.success_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.success_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 p-3 bg-white rounded-2xl border border-slate-100">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">就绪探针 (Readiness Probe)</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              <select 
+                                className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-bold"
+                                value={container.readiness_probe.type}
+                                onChange={e => {
+                                  const n = [...formData.containers];
+                                  n[idx].readiness_probe.type = e.target.value;
+                                  setFormData({...formData, containers: n});
+                                }}
+                              >
+                                <option value="http">HTTP</option>
+                                <option value="tcp">TCP</option>
+                                <option value="exec">Exec</option>
+                              </select>
+                              {container.readiness_probe.type !== 'exec' ? (
+                                <>
+                                  <input 
+                                    placeholder="Port" type="number"
+                                    className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                    value={container.readiness_probe.port}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].readiness_probe.port = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  {container.readiness_probe.type === 'http' && (
+                                    <input 
+                                      placeholder="Path"
+                                      className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                      value={container.readiness_probe.path}
+                                      onChange={e => {
+                                        const n = [...formData.containers];
+                                        n[idx].readiness_probe.path = e.target.value;
+                                        setFormData({...formData, containers: n});
+                                      }}
+                                    />
+                                  )}
+                                </>
+                              ) : (
+                                <input 
+                                  placeholder="Command (comma separated)"
+                                  className="col-span-2 px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                  value={container.readiness_probe.command}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].readiness_probe.command = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Delay</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.initial_delay_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.initial_delay_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Period</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.period_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.period_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Timeout</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.timeout_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.timeout_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Fail</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.failure_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.failure_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Succ</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.success_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.success_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                            </div>
+                          </div>
+                        </div>
+                        {idx > 0 && (
+                          <button 
+                            type="button" 
+                            onClick={() => setFormData({...formData, containers: formData.containers.filter((_, i) => i !== idx)})}
+                            className="absolute -top-2 -right-2 w-8 h-8 bg-red-50 text-red-500 rounded-full flex items-center justify-center border border-red-100 shadow-sm opacity-0 group-hover/c:opacity-100 transition-opacity"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+               </div>
+            </form>
+
+            <div className="p-8 border-t border-slate-50 bg-slate-50/50 flex gap-4 shrink-0">
+               <button 
+                 type="button" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}
+                 className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-black hover:bg-slate-100 transition-all"
+               >
+                 取消
+               </button>
+               <button 
+                 onClick={handleCreate} disabled={isSubmitting}
+                 className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-black hover:bg-slate-800 shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+               >
+                  {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} className="text-amber-400" />}
+                  确认注册任务组件
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

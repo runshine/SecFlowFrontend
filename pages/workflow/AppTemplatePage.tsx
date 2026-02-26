@@ -39,16 +39,17 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     image: '', 
     command: '', 
     args: '', 
-    env_vars: '[]',
-    volume_mounts: '[]',
-    input_env_vars: '[]',
-    input_volume_mounts: '[]',
-    output_env_vars: '[]',
-    output_volume_mounts: '[]',
+    env_vars: [{ name: '', value: '' }],
+    volume_mounts: [{ pvc_name: '', mount_path: '', sub_path: '', read_only: false }],
+    input_env_vars: [{ name: '', default_value: '' }],
+    input_volume_mounts: [{ mount_path: '', sub_path: '', read_only: true }],
+    output_env_vars: [],
+    output_volume_mounts: [],
     privileged: false,
     image_pull_policy: 'IfNotPresent',
-    resources: '{}',
-    health_check: '{}'
+    resources: { requests: { cpu: '', memory: '' }, limits: { cpu: '', memory: '' } },
+    liveness_probe: { type: 'http', port: '', path: '', initial_delay_seconds: 0, period_seconds: 10, timeout_seconds: 1, failure_threshold: 3, success_threshold: 1 },
+    readiness_probe: { type: 'http', port: '', path: '', initial_delay_seconds: 0, period_seconds: 10, timeout_seconds: 1, failure_threshold: 3, success_threshold: 1 }
   };
 
   const [formData, setFormData] = useState({
@@ -56,7 +57,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     description: '',
     scope: 'project' as TemplateScope,
     replicas: 1,
-    service_ports: '',
+    service_ports: [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
     containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
   });
 
@@ -118,21 +119,35 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     const payload = {
       ...formData,
       project_id: formData.scope === 'project' ? projectId : undefined,
-      service_ports: formData.service_ports ? formData.service_ports.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p)) : undefined,
+      service_ports: formData.service_ports.filter(p => p.port > 0),
       containers: formData.containers.map((c: any) => {
-        const safeParse = (str: string) => { try { return JSON.parse(str); } catch { return undefined; } };
+        const formatProbe = (p: any) => {
+          if (!p.port && p.type !== 'exec') return undefined;
+          return {
+            ...p,
+            port: p.port ? parseInt(p.port) : undefined,
+            initial_delay_seconds: parseInt(p.initial_delay_seconds || 0),
+            period_seconds: parseInt(p.period_seconds || 10),
+            timeout_seconds: p.timeout_seconds ? parseInt(p.timeout_seconds) : undefined,
+            failure_threshold: p.failure_threshold ? parseInt(p.failure_threshold) : undefined,
+            success_threshold: p.success_threshold ? parseInt(p.success_threshold) : undefined,
+            command: p.type === 'exec' && typeof p.command === 'string' ? p.command.split(',').map((s: string) => s.trim()) : p.command
+          };
+        };
+
         return {
           ...c,
           command: c.command ? c.command.split(',').map((s: string) => s.trim()) : undefined,
           args: c.args ? c.args.split(',').map((s: string) => s.trim()) : undefined,
-          env_vars: safeParse(c.env_vars),
-          volume_mounts: safeParse(c.volume_mounts),
-          input_env_vars: safeParse(c.input_env_vars),
-          input_volume_mounts: safeParse(c.input_volume_mounts),
-          output_env_vars: safeParse(c.output_env_vars),
-          output_volume_mounts: safeParse(c.output_volume_mounts),
-          resources: safeParse(c.resources),
-          health_check: safeParse(c.health_check)
+          env_vars: c.env_vars.filter((e: any) => e.name && e.value),
+          volume_mounts: c.volume_mounts.filter((v: any) => v.pvc_name && v.mount_path),
+          input_env_vars: c.input_env_vars.filter((e: any) => e.name),
+          input_volume_mounts: c.input_volume_mounts.filter((v: any) => v.mount_path),
+          output_env_vars: undefined,
+          output_volume_mounts: undefined,
+          resources: (c.resources?.requests?.cpu || c.resources?.limits?.cpu) ? c.resources : undefined,
+          liveness_probe: formatProbe(c.liveness_probe),
+          readiness_probe: formatProbe(c.readiness_probe)
         };
       })
     };
@@ -142,7 +157,8 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       await api.workflow.createAppTemplate(payload);
       setIsModalOpen(false);
       setFormData({
-        name: '', description: '', scope: 'project', replicas: 1, service_ports: '',
+        name: '', description: '', scope: 'project', replicas: 1, 
+        service_ports: [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
         containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
       });
       loadTemplates();
@@ -240,9 +256,9 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                 </td>
                 <td className="px-6 py-6">
                   <div className="flex flex-wrap gap-1.5">
-                    {t.service_ports && t.service_ports.length > 0 ? t.service_ports.map((p, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[9px] font-black uppercase">
-                        {p}
+                    {t.service_ports && t.service_ports.length > 0 ? t.service_ports.map((p: any, idx) => (
+                      <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[9px] font-black uppercase" title={`${p.name}: ${p.port}->${p.target_port}/${p.protocol}`}>
+                        {p.port}
                       </span>
                     )) : (
                       <span className="text-[10px] font-bold text-slate-400">-</span>
@@ -325,7 +341,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       {/* Registration Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+          <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
             <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between shrink-0">
                <div className="flex items-center gap-4">
                  <div className="w-14 h-14 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg">
@@ -341,21 +357,21 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                </button>
             </div>
 
-            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                {/* Basic Info */}
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">模板名称 *</label>
                     <input 
                       required placeholder="e.g. security-waf-proxy" 
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all"
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all"
                       value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">发布范围</label>
                     <select 
-                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800"
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800"
                       value={formData.scope} onChange={e => setFormData({...formData, scope: e.target.value as any})}
                     >
                       <option value="project">仅限当前项目 (Project-only)</option>
@@ -364,7 +380,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   </div>
                </div>
 
-               <div className="space-y-4">
+               <div className="space-y-3">
                   <div className="flex items-center justify-between">
                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">运行副本数 (Replicas)</label>
                      <span className="text-xs font-black text-blue-600">{formData.replicas} Pods</span>
@@ -377,25 +393,82 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                </div>
 
                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">服务端口 (Service Ports)</label>
-                  <input 
-                    placeholder="e.g. 80, 443, 8080 (逗号分隔)" 
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all"
-                    value={formData.service_ports} onChange={e => setFormData({...formData, service_ports: e.target.value})}
-                  />
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">服务端口 (Service Ports)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData({...formData, service_ports: [...formData.service_ports, { name: 'http-' + formData.service_ports.length, port: 80, target_port: 80, protocol: 'TCP' }]})}
+                      className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                    >
+                      + 添加端口
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {formData.service_ports.map((p, pIdx) => (
+                      <div key={pIdx} className="flex gap-2 items-center">
+                        <input 
+                          placeholder="Name" 
+                          className="w-24 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-bold"
+                          value={p.name} onChange={e => {
+                            const n = [...formData.service_ports];
+                            n[pIdx].name = e.target.value;
+                            setFormData({...formData, service_ports: n});
+                          }}
+                        />
+                        <input 
+                          type="number" placeholder="Port" 
+                          className="w-20 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-mono"
+                          value={p.port} onChange={e => {
+                            const n = [...formData.service_ports];
+                            n[pIdx].port = parseInt(e.target.value);
+                            setFormData({...formData, service_ports: n});
+                          }}
+                        />
+                        <input 
+                          type="number" placeholder="Target" 
+                          className="w-20 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-mono"
+                          value={p.target_port} onChange={e => {
+                            const n = [...formData.service_ports];
+                            n[pIdx].target_port = parseInt(e.target.value);
+                            setFormData({...formData, service_ports: n});
+                          }}
+                        />
+                        <select 
+                          className="w-24 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-bold"
+                          value={p.protocol} onChange={e => {
+                            const n = [...formData.service_ports];
+                            n[pIdx].protocol = e.target.value;
+                            setFormData({...formData, service_ports: n});
+                          }}
+                        >
+                          <option value="TCP">TCP</option>
+                          <option value="UDP">UDP</option>
+                        </select>
+                        {formData.service_ports.length > 1 && (
+                          <button 
+                            type="button"
+                            onClick={() => setFormData({...formData, service_ports: formData.service_ports.filter((_, i) => i !== pIdx)})}
+                            className="p-2 text-slate-400 hover:text-red-500"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                </div>
 
                <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">组件描述</label>
                   <textarea 
                     placeholder="描述该应用组件的功能、挂载需求及预期的服务类型..." rows={2}
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all resize-none"
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all resize-none"
                     value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
                   />
                </div>
 
                {/* Container Stack */}
-               <div className="pt-6 border-t border-slate-100 space-y-6">
+               <div className="pt-4 border-t border-slate-100 space-y-4">
                   <div className="flex justify-between items-center">
                     <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
                       <Container size={16} className="text-blue-500" /> 容器编排栈 (Container Stack)
@@ -409,15 +482,15 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                     </button>
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {formData.containers.map((container: any, idx) => (
-                      <div key={idx} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 relative group/c space-y-4">
+                      <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 relative group/c space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1">容器名称</label>
                             <input 
                               required placeholder="e.g. main-service"
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-bold"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-bold"
                               value={container.name}
                               onChange={e => {
                                 const n = [...formData.containers];
@@ -430,7 +503,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1">镜像 (Image) *</label>
                             <input 
                               required placeholder="e.g. nginx:latest"
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono font-bold text-blue-600"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono font-bold text-blue-600"
                               value={container.image}
                               onChange={e => {
                                 const n = [...formData.containers];
@@ -446,7 +519,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1">启动命令 (Command)</label>
                             <input 
                               placeholder="e.g. /bin/sh, -c (逗号分隔)"
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
                               value={container.command}
                               onChange={e => {
                                 const n = [...formData.containers];
@@ -459,7 +532,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1">命令参数 (Args)</label>
                             <input 
                               placeholder="e.g. start, --prod (逗号分隔)"
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
                               value={container.args}
                               onChange={e => {
                                 const n = [...formData.containers];
@@ -474,7 +547,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                           <div className="space-y-1.5">
                             <label className="text-[9px] font-black text-slate-400 uppercase ml-1">拉取策略 (Image Pull Policy)</label>
                             <select 
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-bold"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-bold"
                               value={container.image_pull_policy}
                               onChange={e => {
                                 const n = [...formData.containers];
@@ -487,7 +560,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                               <option value="Never">Never</option>
                             </select>
                           </div>
-                          <div className="space-y-1.5 flex items-center pt-6">
+                          <div className="space-y-1.5 flex items-center pt-5">
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input 
                                 type="checkbox" 
@@ -505,115 +578,538 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-[9px] font-black text-slate-400 uppercase ml-1">环境变量 (Env Vars JSON)</label>
-                          <textarea 
-                            placeholder='[{"name": "ENV_KEY", "value": "ENV_VALUE"}]' rows={2}
-                            className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                            value={container.env_vars}
-                            onChange={e => {
-                              const n = [...formData.containers];
-                              n[idx].env_vars = e.target.value;
-                              setFormData({...formData, containers: n});
-                            }}
-                          />
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">环境变量 (Env Vars)</label>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const n = [...formData.containers];
+                                n[idx].env_vars.push({ name: '', value: '' });
+                                setFormData({...formData, containers: n});
+                              }}
+                              className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                            >
+                              + 添加变量
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {container.env_vars.map((env: any, envIdx: number) => (
+                              <div key={envIdx} className="flex gap-2 items-center">
+                                <input 
+                                  placeholder="Name (e.g. ENV_KEY)"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={env.name}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].env_vars[envIdx].name = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <input 
+                                  placeholder="Value (e.g. ENV_VALUE)"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={env.value}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].env_vars[envIdx].value = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const n = [...formData.containers];
+                                    n[idx].env_vars = n[idx].env_vars.filter((_: any, i: number) => i !== envIdx);
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                         
                         <div className="space-y-1.5">
-                          <label className="text-[9px] font-black text-slate-400 uppercase ml-1">固定挂载 (Volume Mounts JSON)</label>
-                          <textarea 
-                            placeholder='[{"pvc_name": "pvc", "mount_path": "/data", "sub_path": "subdir", "read_only": false}]' rows={2}
-                            className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                            value={container.volume_mounts}
-                            onChange={e => {
-                              const n = [...formData.containers];
-                              n[idx].volume_mounts = e.target.value;
-                              setFormData({...formData, containers: n});
-                            }}
-                          />
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">固定挂载 (Volume Mounts)</label>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const n = [...formData.containers];
+                                n[idx].volume_mounts.push({ pvc_name: '', mount_path: '' });
+                                setFormData({...formData, containers: n});
+                              }}
+                              className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                            >
+                              + 添加挂载
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            {container.volume_mounts.map((vol: any, volIdx: number) => (
+                              <div key={volIdx} className="flex gap-2 items-center">
+                                <input 
+                                  placeholder="PVC Name"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={vol.pvc_name}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts[volIdx].pvc_name = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <input 
+                                  placeholder="Mount Path"
+                                  className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={vol.mount_path}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts[volIdx].mount_path = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <input 
+                                  placeholder="Sub Path"
+                                  className="w-24 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                  value={vol.sub_path}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts[volIdx].sub_path = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                                <label className="flex items-center gap-1 cursor-pointer shrink-0">
+                                  <input 
+                                    type="checkbox"
+                                    className="w-3 h-3 rounded border-slate-300 text-blue-600"
+                                    checked={vol.read_only}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].volume_mounts[volIdx].read_only = e.target.checked;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <span className="text-[9px] font-bold text-slate-400 uppercase">RO</span>
+                                </label>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const n = [...formData.containers];
+                                    n[idx].volume_mounts = n[idx].volume_mounts.filter((_: any, i: number) => i !== volIdx);
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输入环境变量依赖 (Input Env Vars JSON)</label>
-                            <textarea 
-                              placeholder='[{"name": "DB_HOST", "source_key": "host"}]' rows={2}
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                              value={container.input_env_vars}
+                            <div className="flex justify-between items-center">
+                              <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输入环境变量依赖 (Input Env Vars)</label>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const n = [...formData.containers];
+                                  n[idx].input_env_vars.push({ name: '', source_key: '' });
+                                  setFormData({...formData, containers: n});
+                                }}
+                                className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                              >
+                                + 添加依赖
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {container.input_env_vars.map((env: any, envIdx: number) => (
+                                <div key={envIdx} className="flex gap-2 items-center">
+                                  <input 
+                                    placeholder="Name"
+                                    className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={env.name}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_env_vars[envIdx].name = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Default Value"
+                                    className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={env.default_value}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_env_vars[envIdx].default_value = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_env_vars = n[idx].input_env_vars.filter((_: any, i: number) => i !== envIdx);
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输入挂载依赖 (Input Mounts)</label>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const n = [...formData.containers];
+                                  n[idx].input_volume_mounts.push({ mount_path: '' });
+                                  setFormData({...formData, containers: n});
+                                }}
+                                className="text-[9px] font-black text-blue-600 hover:underline uppercase"
+                              >
+                                + 添加依赖
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {container.input_volume_mounts.map((vol: any, volIdx: number) => (
+                                <div key={volIdx} className="flex gap-2 items-center">
+                                  <input 
+                                    placeholder="Mount Path"
+                                    className="flex-1 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={vol.mount_path}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_volume_mounts[volIdx].mount_path = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Sub Path"
+                                    className="w-24 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                                    value={vol.sub_path}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_volume_mounts[volIdx].sub_path = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  <label className="flex items-center gap-1 cursor-pointer shrink-0">
+                                    <input 
+                                      type="checkbox"
+                                      className="w-3 h-3 rounded border-slate-300 text-blue-600"
+                                      checked={vol.read_only}
+                                      onChange={e => {
+                                        const n = [...formData.containers];
+                                        n[idx].input_volume_mounts[volIdx].read_only = e.target.checked;
+                                        setFormData({...formData, containers: n});
+                                      }}
+                                    />
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase">RO</span>
+                                  </label>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const n = [...formData.containers];
+                                      n[idx].input_volume_mounts = n[idx].input_volume_mounts.filter((_: any, i: number) => i !== volIdx);
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-black text-slate-400 uppercase ml-1">资源限制 (Resources)</label>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <input 
+                              placeholder="Requests CPU (e.g. 100m)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.requests.cpu}
                               onChange={e => {
                                 const n = [...formData.containers];
-                                n[idx].input_env_vars = e.target.value;
+                                n[idx].resources.requests.cpu = e.target.value;
                                 setFormData({...formData, containers: n});
                               }}
                             />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输入挂载依赖 (Input Volume Mounts JSON)</label>
-                            <textarea 
-                              placeholder='[{"mount_path": "/data"}]' rows={2}
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                              value={container.input_volume_mounts}
+                            <input 
+                              placeholder="Requests Memory (e.g. 128Mi)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.requests.memory}
                               onChange={e => {
                                 const n = [...formData.containers];
-                                n[idx].input_volume_mounts = e.target.value;
+                                n[idx].resources.requests.memory = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                            <input 
+                              placeholder="Limits CPU (e.g. 500m)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.limits.cpu}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].resources.limits.cpu = e.target.value;
+                                setFormData({...formData, containers: n});
+                              }}
+                            />
+                            <input 
+                              placeholder="Limits Memory (e.g. 512Mi)"
+                              className="w-full px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
+                              value={container.resources.limits.memory}
+                              onChange={e => {
+                                const n = [...formData.containers];
+                                n[idx].resources.limits.memory = e.target.value;
                                 setFormData({...formData, containers: n});
                               }}
                             />
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输出环境变量 (Output Env Vars JSON)</label>
-                            <textarea 
-                              placeholder='[{"name": "SERVICE_URL", "description": "API URL"}]' rows={2}
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                              value={container.output_env_vars}
-                              onChange={e => {
-                                const n = [...formData.containers];
-                                n[idx].output_env_vars = e.target.value;
-                                setFormData({...formData, containers: n});
-                              }}
-                            />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                          <div className="space-y-2 p-3 bg-white rounded-2xl border border-slate-100">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">存活探针 (Liveness Probe)</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              <select 
+                                className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-bold"
+                                value={container.liveness_probe.type}
+                                onChange={e => {
+                                  const n = [...formData.containers];
+                                  n[idx].liveness_probe.type = e.target.value;
+                                  setFormData({...formData, containers: n});
+                                }}
+                              >
+                                <option value="http">HTTP</option>
+                                <option value="tcp">TCP</option>
+                                <option value="exec">Exec</option>
+                              </select>
+                              {container.liveness_probe.type !== 'exec' ? (
+                                <>
+                                  <input 
+                                    placeholder="Port" type="number"
+                                    className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                    value={container.liveness_probe.port}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].liveness_probe.port = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  {container.liveness_probe.type === 'http' && (
+                                    <input 
+                                      placeholder="Path"
+                                      className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                      value={container.liveness_probe.path}
+                                      onChange={e => {
+                                        const n = [...formData.containers];
+                                        n[idx].liveness_probe.path = e.target.value;
+                                        setFormData({...formData, containers: n});
+                                      }}
+                                    />
+                                  )}
+                                </>
+                              ) : (
+                                <input 
+                                  placeholder="Command (comma separated)"
+                                  className="col-span-2 px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                  value={container.liveness_probe.command}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].liveness_probe.command = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Delay</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.initial_delay_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.initial_delay_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Period</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.period_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.period_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Timeout</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.timeout_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.timeout_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Fail</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.failure_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.failure_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Succ</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.liveness_probe.success_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].liveness_probe.success_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">输出挂载 (Output Volume Mounts JSON)</label>
-                            <textarea 
-                              placeholder='[{"mount_path": "/output", "description": "Logs"}]' rows={2}
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                              value={container.output_volume_mounts}
-                              onChange={e => {
-                                const n = [...formData.containers];
-                                n[idx].output_volume_mounts = e.target.value;
-                                setFormData({...formData, containers: n});
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">资源限制 (Resources JSON)</label>
-                            <textarea 
-                              placeholder='{"requests": {"cpu": "100m", "memory": "128Mi"}, "limits": {"cpu": "500m", "memory": "512Mi"}}' rows={2}
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                              value={container.resources}
-                              onChange={e => {
-                                const n = [...formData.containers];
-                                n[idx].resources = e.target.value;
-                                setFormData({...formData, containers: n});
-                              }}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">健康检查 (Health Check JSON)</label>
-                            <textarea 
-                              placeholder='{"type": "http", "port": 80, "path": "/"}' rows={2}
-                              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono resize-none"
-                              value={container.health_check}
-                              onChange={e => {
-                                const n = [...formData.containers];
-                                n[idx].health_check = e.target.value;
-                                setFormData({...formData, containers: n});
-                              }}
-                            />
+
+                          <div className="space-y-2 p-3 bg-white rounded-2xl border border-slate-100">
+                            <label className="text-[9px] font-black text-slate-400 uppercase ml-1">就绪探针 (Readiness Probe)</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              <select 
+                                className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-bold"
+                                value={container.readiness_probe.type}
+                                onChange={e => {
+                                  const n = [...formData.containers];
+                                  n[idx].readiness_probe.type = e.target.value;
+                                  setFormData({...formData, containers: n});
+                                }}
+                              >
+                                <option value="http">HTTP</option>
+                                <option value="tcp">TCP</option>
+                                <option value="exec">Exec</option>
+                              </select>
+                              {container.readiness_probe.type !== 'exec' ? (
+                                <>
+                                  <input 
+                                    placeholder="Port" type="number"
+                                    className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                    value={container.readiness_probe.port}
+                                    onChange={e => {
+                                      const n = [...formData.containers];
+                                      n[idx].readiness_probe.port = e.target.value;
+                                      setFormData({...formData, containers: n});
+                                    }}
+                                  />
+                                  {container.readiness_probe.type === 'http' && (
+                                    <input 
+                                      placeholder="Path"
+                                      className="px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                      value={container.readiness_probe.path}
+                                      onChange={e => {
+                                        const n = [...formData.containers];
+                                        n[idx].readiness_probe.path = e.target.value;
+                                        setFormData({...formData, containers: n});
+                                      }}
+                                    />
+                                  )}
+                                </>
+                              ) : (
+                                <input 
+                                  placeholder="Command (comma separated)"
+                                  className="col-span-2 px-3 py-1.5 bg-slate-50 rounded-lg outline-none text-[10px] font-mono"
+                                  value={container.readiness_probe.command}
+                                  onChange={e => {
+                                    const n = [...formData.containers];
+                                    n[idx].readiness_probe.command = e.target.value;
+                                    setFormData({...formData, containers: n});
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-2">
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Delay</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.initial_delay_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.initial_delay_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Period</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.period_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.period_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Timeout</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.timeout_seconds}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.timeout_seconds = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Fail</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.failure_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.failure_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                               <div className="flex items-center justify-between px-2 py-1 bg-slate-50 rounded-lg">
+                                 <span className="text-[8px] font-black text-slate-400 uppercase">Succ</span>
+                                 <input 
+                                   type="number" className="w-8 bg-transparent text-right outline-none text-[10px] font-mono"
+                                   value={container.readiness_probe.success_threshold}
+                                   onChange={e => {
+                                     const n = [...formData.containers];
+                                     n[idx].readiness_probe.success_threshold = e.target.value;
+                                     setFormData({...formData, containers: n});
+                                   }}
+                                 />
+                               </div>
+                            </div>
                           </div>
                         </div>
                         {idx > 0 && (
@@ -631,16 +1127,16 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                </div>
             </form>
 
-            <div className="p-10 border-t border-slate-50 bg-slate-50/50 flex gap-4 shrink-0">
+            <div className="p-8 border-t border-slate-50 bg-slate-50/50 flex gap-4 shrink-0">
                <button 
                  type="button" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}
-                 className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black hover:bg-slate-100 transition-all"
+                 className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-black hover:bg-slate-100 transition-all"
                >
                  取消
                </button>
                <button 
                  onClick={handleCreate} disabled={isSubmitting}
-                 className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                 className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-black hover:bg-slate-800 shadow-2xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                >
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} className="text-amber-400" />}
                   确认注册组件

@@ -84,7 +84,15 @@ export interface WorkflowContainer {
   privileged?: boolean;
   image_pull_policy?: 'Always' | 'IfNotPresent' | 'Never';
   resources?: ResourceRequirements;
-  health_check?: HealthCheck;
+  liveness_probe?: HealthCheck;
+  readiness_probe?: HealthCheck;
+}
+
+export interface ServicePort {
+  name: string;
+  port: number;
+  target_port: number;
+  protocol?: string;
 }
 
 export interface AppTemplate {
@@ -94,7 +102,7 @@ export interface AppTemplate {
   scope: TemplateScope;
   project_id?: string;
   containers: WorkflowContainer[];
-  service_ports?: number[];
+  service_ports?: ServicePort[];
   replicas: number;
   created_at: string;
 }
@@ -107,6 +115,7 @@ export interface JobTemplate {
   project_id?: string;
   containers: WorkflowContainer[];
   backoff_limit: number;
+  ttl_seconds_after_finished?: number;
   created_at: string;
 }
 
@@ -420,7 +429,7 @@ export type ViewType =
   | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
-  | 'workflow-instances' | 'workflow-templates' | 'workflow-jobs' | 'workflow-apps'
+  | 'workflow-instances' | 'workflow-jobs' | 'workflow-apps'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'

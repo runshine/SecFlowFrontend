@@ -30,7 +30,6 @@ import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
 
 // Workflow Pages
 import { WorkflowInstancePage } from './pages/workflow/WorkflowInstancePage';
-import { WorkflowTemplatePage } from './pages/workflow/WorkflowTemplatePage';
 import { JobTemplatePage } from './pages/workflow/JobTemplatePage';
 import { AppTemplatePage } from './pages/workflow/AppTemplatePage';
 
@@ -279,7 +278,6 @@ const App: React.FC = () => {
 
       // Workflow Management
       case 'workflow-instances': return <WorkflowInstancePage projectId={selectedProjectId} />;
-      case 'workflow-templates': return <WorkflowTemplatePage projectId={selectedProjectId} />;
       case 'workflow-jobs': return <JobTemplatePage projectId={selectedProjectId} />;
       case 'workflow-apps': return <AppTemplatePage projectId={selectedProjectId} />;
 

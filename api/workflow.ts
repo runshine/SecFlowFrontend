@@ -44,6 +44,14 @@ export const workflowApi = {
     const response = await fetch(`${API_BASE}/api/workflow/job-templates/${id}`, { headers: getHeaders() });
     return handleResponse(response);
   },
+  createJobTemplate: async (payload: any): Promise<JobTemplate> => {
+    const response = await fetch(`${API_BASE}/api/workflow/job-templates`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(response);
+  },
   deleteJobTemplate: async (id: string) => {
     const response = await fetch(`${API_BASE}/api/workflow/job-templates/${id}`, { method: 'DELETE', headers: getHeaders() });
     return handleResponse(response);

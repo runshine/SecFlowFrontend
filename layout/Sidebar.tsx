@@ -190,7 +190,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           children={[
             { id: 'workflow-apps', label: '应用模板', icon: <Layers size={14} /> },
             { id: 'workflow-jobs', label: '任务模板', icon: <Zap size={14} /> },
-            { id: 'workflow-templates', label: '工作流模板', icon: <GitBranch size={14} /> },
             { id: 'workflow-instances', label: '工作流实例', icon: <Activity size={14} /> }
           ]}
         />

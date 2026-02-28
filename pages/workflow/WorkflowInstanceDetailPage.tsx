@@ -53,9 +53,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [templateDetails, setTemplateDetails] = useState<any>(null);
   const [newNodeConfig, setNewNodeConfig] = useState({
     name: '',
-    node_id: '',
     env_vars: [] as { name: string, value: string }[],
-    volume_mounts: [] as { mount_path: string, pvc_name: string }[]
+    volume_mounts: [] as { mount_path: string, pvc_name: string }[],
+    position: null as { x: number, y: number } | null
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
   const [pvcs, setPvcs] = useState<any[]>([]);
@@ -67,7 +67,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // Transform nodes for React Flow
       const flowNodes: Node[] = (data.nodes || []).map((n: any, index: number) => ({
-        id: n.node_id,
+        id: n.id,
         type: 'default',
         position: n.position || { x: 250, y: index * 100 + 50 },
         data: { 
@@ -108,9 +108,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           if (n.depends_on && n.depends_on.length > 0) {
             n.depends_on.forEach((dep: string) => {
               flowEdges.push({
-                id: `${dep}-${n.node_id}`,
+                id: `${dep}-${n.id}`,
                 source: dep,
-                target: n.node_id,
+                target: n.id,
                 animated: data.status === 'running',
                 markerEnd: { type: MarkerType.ArrowClosed },
                 style: { stroke: '#94a3b8', strokeWidth: 2 }
@@ -193,14 +193,14 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       // Nodes to delete
       const flowNodeIds = new Set(nodes.map(n => n.id));
       for (const cn of currentNodes) {
-        if (!flowNodeIds.has(cn.node_id)) {
+        if (!flowNodeIds.has(cn.id)) {
           await api.workflow.deleteNode(instanceId, cn.id);
         }
       }
 
       // Nodes to create/update
       for (const node of nodes) {
-        const existingNode = currentNodes.find((n: any) => n.node_id === node.id);
+        const existingNode = currentNodes.find((n: any) => n.id === node.id);
         if (existingNode) {
           await api.workflow.updateNode(instanceId, existingNode.id, {
             name: node.data.name,
@@ -210,7 +210,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           // This case should be handled by handleCreateNode now, 
           // but keeping it as fallback for any nodes added via other means
           await api.workflow.createNode(instanceId, {
-            node_id: node.id,
             node_type: node.data.node_type,
             template_id: node.data.template_id,
             name: node.data.name,
@@ -288,9 +287,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       setNewNodeConfig({
         name: template.name,
-        node_id: `${template.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString().slice(-4)}`,
         env_vars: envVars,
-        volume_mounts: volumeMounts
+        volume_mounts: volumeMounts,
+        position: null
       });
       
       setAddNodeStep('configure');
@@ -303,7 +302,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   };
 
   const handleCreateNode = async () => {
-    if (!selectedTemplate || !newNodeConfig.node_id || !newNodeConfig.name) {
+    if (!selectedTemplate || !newNodeConfig.name) {
       alert("请填写完整信息");
       return;
     }
@@ -320,11 +319,10 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         alert("更新成功");
       } else {
         const payload = {
-          node_id: newNodeConfig.node_id,
           node_type: selectedTemplate.type,
           template_id: selectedTemplate.id,
           name: newNodeConfig.name,
-          position: { x: Math.random() * 200 + 100, y: Math.random() * 200 + 100 },
+          position: newNodeConfig.position || { x: Math.random() * 200 + 100, y: Math.random() * 200 + 100 },
           env_vars: newNodeConfig.env_vars.filter(e => e.value),
           volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name)
         };
@@ -386,38 +384,65 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   );
 
   const handleCopyNode = async (nodeId: string) => {
+    setMenu(null);
     try {
       setLoading(true);
       // 1. Fetch the latest node details from backend
       const nodeDetails = await api.workflow.getNode(instanceId, nodeId);
       
-      // 2. Prepare new node data
-      const newNodeId = `${nodeDetails.node_id}-copy-${Math.random().toString(36).substring(2, 7)}`;
-      const newNodeName = `${nodeDetails.name} (Copy)`;
+      setIsEditingNode(false);
+      setEditingNodeId(null);
       
-      // 3. Create the new node
-      await api.workflow.createNode(instanceId, {
-        node_id: newNodeId,
-        node_type: nodeDetails.node_type,
-        template_id: nodeDetails.template_id,
-        name: newNodeName,
+      // 2. Fetch template details to know what inputs are required
+      let details;
+      if (nodeDetails.node_type === 'app') {
+        details = await api.workflow.getAppTemplate(nodeDetails.template_id);
+      } else {
+        details = await api.workflow.getJobTemplate(nodeDetails.template_id);
+      }
+      
+      await loadPvcs();
+      
+      setSelectedTemplate({ id: nodeDetails.template_id, name: details.name, type: nodeDetails.node_type });
+      setTemplateDetails(details);
+      
+      // 3. Populate config from node details
+      const envVars: { name: string, value: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+
+      details.containers.forEach((c: any) => {
+        if (c.input_env_vars) {
+          c.input_env_vars.forEach((iv: any) => {
+            if (!envVars.find(e => e.name === iv.name)) {
+              const existingValue = nodeDetails.env_vars?.find((ev: any) => ev.name === iv.name);
+              envVars.push({ name: iv.name, value: existingValue?.value || iv.default_value || '' });
+            }
+          });
+        }
+        if (c.input_volume_mounts) {
+          c.input_volume_mounts.forEach((iv: any) => {
+            if (!volumeMounts.find(v => v.mount_path === iv.mount_path)) {
+              const existingValue = nodeDetails.volume_mounts?.find((vm: any) => vm.mount_path === iv.mount_path);
+              volumeMounts.push({ mount_path: iv.mount_path, pvc_name: existingValue?.pvc_name || '' });
+            }
+          });
+        }
+      });
+
+      setNewNodeConfig({
+        name: `${nodeDetails.name} (Copy)`,
+        env_vars: envVars,
+        volume_mounts: volumeMounts,
         position: { 
           x: (nodeDetails.position?.x || 0) + 50, 
           y: (nodeDetails.position?.y || 0) + 50 
-        },
-        env_vars: nodeDetails.env_vars,
-        volume_mounts: nodeDetails.volume_mounts,
-        resources: nodeDetails.resources,
-        timeout_seconds: nodeDetails.timeout_seconds,
-        input_env_vars: nodeDetails.input_env_vars,
-        input_volume_mounts: nodeDetails.input_volume_mounts
+        }
       });
       
-      await loadInstance();
-      setMenu(null);
-      alert("复制成功");
+      setAddNodeStep('configure');
+      setIsAddNodeModalOpen(true);
     } catch (e: any) {
-      alert("复制失败: " + e.message);
+      alert("复制节点失败: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -487,9 +512,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
 
       setNewNodeConfig({
         name: nodeDetails.name,
-        node_id: nodeDetails.node_id,
         env_vars: envVars,
-        volume_mounts: volumeMounts
+        volume_mounts: volumeMounts,
+        position: null
       });
       
       setAddNodeStep('configure');
@@ -669,8 +694,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">节点 ID</label>
-                  <div className="mt-1 text-xs font-mono text-slate-600 truncate" title={selectedNode.data.node_id}>
-                    {selectedNode.data.node_id as string}
+                  <div className="mt-1 text-xs font-mono text-slate-600 truncate" title={selectedNode.data.id}>
+                    {selectedNode.data.id as string}
                   </div>
                 </div>
                 <div>
@@ -839,28 +864,15 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">节点 ID</label>
-                      <input 
-                        type="text"
-                        className={`w-full px-4 py-3 border rounded-xl outline-none transition-all font-mono text-sm ${isEditingNode ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50 border-slate-200 focus:border-blue-500'}`}
-                        value={newNodeConfig.node_id}
-                        onChange={e => !isEditingNode && setNewNodeConfig({...newNodeConfig, node_id: e.target.value})}
-                        readOnly={isEditingNode}
-                        placeholder="e.g. web-server-1"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">显示名称</label>
-                      <input 
-                        type="text"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition-all font-bold text-sm"
-                        value={newNodeConfig.name}
-                        onChange={e => setNewNodeConfig({...newNodeConfig, name: e.target.value})}
-                        placeholder="e.g. 前端服务"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">显示名称</label>
+                    <input 
+                      type="text"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition-all font-bold text-sm"
+                      value={newNodeConfig.name}
+                      onChange={e => setNewNodeConfig({...newNodeConfig, name: e.target.value})}
+                      placeholder="e.g. 前端服务"
+                    />
                   </div>
 
                   {newNodeConfig.env_vars.length > 0 && (

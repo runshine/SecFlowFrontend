@@ -125,7 +125,7 @@ export interface JobTemplate {
 }
 
 export interface WorkflowNode {
-  node_id: string;
+  id: string;
   node_type: NodeType;
   template_id: string;
   name: string;
@@ -174,7 +174,6 @@ export interface WorkflowInstance {
 
 export interface WorkflowNodeInstance {
   id: string;
-  node_id: string;
   node_type: NodeType;
   template_id: string;
   name: string;
@@ -182,7 +181,13 @@ export interface WorkflowNodeInstance {
   k8s_resource_name?: string;
   k8s_resource_type?: string;
   depends_on?: string[];
+  downstream_node_ids?: string[];
   service_name?: string;
+  timeout_seconds?: number;
+  position?: { x: number; y: number };
+  env_vars?: any[];
+  volume_mounts?: any[];
+  resources?: any;
   started_at?: string;
   finished_at?: string;
   message?: string;

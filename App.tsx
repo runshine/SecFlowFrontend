@@ -30,8 +30,11 @@ import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
 
 // Workflow Pages
 import { WorkflowInstancePage } from './pages/workflow/WorkflowInstancePage';
+import { WorkflowInstanceDetailPage } from './pages/workflow/WorkflowInstanceDetailPage';
 import { JobTemplatePage } from './pages/workflow/JobTemplatePage';
+import { JobTemplateDetailPage } from './pages/workflow/JobTemplateDetailPage';
 import { AppTemplatePage } from './pages/workflow/AppTemplatePage';
+import { AppTemplateDetailPage } from './pages/workflow/AppTemplateDetailPage';
 
 // Pentest Pages
 import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
@@ -53,6 +56,9 @@ const App: React.FC = () => {
   const [projects, setProjects] = useState<SecurityProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>(localStorage.getItem('last_project_id') || '');
   const [activeProjectId, setActiveProjectId] = useState<string>(''); 
+  const [activeInstanceId, setActiveInstanceId] = useState<string>('');
+  const [activeAppTemplateId, setActiveAppTemplateId] = useState<string>('');
+  const [activeJobTemplateId, setActiveJobTemplateId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -277,9 +283,12 @@ const App: React.FC = () => {
       case 'env-tasks': return <EnvTasksPage projectId={selectedProjectId} />;
 
       // Workflow Management
-      case 'workflow-instances': return <WorkflowInstancePage projectId={selectedProjectId} />;
-      case 'workflow-jobs': return <JobTemplatePage projectId={selectedProjectId} />;
-      case 'workflow-apps': return <AppTemplatePage projectId={selectedProjectId} />;
+      case 'workflow-instances': return <WorkflowInstancePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveInstanceId(id); setCurrentView('workflow-instance-detail'); }} />;
+      case 'workflow-instance-detail': return <WorkflowInstanceDetailPage instanceId={activeInstanceId} onBack={() => setCurrentView('workflow-instances')} />;
+      case 'workflow-jobs': return <JobTemplatePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveJobTemplateId(id); setCurrentView('workflow-job-detail'); }} />;
+      case 'workflow-job-detail': return <JobTemplateDetailPage templateId={activeJobTemplateId} onBack={() => setCurrentView('workflow-jobs')} />;
+      case 'workflow-apps': return <AppTemplatePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveAppTemplateId(id); setCurrentView('workflow-app-detail'); }} />;
+      case 'workflow-app-detail': return <AppTemplateDetailPage templateId={activeAppTemplateId} onBack={() => setCurrentView('workflow-apps')} />;
 
       case 'engine-validation': return <WorkflowPlaceholder title="安全验证" icon={<ShieldCheck />} />;
       case 'pentest-risk': return <WorkflowPlaceholder title="风险评估" icon={<ShieldAlert />} />;

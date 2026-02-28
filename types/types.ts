@@ -103,8 +103,13 @@ export interface AppTemplate {
   project_id?: string;
   containers: WorkflowContainer[];
   service_ports?: ServicePort[];
+  service_name?: string;
+  create_service?: boolean;
+  service_type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
   replicas: number;
+  created_by?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface JobTemplate {
@@ -150,10 +155,40 @@ export interface WorkflowInstance {
   name: string;
   description: string;
   status: WorkflowStatus;
-  template_id: string;
   project_id: string;
+  run_mode: 'once' | 'persistent';
+  trigger_type: 'manual' | 'http';
+  trigger_enabled: boolean;
+  trigger_url?: string;
+  is_active: boolean;
+  run_count: number;
+  last_run_at?: string;
+  nodes: WorkflowNodeInstance[];
+  edges?: WorkflowEdge[];
+  created_by?: string;
   started_at?: string;
   finished_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowNodeInstance {
+  id: string;
+  node_id: string;
+  node_type: NodeType;
+  template_id: string;
+  name: string;
+  status: WorkflowStatus;
+  k8s_resource_name?: string;
+  k8s_resource_type?: string;
+  depends_on?: string[];
+  service_name?: string;
+  started_at?: string;
+  finished_at?: string;
+  message?: string;
+  input_env_vars?: any[];
+  input_volume_mounts?: any[];
+  created_at: string;
 }
 
 // --- End Workflow Types ---
@@ -429,7 +464,7 @@ export type ViewType =
   | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
-  | 'workflow-instances' | 'workflow-jobs' | 'workflow-apps'
+  | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'

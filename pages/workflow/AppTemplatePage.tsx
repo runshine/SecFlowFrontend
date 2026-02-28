@@ -25,7 +25,7 @@ import { AppTemplate, TemplateScope } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
-export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) => {
+export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: (id: string) => void }> = ({ projectId, onNavigateToDetail }) => {
   const [templates, setTemplates] = useState<AppTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<TemplateScope>('project');
@@ -58,6 +58,9 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     scope: 'project' as TemplateScope,
     replicas: 1,
     service_ports: [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
+    service_name: '',
+    create_service: true,
+    service_type: 'ClusterIP' as 'ClusterIP' | 'LoadBalancer' | 'NodePort',
     containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
   });
 
@@ -159,6 +162,9 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       setFormData({
         name: '', description: '', scope: 'project', replicas: 1, 
         service_ports: [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
+        service_name: '',
+        create_service: true,
+        service_type: 'ClusterIP',
         containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
       });
       loadTemplates();
@@ -216,9 +222,9 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
             <tr>
               <th className="px-8 py-6">应用组件信息</th>
               <th className="px-6 py-6">运行实例 (Replicas)</th>
-              <th className="px-6 py-6">服务端口</th>
+              <th className="px-6 py-6">服务端口 / 类型</th>
               <th className="px-6 py-6">容器栈</th>
-              <th className="px-6 py-6">创建时间</th>
+              <th className="px-6 py-6">创建者/更新时间</th>
               <th className="px-8 py-6 text-right">操作</th>
             </tr>
           </thead>
@@ -238,7 +244,12 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                       <Layers size={22} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-slate-800 truncate">{t.name}</p>
+                      <p 
+                        className="text-sm font-black text-slate-800 truncate cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => onNavigateToDetail(t.id)}
+                      >
+                        {t.name}
+                      </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <Hash size={10} className="text-slate-300" />
                         <span className="text-[10px] font-mono text-slate-400 font-bold truncate max-w-[150px]">{t.id}</span>
@@ -255,13 +266,22 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   </div>
                 </td>
                 <td className="px-6 py-6">
-                  <div className="flex flex-wrap gap-1.5">
-                    {t.service_ports && t.service_ports.length > 0 ? t.service_ports.map((p: any, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[9px] font-black uppercase" title={`${p.name}: ${p.port}->${p.target_port}/${p.protocol}`}>
-                        {p.port}
-                      </span>
-                    )) : (
-                      <span className="text-[10px] font-bold text-slate-400">-</span>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {t.service_ports && t.service_ports.length > 0 ? t.service_ports.map((p: any, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[9px] font-black uppercase" title={`${p.name}: ${p.port}->${p.target_port}/${p.protocol}`}>
+                          {p.port}
+                        </span>
+                      )) : (
+                        <span className="text-[10px] font-bold text-slate-400">-</span>
+                      )}
+                    </div>
+                    {t.create_service && (
+                      <div className="flex items-center gap-1">
+                        <Globe size={10} className="text-slate-400" />
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{t.service_type || 'ClusterIP'}</span>
+                        {t.service_name && <span className="text-[9px] font-mono text-slate-400">({t.service_name})</span>}
+                      </div>
                     )}
                   </div>
                 </td>
@@ -275,13 +295,18 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   </div>
                 </td>
                 <td className="px-6 py-6">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
-                    <Clock size={12} /> {t.created_at ? t.created_at.split('T')[0] : 'N/A'}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase">
+                      <Monitor size={12} className="text-blue-500" /> {t.created_by || 'system'}
+                    </div>
+                    <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase">
+                      <Clock size={10} /> {t.updated_at ? new Date(t.updated_at).toLocaleString() : (t.created_at ? new Date(t.created_at).toLocaleString() : 'N/A')}
+                    </div>
                   </div>
                 </td>
                 <td className="px-8 py-6 text-right">
                   <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="查看详细编排">
+                    <button onClick={() => onNavigateToDetail(t.id)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="查看详细编排">
                       <ExternalLink size={16} />
                     </button>
                     <button onClick={() => handleDelete(t.id)} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="注销模板">
@@ -455,6 +480,39 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                         )}
                       </div>
                     ))}
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5 col-span-1 md:col-span-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service 名称</label>
+                    <input 
+                      placeholder="自动生成" 
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all"
+                      value={formData.service_name} onChange={e => setFormData({...formData, service_name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service 类型</label>
+                    <select 
+                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800"
+                      value={formData.service_type} onChange={e => setFormData({...formData, service_type: e.target.value as any})}
+                    >
+                      <option value="ClusterIP">ClusterIP</option>
+                      <option value="LoadBalancer">LoadBalancer</option>
+                      <option value="NodePort">NodePort</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center pt-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        checked={formData.create_service}
+                        onChange={e => setFormData({...formData, create_service: e.target.checked})}
+                      />
+                      <span className="text-xs font-black text-slate-700 uppercase">创建 Service</span>
+                    </label>
                   </div>
                </div>
 
@@ -715,7 +773,7 @@ export const AppTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                                 type="button" 
                                 onClick={() => {
                                   const n = [...formData.containers];
-                                  n[idx].input_env_vars.push({ name: '', source_key: '' });
+                                  n[idx].input_env_vars.push({ name: '', default_value: '' });
                                   setFormData({...formData, containers: n});
                                 }}
                                 className="text-[9px] font-black text-blue-600 hover:underline uppercase"

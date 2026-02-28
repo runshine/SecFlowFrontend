@@ -22,7 +22,7 @@ import {
 import { JobTemplate, TemplateScope } from '../../types/types';
 import { api } from '../../api/api';
 
-export const JobTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) => {
+export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: (id: string) => void }> = ({ projectId, onNavigateToDetail }) => {
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<TemplateScope>('project');
@@ -219,7 +219,12 @@ export const JobTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-black text-slate-800 tracking-tight truncate">{t.name}</h4>
+                          <h4 
+                            className="text-sm font-black text-slate-800 tracking-tight truncate cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={() => onNavigateToDetail(t.id)}
+                          >
+                            {t.name}
+                          </h4>
                           <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-mono font-bold uppercase tracking-tighter">
                             {t.id.slice(0, 8)}
                           </span>
@@ -260,7 +265,7 @@ export const JobTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   </td>
                   <td className="px-8 py-6 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                      <button onClick={() => onNavigateToDetail(t.id)} className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
                         <ExternalLink size={16} />
                       </button>
                       <button 

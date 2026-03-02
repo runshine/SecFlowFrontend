@@ -34,6 +34,11 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
   // Registration Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const defaultContainer = { 
     name: 'main', 
     image: '', 
@@ -42,7 +47,7 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
     env_vars: [{ name: '', value: '' }],
     volume_mounts: [{ pvc_name: '', mount_path: '', sub_path: '', read_only: false }],
     input_env_vars: [{ name: '', default_value: '' }],
-    input_volume_mounts: [{ mount_path: '', sub_path: '', read_only: true }],
+    input_volume_mounts: [{ mount_path: '', read_only: true }],
     output_env_vars: [],
     output_volume_mounts: [],
     privileged: false,
@@ -102,11 +107,18 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
     return filteredTemplates.slice(start, start + itemsPerPage);
   }, [filteredTemplates, currentPage]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("确定要注销此应用组件模板吗？")) return;
+  const handleDelete = (id: string) => {
+    setDeletingId(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingId) return;
     try {
-      await api.workflow.deleteAppTemplate(id);
+      await api.workflow.deleteAppTemplate(deletingId);
       loadTemplates();
+      setIsDeleteModalOpen(false);
+      setDeletingId(null);
     } catch (e: any) {
       alert("删除失败: " + e.message);
     }
@@ -826,7 +838,7 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                                 type="button" 
                                 onClick={() => {
                                   const n = [...formData.containers];
-                                  n[idx].input_volume_mounts.push({ mount_path: '' });
+                                  n[idx].input_volume_mounts.push({ mount_path: '', read_only: true });
                                   setFormData({...formData, containers: n});
                                 }}
                                 className="text-[9px] font-black text-blue-600 hover:underline uppercase"
@@ -844,16 +856,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                                     onChange={e => {
                                       const n = [...formData.containers];
                                       n[idx].input_volume_mounts[volIdx].mount_path = e.target.value;
-                                      setFormData({...formData, containers: n});
-                                    }}
-                                  />
-                                  <input 
-                                    placeholder="Sub Path"
-                                    className="w-24 px-4 py-2 bg-white rounded-xl border border-slate-100 outline-none text-xs font-mono"
-                                    value={vol.sub_path}
-                                    onChange={e => {
-                                      const n = [...formData.containers];
-                                      n[idx].input_volume_mounts[volIdx].sub_path = e.target.value;
                                       setFormData({...formData, containers: n});
                                     }}
                                   />
@@ -1199,6 +1201,39 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} className="text-amber-400" />}
                   确认注册组件
                </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 text-center">
+              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-800">确认删除？</h3>
+              <p className="text-slate-500 mt-4 font-medium">
+                您确定要删除这个应用模板吗？此操作无法撤销。
+              </p>
+            </div>
+            <div className="p-8 bg-slate-50 flex gap-4">
+              <button 
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setDeletingId(null);
+                }} 
+                className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all"
+              >
+                取消
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+              >
+                确认删除
+              </button>
             </div>
           </div>
         </div>

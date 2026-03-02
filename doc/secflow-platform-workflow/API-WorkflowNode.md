@@ -21,11 +21,14 @@
 
 在工作流实例中添加节点。
 
+**前置条件:** 工作流状态必须为 `pending`
+
 **注意：**
 - 节点ID由系统自动生成，用户不需要指定
 - 不同节点之间没有依赖关系，无需指定 `depends_on`
 - `env_vars` 和 `volume_mounts` 用于实例化模板时传递环境变量和挂载参数以满足模板依赖要求
 - 创建时会校验是否满足指定ID模板的依赖条件，如果不满足则返回未满足的依赖详情
+- 工作流初始化后（状态不为 pending）不允许添加节点
 
 **Authentication:** Required
 
@@ -146,7 +149,12 @@
 
 更新工作流节点配置。
 
-**注意：** 不同节点之间没有依赖关系，无需指定 `depends_on`。更新时可修改与创建时相同的配置字段。
+**前置条件:** 工作流状态必须为 `pending`
+
+**注意：**
+- 不同节点之间没有依赖关系，无需指定 `depends_on`
+- 更新时可修改与创建时相同的配置字段
+- 工作流初始化后（状态不为 pending）不允许修改节点
 
 **Authentication:** Required
 
@@ -169,6 +177,29 @@
 | input_env_vars | array[DependencyEnvVar] | No | 输入环境变量依赖 |
 | input_volume_mounts | array[DependencyVolumeMount] | No | 输入挂载依赖 |
 
+**DependencyEnvVar:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| name | string | Yes | 环境变量名 (在当前节点设置) |
+| source_node_id | string | Yes | 上游节点ID (从中获取值) |
+| default_value | string | No | 默认值 (当上游不可用时) |
+
+**DependencyVolumeMount:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| mount_path | string | Yes | 容器内挂载路径 |
+| sub_path | string | No | PVC子目录挂载 (在节点实例化时指定) |
+| source_node_id | string | Yes | 上游节点ID (从中获取PVC) |
+| source_pvc_name | string | No | 指定PVC名称 (可选，不指定则自动检测) |
+| read_only | boolean | No | 只读挂载默认: true |
+
+**说明:**
+- 模板的 `input_volume_mounts` 只声明 `mount_path` 和 `read_only`
+- 节点实例化时通过 `input_volume_mounts` 指定 `source_node_id`、`sub_path` 等具体信息
+- `sub_path` 允许从上游 PVC 的特定子目录挂载数据
+
 **Response:** `200 OK`
 
 ---
@@ -178,6 +209,8 @@
 **DELETE** `/api/workflow/workflow-instances/{instance_id}/nodes/{node_id}`
 
 删除工作流节点。
+
+**前置条件:** 工作流状态必须为 `pending`
 
 **Authentication:** Required
 
@@ -190,7 +223,7 @@
 
 **Description:**
 
-- 节点必须处于pending或stopped状态
+- 工作流初始化后（状态不为 pending）不允许删除节点
 - 删除节点后需要手动更新edges移除相关连线
 
 **Response:** `200 OK`
@@ -261,6 +294,10 @@
 **POST** `/api/workflow/workflow-instances/{instance_id}/edges`
 
 添加、更新或删除工作流边。
+
+**前置条件:** 工作流状态必须为 `pending`
+
+**注意:** 工作流初始化后（状态不为 pending）不允许修改边
 
 **Authentication:** Required
 

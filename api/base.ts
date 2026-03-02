@@ -23,7 +23,11 @@ export const handleResponse = async (response: Response) => {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(errorData.detail || errorData.error || `API Error (${response.status})`);
+    const message = errorData.detail || errorData.error || errorData.message || `API Error (${response.status})`;
+    const error = new Error(message);
+    if (errorData.code) (error as any).code = errorData.code;
+    if (errorData.details) (error as any).details = errorData.details;
+    throw error;
   }
   return response.json();
 };

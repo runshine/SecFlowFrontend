@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { WorkflowInstance, WorkflowStatus } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -21,7 +21,9 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isUninitModalOpen, setIsUninitModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null); // null means batch delete
+  const [uninitId, setUninitId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -132,6 +134,22 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       loadInstances();
     } catch (e: any) {
       alert("删除失败: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUninitialize = async () => {
+    if (!uninitId) return;
+    try {
+      setLoading(true);
+      await api.workflow.uninitializeInstance(uninitId);
+      setIsUninitModalOpen(false);
+      setUninitId(null);
+      loadInstances();
+      alert("反初始化成功");
+    } catch (e: any) {
+      alert("反初始化失败: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -275,8 +293,31 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                     <button onClick={() => handleSync(instance.id)} title="同步状态" className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all">
                       <RefreshCw size={16} />
                     </button>
+
+                    {instance.status === 'pending' && (
+                      <button onClick={async () => {
+                        try {
+                          await api.workflow.initializeInstance(instance.id);
+                          loadInstances();
+                          alert("初始化成功");
+                        } catch (e: any) {
+                          alert("初始化失败: " + e.message);
+                        }
+                      }} title="初始化" className="p-3 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-600 hover:text-white transition-all">
+                        <Activity size={16} />
+                      </button>
+                    )}
+
+                    {['initialized', 'stopped', 'failed', 'succeeded'].includes(instance.status) && (
+                      <button onClick={() => {
+                        setUninitId(instance.id);
+                        setIsUninitModalOpen(true);
+                      }} title="反初始化" className="p-3 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-600 hover:text-white transition-all">
+                        <RotateCcw size={16} />
+                      </button>
+                    )}
                     
-                    {instance.status !== 'running' && (
+                    {['initialized', 'stopped'].includes(instance.status) && (
                       <button onClick={() => handleStart(instance.id)} title="启动" className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all">
                         <Play size={16} />
                       </button>
@@ -392,6 +433,45 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                 <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20">创建</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Uninitialize Confirmation Modal */}
+      {isUninitModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 text-center">
+              <div className="w-20 h-20 bg-orange-50 text-orange-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
+                <RotateCcw size={40} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-800">确认反初始化？</h3>
+              <p className="text-slate-500 mt-4 font-medium">
+                您确定要反初始化这个工作流实例吗？这将删除所有关联的 K8S 资源并重置状态。
+              </p>
+              <p className="text-red-500 mt-2 font-bold text-sm bg-red-50 p-3 rounded-xl border border-red-100">
+                警告：所有的非持久化数据将全部丢失！
+              </p>
+            </div>
+            <div className="p-8 bg-slate-50 flex gap-4">
+              <button 
+                onClick={() => {
+                  setIsUninitModalOpen(false);
+                  setUninitId(null);
+                }} 
+                className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all"
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleUninitialize}
+                disabled={loading}
+                className="flex-1 py-4 bg-orange-600 text-white rounded-2xl font-bold hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading && <Loader2 size={18} className="animate-spin" />}
+                确认反初始化
+              </button>
+            </div>
           </div>
         </div>
       )}

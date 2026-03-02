@@ -114,6 +114,18 @@ export const workflowApi = {
     });
     return handleResponse(response);
   },
+  initializeInstance: async (id: string, force: boolean = false) => {
+    const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${id}/initialize`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ force })
+    });
+    return handleResponse(response);
+  },
+  uninitializeInstance: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${id}/uninitialize`, { method: 'POST', headers: getHeaders() });
+    return handleResponse(response);
+  },
   startInstance: async (id: string) => {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${id}/start`, { method: 'POST', headers: getHeaders() });
     return handleResponse(response);

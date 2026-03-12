@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  ReactFlow, 
-  MiniMap, 
-  Controls, 
-  Background, 
-  useNodesState, 
-  useEdgesState, 
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  useNodesState,
+  useEdgesState,
   addEdge,
   Connection,
   Edge,
@@ -18,6 +18,7 @@ import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Termi
 import { api } from '../../api/api';
 import { WorkflowInstance, WorkflowNodeInstance, WorkflowStatus } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
+import { XTerminal } from '../../components/XTerminal';
 
 const nodeColor = (status: WorkflowStatus) => {
   switch (status) {
@@ -59,15 +60,12 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [restarting, setRestarting] = useState(false);
   const [recreating, setRecreating] = useState(false);
   
-  // 终端相关状态
+  // 终端相关状态 (使用xterm.js)
   const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false);
   const [terminalWs, setTerminalWs] = useState<WebSocket | null>(null);
-  const [terminalOutput, setTerminalOutput] = useState<string>('');
-  const [terminalInput, setTerminalInput] = useState<string>('');
   const [terminalConnected, setTerminalConnected] = useState(false);
   const [terminalPodName, setTerminalPodName] = useState<string>('');
-  const terminalInputRef = React.useRef<HTMLInputElement>(null);
-  
+
   const [isAddNodeModalOpen, setIsAddNodeModalOpen] = useState(false);
   const [isEditingNode, setIsEditingNode] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -783,64 +781,47 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     }
   };
 
-  // 新增：打开终端
+  // 新增：打开终端 (使用xterm.js)
   const handleOpenTerminal = async (nodeId: string) => {
     setMenu(null);
     if (!instance?.project_id) return;
-    
+
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
       alert("节点尚未创建K8S资源");
       return;
     }
-    
+
     try {
       // 获取Pod列表
       const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
       if (podsRes.items && podsRes.items.length > 0) {
         const podName = podsRes.items[0].name;
         setTerminalPodName(podName);
-        setTerminalOutput('');
-        setTerminalInput('');
         setIsTerminalModalOpen(true);
         setTerminalConnected(false);
-        
+
         // 创建WebSocket连接
         const ws = api.k8s.createTerminalConnection(instance.project_id, podName);
-        
+
         ws.onopen = () => {
           setTerminalConnected(true);
-          setTerminalOutput(prev => prev + '\x1b[32m✓ 已连接到容器终端\x1b[0m\n');
         };
-        
-        ws.onmessage = (event) => {
-          setTerminalOutput(prev => prev + event.data);
-        };
-        
-        ws.onerror = (error) => {
-          setTerminalOutput(prev => prev + '\x1b[31m✗ 连接错误\x1b[0m\n');
+
+        ws.onerror = () => {
           setTerminalConnected(false);
         };
-        
+
         ws.onclose = () => {
           setTerminalConnected(false);
-          setTerminalOutput(prev => prev + '\x1b[33m✗ 连接已关闭\x1b[0m\n');
         };
-        
+
         setTerminalWs(ws);
       } else {
         alert("未找到运行的Pod");
       }
     } catch (e: any) {
       alert("获取Pod失败: " + e.message);
-    }
-  };
-
-  // 发送终端命令
-  const handleTerminalSend = () => {
-    if (terminalWs && terminalWs.readyState === WebSocket.OPEN && terminalInput.trim()) {
-      terminalWs.send(terminalInput);
-      setTerminalInput('');
     }
   };
 
@@ -852,13 +833,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     }
     setIsTerminalModalOpen(false);
     setTerminalConnected(false);
-  };
-
-  // 处理终端键盘事件
-  const handleTerminalKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleTerminalSend();
-    }
+    setTerminalPodName('');
   };
 
   // 新增：访问服务
@@ -2064,95 +2039,16 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       )}
 
-      {/* Terminal Modal */}
+      {/* Terminal Modal - 使用xterm.js */}
       {isTerminalModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-[2rem] w-full max-w-5xl shadow-2xl overflow-hidden animate-in zoom-in-95 border border-slate-800">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-500/10 rounded-lg">
-                  <Zap size={20} className="text-yellow-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-white">容器终端</h3>
-                  <div className="text-xs text-slate-400 font-mono">{terminalPodName}</div>
-                </div>
-                <div className={`ml-4 px-3 py-1 rounded-full text-xs font-bold ${terminalConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                  {terminalConnected ? '已连接' : '未连接'}
-                </div>
-              </div>
-              <button 
-                onClick={handleCloseTerminal}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
-              >
-                <Plus size={24} className="rotate-45" />
-              </button>
-            </div>
-            
-            <div className="p-4">
-              {/* 终端输出区域 */}
-              <div 
-                className="bg-black rounded-2xl border border-slate-800 p-4 h-[50vh] overflow-y-auto custom-scrollbar font-mono text-sm text-green-400 leading-relaxed"
-                onClick={() => terminalInputRef.current?.focus()}
-              >
-                <pre className="whitespace-pre-wrap">{terminalOutput || '等待连接...'}</pre>
-              </div>
-              
-              {/* 输入区域 */}
-              <div className="mt-4 flex gap-2">
-                <div className="flex-1 relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-green-400 font-mono">$</span>
-                  <input
-                    ref={terminalInputRef}
-                    type="text"
-                    value={terminalInput}
-                    onChange={(e) => setTerminalInput(e.target.value)}
-                    onKeyDown={handleTerminalKeyDown}
-                    disabled={!terminalConnected}
-                    placeholder={terminalConnected ? "输入命令后按 Enter 执行..." : "等待连接..."}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono text-sm outline-none focus:border-green-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                <button
-                  onClick={handleTerminalSend}
-                  disabled={!terminalConnected || !terminalInput.trim()}
-                  className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  发送
-                </button>
-              </div>
-              
-              {/* 快捷命令 */}
-              <div className="mt-4 flex gap-2 flex-wrap">
-                {['ls -la', 'pwd', 'cat /etc/os-release', 'env', 'ps aux', 'df -h'].map((cmd) => (
-                  <button
-                    key={cmd}
-                    onClick={() => {
-                      if (terminalConnected) {
-                        setTerminalInput(cmd);
-                        terminalInputRef.current?.focus();
-                      }
-                    }}
-                    disabled={!terminalConnected}
-                    className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-xs font-mono hover:bg-slate-700 transition-all disabled:opacity-50"
-                  >
-                    {cmd}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
-              <div className="text-xs text-slate-500">
-                提示: 输入命令后按 Enter 执行，或点击快捷命令
-              </div>
-              <button 
-                onClick={handleCloseTerminal}
-                className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all"
-              >
-                关闭终端
-              </button>
-            </div>
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl w-full max-w-6xl shadow-2xl overflow-hidden animate-in zoom-in-95 border border-slate-700" style={{ height: '70vh' }}>
+            <XTerminal
+              ws={terminalWs}
+              connected={terminalConnected}
+              podName={terminalPodName}
+              onClose={handleCloseTerminal}
+            />
           </div>
         </div>
       )}

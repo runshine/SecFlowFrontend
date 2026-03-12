@@ -37,9 +37,10 @@ export const k8sApi = {
   },
 
   // --- Terminal Operations ---
-  createTerminalConnection: (projectId: string, podName: string, container?: string, command: string = '/bin/sh'): WebSocket => {
+  createTerminalConnection: (projectId: string, podName: string, container?: string, command: string = '/bin/bash'): WebSocket => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = API_BASE.replace(/^https?:\/\//, '').replace(/^http?:\/\//, '');
+    // 正确提取host，移除协议前缀
+    const wsHost = API_BASE.replace(/^https?:\/\//, '');
     const token = localStorage.getItem('secflow_token');
     let wsUrl = `${wsProtocol}//${wsHost}/api/k8s/ws/pods/${podName}/exec?project_id=${projectId}&command=${encodeURIComponent(command)}`;
     if (container) {
@@ -48,6 +49,7 @@ export const k8sApi = {
     if (token) {
       wsUrl += `&token=${encodeURIComponent(token)}`;
     }
+    console.log('WebSocket URL:', wsUrl);
     return new WebSocket(wsUrl);
   },
 

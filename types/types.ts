@@ -165,6 +165,8 @@ export interface WorkflowInstance {
   last_run_at?: string;
   nodes: WorkflowNodeInstance[];
   edges?: WorkflowEdge[];
+  has_warning?: boolean;
+  message?: string;
   created_by?: string;
   started_at?: string;
   finished_at?: string;

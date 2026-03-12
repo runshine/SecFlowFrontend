@@ -17,7 +17,9 @@ import {
   Clock,
   Hash,
   ExternalLink,
-  Layers
+  Layers,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { JobTemplate, TemplateScope } from '../../types/types';
 import { api } from '../../api/api';
@@ -35,6 +37,10 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const defaultContainer = { 
     name: 'main', 
@@ -73,6 +79,7 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
         project_id: scope === 'project' ? projectId : 'all' 
       });
       setTemplates(res.items || []);
+      setCurrentPage(1);
     } catch (e) {
       console.error(e);
     } finally {
@@ -86,6 +93,12 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
       t.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [templates, searchTerm]);
+
+  const totalPages = Math.ceil(filteredTemplates.length / itemsPerPage) || 1;
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredTemplates.slice(start, start + itemsPerPage);
+  }, [filteredTemplates, currentPage]);
 
   const handleDelete = (id: string) => {
     setDeletingId(id);
@@ -221,7 +234,7 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
                   </td>
                 </tr>
-              ) : filteredTemplates.length > 0 ? filteredTemplates.map(t => (
+              ) : paginatedItems.length > 0 ? paginatedItems.map(t => (
                 <tr key={t.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
@@ -300,6 +313,40 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Footer Pagination */}
+        <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Showing {Math.min(paginatedItems.length, itemsPerPage)} / {filteredTemplates.length} results
+          </span>
+          <div className="flex items-center gap-4">
+            <button 
+              disabled={currentPage === 1 || loading}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <button 
+                  key={i} 
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`w-9 h-9 rounded-xl text-[10px] font-black transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-400 hover:bg-slate-50 border border-slate-200'}`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button 
+              disabled={currentPage === totalPages || loading}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
         </div>
       </div>
 

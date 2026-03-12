@@ -7,6 +7,7 @@ import { environmentApi } from './environment';
 import { codeServerApi } from './codeServer';
 import { deployScriptApi } from './deployScript';
 import { workflowApi } from './workflow';
+import { k8sApi } from './k8s';
 
 export const api = {
   auth: authApi,
@@ -16,5 +17,6 @@ export const api = {
   environment: environmentApi,
   codeServer: codeServerApi,
   deployScript: deployScriptApi,
-  workflow: workflowApi
+  workflow: workflowApi,
+  k8s: k8sApi
 };

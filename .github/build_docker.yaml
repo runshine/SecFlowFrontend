@@ -2,11 +2,7 @@ name: build-secflow-frontend-image
 on:
   push:
     branches:
-      - 'v2.*'
-    paths:
-      - .github/workflows/build-secflow-frontend-image.yaml
-      - 13-secflow-service/image_build/secflow-frontend
-      - 13-secflow-service/image_build/secflow-frontend/**
+      - 'local'
 jobs:
   build-secflow-frontend-image:
     runs-on: ubuntu-latest

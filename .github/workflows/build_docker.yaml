@@ -51,10 +51,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            runshine0819/secflow-frontend:latest
-            ghcr.io/runshine/secflow-frontend:latest
-            runshine0819/secflow-frontend:${{ steps.date.outputs.date_tag }}
-            ghcr.io/runshine/secflow-frontend:${{ steps.date.outputs.date_tag }}
+            runshine0819/secflow-frontend-local:latest
+            ghcr.io/runshine/secflow-frontend-local:latest
+            runshine0819/secflow-frontend-local:${{ steps.date.outputs.date_tag }}
+            ghcr.io/runshine/secflow-frontend-local:${{ steps.date.outputs.date_tag }}
           file: docker/docker.txt
 
 

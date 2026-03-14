@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  ReactFlow, 
-  MiniMap, 
-  Controls, 
-  Background, 
-  useNodesState, 
-  useEdgesState, 
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  useNodesState,
+  useEdgesState,
   addEdge,
   Connection,
   Edge,
@@ -14,10 +14,11 @@ import {
   Panel
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw, Clock, BarChart2, Database, AlertCircle, CheckCircle, XCircle, Zap } from 'lucide-react';
 import { api } from '../../api/api';
 import { WorkflowInstance, WorkflowNodeInstance, WorkflowStatus } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
+import { XTerminal } from '../../components/XTerminal';
 
 const nodeColor = (status: WorkflowStatus) => {
   switch (status) {
@@ -46,6 +47,25 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [nodeLogs, setNodeLogs] = useState<string>('');
   const [loadingLogs, setLoadingLogs] = useState(false);
   
+  // 新增：节点交互操作状态
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
+  const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
+  const [nodeStatus, setNodeStatus] = useState<any>(null);
+  const [nodeEvents, setNodeEvents] = useState<any[]>([]);
+  const [nodeMetrics, setNodeMetrics] = useState<any>(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [recreating, setRecreating] = useState(false);
+  
+  // 终端相关状态 (使用xterm.js)
+  const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false);
+  const [terminalWs, setTerminalWs] = useState<WebSocket | null>(null);
+  const [terminalConnected, setTerminalConnected] = useState(false);
+  const [terminalPodName, setTerminalPodName] = useState<string>('');
+
   const [isAddNodeModalOpen, setIsAddNodeModalOpen] = useState(false);
   const [isEditingNode, setIsEditingNode] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -55,11 +75,21 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [newNodeConfig, setNewNodeConfig] = useState({
     name: '',
     env_vars: [] as { name: string, value: string }[],
-    volume_mounts: [] as { mount_path: string, pvc_name: string }[],
-    position: null as { x: number, y: number } | null
+    volume_mounts: [] as { mount_path: string, pvc_name: string, sub_path?: string }[],
+    position: null as { x: number, y: number } | null,
+    create_service: true,
+    service_name: '',
+    service_ports: [] as { name: string, port: number, target_port: number, protocol: string }[],
+    service_type: 'ClusterIP' as 'ClusterIP' | 'NodePort' | 'LoadBalancer',
+    timeout_seconds: null as number | null
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
   const [pvcs, setPvcs] = useState<any[]>([]);
+  
+  // 访问服务相关状态
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  const [serviceAccessInfo, setServiceAccessInfo] = useState<any>(null);
+  const [loadingAccess, setLoadingAccess] = useState(false);
   
   const [initialNodes, setInitialNodes] = useState<Node[]>([]);
   const [initialEdges, setInitialEdges] = useState<Edge[]>([]);
@@ -321,8 +351,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // Initialize config with required inputs
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
       
+      const servicePorts: { name: string, port: number, target_port: number, protocol: string }[] = [];
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
           c.input_env_vars.forEach((iv: any) => {
@@ -338,13 +369,32 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             }
           });
         }
+        if (c.ports) {
+          c.ports.forEach((p: any) => {
+            if (!servicePorts.find(sp => sp.port === p.container_port)) {
+              servicePorts.push({
+                name: p.name || `port-${p.container_port}`,
+                port: p.container_port,
+                target_port: p.container_port,
+                protocol: p.protocol || 'TCP'
+              });
+            }
+          });
+        }
       });
+      
+      const autoServiceName = template.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
       
       setNewNodeConfig({
         name: template.name,
         env_vars: envVars,
         volume_mounts: volumeMounts,
-        position: null
+        position: null,
+        create_service: template.type === 'app',
+        service_name: template.type === 'app' ? autoServiceName : '',
+        service_ports: template.type === 'app' ? servicePorts : [],
+        service_type: 'ClusterIP',
+        timeout_seconds: null
       });
       
       setAddNodeStep('configure');
@@ -377,6 +427,22 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       alert(errorMsg);
       return;
     }
+
+    if (selectedTemplate.type === 'app' && newNodeConfig.create_service) {
+      if (!newNodeConfig.service_name || !newNodeConfig.service_name.trim()) {
+        alert("服务名称不能为空");
+        return;
+      }
+      if (newNodeConfig.service_ports.length === 0) {
+        alert("请至少添加一个服务端口");
+        return;
+      }
+      const invalidPorts = newNodeConfig.service_ports.filter(sp => !sp.port || !sp.target_port);
+      if (invalidPorts.length > 0) {
+        alert("服务端口配置不完整，请检查端口号");
+        return;
+      }
+    }
     
     try {
       setLoading(true);
@@ -389,7 +455,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         });
         alert("更新成功");
       } else {
-        const payload = {
+        const payload: any = {
           node_type: selectedTemplate.type,
           template_id: selectedTemplate.id,
           name: newNodeConfig.name,
@@ -397,6 +463,19 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           env_vars: newNodeConfig.env_vars.filter(e => e.value),
           volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name)
         };
+        
+        if (selectedTemplate.type === 'app') {
+          payload.create_service = newNodeConfig.create_service;
+          if (newNodeConfig.create_service) {
+            payload.service_name = newNodeConfig.service_name;
+            payload.service_ports = newNodeConfig.service_ports;
+            payload.service_type = newNodeConfig.service_type;
+          }
+        }
+        
+        if (newNodeConfig.timeout_seconds) {
+          payload.timeout_seconds = newNodeConfig.timeout_seconds;
+        }
         
         await api.workflow.createNode(instanceId, payload);
         alert("创建成功");
@@ -500,7 +579,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // 3. Populate config from node details
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -528,7 +607,12 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         position: { 
           x: (nodeDetails.position?.x || 0) + 50, 
           y: (nodeDetails.position?.y || 0) + 50 
-        }
+        },
+        create_service: nodeDetails.create_service ?? true,
+        service_name: nodeDetails.service_name || '',
+        service_ports: nodeDetails.service_ports || [],
+        service_type: nodeDetails.service_type || 'ClusterIP',
+        timeout_seconds: nodeDetails.timeout_seconds || null
       });
       
       setAddNodeStep('configure');
@@ -553,6 +637,235 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     } finally {
       setLoadingLogs(false);
     }
+  };
+
+  // 新增：获取节点状态
+  const handleViewStatus = async (nodeId: string) => {
+    setMenu(null);
+    if (!instance?.project_id) return;
+    
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.data.k8s_resource_name) {
+      alert("节点尚未创建K8S资源");
+      return;
+    }
+    
+    setIsStatusModalOpen(true);
+    setLoadingStatus(true);
+    setNodeStatus(null);
+    
+    try {
+      // 获取Pod列表
+      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
+      if (podsRes.items && podsRes.items.length > 0) {
+        const podName = podsRes.items[0].name;
+        const status = await api.k8s.getPodStatus(instance.project_id, podName);
+        setNodeStatus(status);
+      } else {
+        setNodeStatus({ error: "未找到运行的Pod" });
+      }
+    } catch (e: any) {
+      setNodeStatus({ error: "获取状态失败: " + e.message });
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  // 新增：获取节点事件
+  const handleViewEvents = async (nodeId: string) => {
+    setMenu(null);
+    if (!instance?.project_id) return;
+    
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.data.k8s_resource_name) {
+      alert("节点尚未创建K8S资源");
+      return;
+    }
+    
+    setIsEventsModalOpen(true);
+    setLoadingEvents(true);
+    setNodeEvents([]);
+    
+    try {
+      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
+      if (podsRes.items && podsRes.items.length > 0) {
+        const podName = podsRes.items[0].name;
+        const eventsRes = await api.k8s.getPodEvents(instance.project_id, podName);
+        setNodeEvents(eventsRes.events || []);
+      }
+    } catch (e: any) {
+      console.error("获取事件失败:", e);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  // 新增：获取节点资源指标
+  const handleViewMetrics = async (nodeId: string) => {
+    setMenu(null);
+    if (!instance?.project_id) return;
+    
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.data.k8s_resource_name) {
+      alert("节点尚未创建K8S资源");
+      return;
+    }
+    
+    setIsMetricsModalOpen(true);
+    setLoadingMetrics(true);
+    setNodeMetrics(null);
+    
+    try {
+      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
+      if (podsRes.items && podsRes.items.length > 0) {
+        const podName = podsRes.items[0].name;
+        const metrics = await api.k8s.getPodMetrics(instance.project_id, podName);
+        setNodeMetrics(metrics);
+      } else {
+        setNodeMetrics({ error: "未找到运行的Pod" });
+      }
+    } catch (e: any) {
+      setNodeMetrics({ error: "获取指标失败: " + e.message });
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
+
+  // 新增：重启节点（APP类型）
+  const handleRestartNode = async (nodeId: string) => {
+    setMenu(null);
+    if (!instance?.project_id) return;
+    
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.data.k8s_resource_name) {
+      alert("节点尚未创建K8S资源");
+      return;
+    }
+    
+    if (!confirm(`确定要重启节点 "${node.data.name}" 吗？`)) return;
+    
+    setRestarting(true);
+    try {
+      await api.k8s.restartDeployment(instance.project_id, node.data.k8s_resource_name);
+      alert("重启命令已发送");
+      loadInstance();
+    } catch (e: any) {
+      alert("重启失败: " + e.message);
+    } finally {
+      setRestarting(false);
+    }
+  };
+
+  // 新增：重试节点（JOB类型）
+  const handleRetryNode = async (nodeId: string) => {
+    setMenu(null);
+    if (!instance?.project_id) return;
+    
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.data.k8s_resource_name) {
+      alert("节点尚未创建K8S资源");
+      return;
+    }
+    
+    if (!confirm(`确定要重试任务 "${node.data.name}" 吗？这将删除并重建Job。`)) return;
+    
+    setRecreating(true);
+    try {
+      await api.k8s.recreateJob(instance.project_id, node.data.k8s_resource_name);
+      alert("重试命令已发送");
+      loadInstance();
+    } catch (e: any) {
+      alert("重试失败: " + e.message);
+    } finally {
+      setRecreating(false);
+    }
+  };
+
+  // 新增：打开终端 (使用xterm.js)
+  const handleOpenTerminal = async (nodeId: string) => {
+    setMenu(null);
+    if (!instance?.project_id) return;
+
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.data.k8s_resource_name) {
+      alert("节点尚未创建K8S资源");
+      return;
+    }
+
+    try {
+      // 获取Pod列表
+      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
+      if (podsRes.items && podsRes.items.length > 0) {
+        const podName = podsRes.items[0].name;
+        setTerminalPodName(podName);
+        setIsTerminalModalOpen(true);
+        setTerminalConnected(false);
+
+        // 创建WebSocket连接
+        const ws = api.k8s.createTerminalConnection(instance.project_id, podName);
+
+        ws.onopen = () => {
+          setTerminalConnected(true);
+        };
+
+        ws.onerror = () => {
+          setTerminalConnected(false);
+        };
+
+        ws.onclose = () => {
+          setTerminalConnected(false);
+        };
+
+        setTerminalWs(ws);
+      } else {
+        alert("未找到运行的Pod");
+      }
+    } catch (e: any) {
+      alert("获取Pod失败: " + e.message);
+    }
+  };
+
+  // 关闭终端
+  const handleCloseTerminal = () => {
+    if (terminalWs) {
+      terminalWs.close();
+      setTerminalWs(null);
+    }
+    setIsTerminalModalOpen(false);
+    setTerminalConnected(false);
+    setTerminalPodName('');
+  };
+
+  // 新增：访问服务
+  const handleAccessService = async (nodeId: string) => {
+    setMenu(null);
+    if (!instance?.project_id) return;
+    
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.data.service_name) {
+      alert("该节点未创建Service，无法直接访问");
+      return;
+    }
+    
+    setIsAccessModalOpen(true);
+    setLoadingAccess(true);
+    setServiceAccessInfo(null);
+    
+    try {
+      const accessInfo = await api.k8s.getServiceAccess(instance.project_id, node.data.service_name);
+      setServiceAccessInfo(accessInfo);
+    } catch (e: any) {
+      setServiceAccessInfo({ error: "获取访问信息失败: " + e.message });
+    } finally {
+      setLoadingAccess(false);
+    }
+  };
+
+  // 打开服务代理URL
+  const handleOpenProxyUrl = (port: number, path: string = '/') => {
+    if (!instance?.project_id || !serviceAccessInfo?.name) return;
+    const url = api.k8s.proxyServiceUrl(instance.project_id, serviceAccessInfo.name, port, path);
+    window.open(url, '_blank');
   };
 
   const handleModifyNode = async (nodeId: string) => {
@@ -581,7 +894,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       // 3. Populate config from node details
       // We merge the template's required inputs with the node's provided values
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -606,7 +919,12 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         name: nodeDetails.name,
         env_vars: envVars,
         volume_mounts: volumeMounts,
-        position: null
+        position: null,
+        create_service: nodeDetails.create_service ?? true,
+        service_name: nodeDetails.service_name || '',
+        service_ports: nodeDetails.service_ports || [],
+        service_type: nodeDetails.service_type || 'ClusterIP',
+        timeout_seconds: nodeDetails.timeout_seconds || null
       });
       
       setAddNodeStep('configure');
@@ -649,6 +967,11 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-black text-slate-800 tracking-tight">{instance?.name}</h2>
               {instance?.status && <StatusBadge status={instance.status} />}
+              {instance?.has_warning && (
+                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full flex items-center gap-1">
+                  <AlertCircle size={12} /> 警告
+                </span>
+              )}
             </div>
             <p className="text-xs font-mono text-slate-400 mt-1">ID: {instance?.id}</p>
           </div>
@@ -736,6 +1059,53 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       </div>
 
+      {/* Warning Banner */}
+      {instance?.has_warning && instance?.message && (
+        <div className="mx-6 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-3">
+          <AlertCircle className="text-yellow-600 shrink-0 mt-0.5" size={20} />
+          <div className="flex-1">
+            <div className="font-bold text-yellow-800 mb-1">工作流状态警告</div>
+            <div className="text-sm text-yellow-700">{instance.message}</div>
+            <div className="mt-3 flex gap-2">
+              <button 
+                onClick={async () => {
+                  if (confirm('确定要取消初始化并清理资源吗？')) {
+                    try {
+                      setLoading(true);
+                      await api.workflow.uninitializeInstance(instanceId);
+                      await loadInstance();
+                    } catch (e: any) {
+                      alert('操作失败: ' + e.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-bold bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-all"
+              >
+                取消初始化
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    await api.workflow.initializeInstance(instanceId);
+                    await loadInstance();
+                  } catch (e: any) {
+                    alert('重新初始化失败: ' + e.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-bold bg-white border border-yellow-300 text-yellow-700 rounded-lg hover:bg-yellow-50 transition-all"
+              >
+                重新初始化
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* React Flow Canvas */}
@@ -808,12 +1178,93 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                   </button>
                 </>
               ) : (
-                <button 
-                  onClick={() => handleViewLogs(menu.id)}
-                  className="w-full px-4 py-2 text-left text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-all"
-                >
-                  <Terminal size={14} /> 查看日志
-                </button>
+                <>
+                  {/* 状态监控 */}
+                  <button 
+                    onClick={() => handleViewStatus(menu.id)}
+                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
+                  >
+                    <Activity size={14} className="text-green-500" /> 实时状态
+                  </button>
+                  
+                  {/* 日志 */}
+                  <button 
+                    onClick={() => handleViewLogs(menu.id)}
+                    className="w-full px-4 py-2 text-left text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-all"
+                  >
+                    <Terminal size={14} /> 查看日志
+                  </button>
+                  
+                  {/* 进入终端 */}
+                  <button 
+                    onClick={() => handleOpenTerminal(menu.id)}
+                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
+                  >
+                    <Zap size={14} className="text-yellow-500" /> 进入终端
+                  </button>
+                  
+                  {/* 事件历史 */}
+                  <button 
+                    onClick={() => handleViewEvents(menu.id)}
+                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
+                  >
+                    <Clock size={14} className="text-orange-500" /> 执行历史
+                  </button>
+                  
+                  {/* 资源指标 */}
+                  <button 
+                    onClick={() => handleViewMetrics(menu.id)}
+                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
+                  >
+                    <BarChart2 size={14} className="text-purple-500" /> 资源监控
+                  </button>
+                  
+                  {/* 分隔线 */}
+                  <div className="border-t border-slate-100 my-1"></div>
+                  
+                  {/* 访问服务 - 仅APP类型节点显示 */}
+                  {(() => {
+                    const node = nodes.find(n => n.id === menu.id);
+                    if (node?.data.node_type === 'app' && node?.data.service_name) {
+                      return (
+                        <button 
+                          onClick={() => handleAccessService(menu.id)}
+                          className="w-full px-4 py-2 text-left text-sm font-bold text-cyan-600 hover:bg-cyan-50 flex items-center gap-2 transition-all"
+                        >
+                          <Database size={14} /> 访问服务
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
+                  
+                  {/* 重启/重试 - 根据节点类型显示不同选项 */}
+                  {(() => {
+                    const node = nodes.find(n => n.id === menu.id);
+                    if (node?.data.node_type === 'app') {
+                      return (
+                        <button 
+                          onClick={() => handleRestartNode(menu.id)}
+                          disabled={restarting}
+                          className="w-full px-4 py-2 text-left text-sm font-bold text-orange-600 hover:bg-orange-50 flex items-center gap-2 transition-all disabled:opacity-50"
+                        >
+                          <RefreshCw size={14} className={restarting ? 'animate-spin' : ''} /> 重启服务
+                        </button>
+                      );
+                    } else if (node?.data.node_type === 'job') {
+                      return (
+                        <button 
+                          onClick={() => handleRetryNode(menu.id)}
+                          disabled={recreating}
+                          className="w-full px-4 py-2 text-left text-sm font-bold text-orange-600 hover:bg-orange-50 flex items-center gap-2 transition-all disabled:opacity-50"
+                        >
+                          <RotateCcw size={14} className={recreating ? 'animate-spin' : ''} /> 重试任务
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
               )}
             </div>
           )}
@@ -1180,6 +1631,141 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       </div>
                     </div>
                   )}
+
+                  {selectedTemplate?.type === 'app' && (
+                    <div className="space-y-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">服务配置</label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            checked={newNodeConfig.create_service}
+                            onChange={e => setNewNodeConfig({...newNodeConfig, create_service: e.target.checked})}
+                            className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-xs font-bold text-indigo-700">创建 K8S Service</span>
+                        </label>
+                      </div>
+                      
+                      {newNodeConfig.create_service && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-black text-slate-500 uppercase">服务名称</label>
+                              <input 
+                                type="text"
+                                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
+                                value={newNodeConfig.service_name}
+                                onChange={e => setNewNodeConfig({...newNodeConfig, service_name: e.target.value})}
+                                placeholder="my-service"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-black text-slate-500 uppercase">服务类型</label>
+                              <select 
+                                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
+                                value={newNodeConfig.service_type}
+                                onChange={e => setNewNodeConfig({...newNodeConfig, service_type: e.target.value as any})}
+                              >
+                                <option value="ClusterIP">ClusterIP</option>
+                                <option value="NodePort">NodePort</option>
+                                <option value="LoadBalancer">LoadBalancer</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[9px] font-black text-slate-500 uppercase">服务端口</label>
+                              <button 
+                                type="button"
+                                onClick={() => setNewNodeConfig({
+                                  ...newNodeConfig, 
+                                  service_ports: [...newNodeConfig.service_ports, { name: `port-${newNodeConfig.service_ports.length + 1}`, port: 80, target_port: 80, protocol: 'TCP' }]
+                                })}
+                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
+                              >
+                                + 添加端口
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {newNodeConfig.service_ports.map((sp, i) => (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-indigo-100">
+                                  <input 
+                                    type="text"
+                                    className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
+                                    value={sp.name}
+                                    onChange={e => {
+                                      const n = [...newNodeConfig.service_ports];
+                                      n[i].name = e.target.value;
+                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
+                                    }}
+                                    placeholder="名称"
+                                  />
+                                  <input 
+                                    type="number"
+                                    className="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
+                                    value={sp.port}
+                                    onChange={e => {
+                                      const n = [...newNodeConfig.service_ports];
+                                      n[i].port = parseInt(e.target.value) || 0;
+                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
+                                    }}
+                                    placeholder="端口"
+                                  />
+                                  <span className="text-slate-400">→</span>
+                                  <input 
+                                    type="number"
+                                    className="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
+                                    value={sp.target_port}
+                                    onChange={e => {
+                                      const n = [...newNodeConfig.service_ports];
+                                      n[i].target_port = parseInt(e.target.value) || 0;
+                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
+                                    }}
+                                    placeholder="目标端口"
+                                  />
+                                  <select 
+                                    className="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
+                                    value={sp.protocol}
+                                    onChange={e => {
+                                      const n = [...newNodeConfig.service_ports];
+                                      n[i].protocol = e.target.value;
+                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
+                                    }}
+                                  >
+                                    <option value="TCP">TCP</option>
+                                    <option value="UDP">UDP</option>
+                                  </select>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const n = newNodeConfig.service_ports.filter((_, idx) => idx !== i);
+                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
+                                    }}
+                                    className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">超时时间 (秒)</label>
+                    <input 
+                      type="number"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition-all font-bold text-sm"
+                      value={newNodeConfig.timeout_seconds || ''}
+                      onChange={e => setNewNodeConfig({...newNodeConfig, timeout_seconds: e.target.value ? parseInt(e.target.value) : null})}
+                      placeholder="可选，单位：秒"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1256,6 +1842,349 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           </div>
         </div>
       )}
+
+      {/* Status Modal */}
+      {isStatusModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <Activity size={20} className="text-green-600" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800">实时状态</h3>
+              </div>
+              <button 
+                onClick={() => setIsStatusModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
+              >
+                <Plus size={24} className="rotate-45" />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              {loadingStatus ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <Loader2 className="animate-spin text-blue-500" size={32} />
+                  <div className="text-slate-500 font-bold">获取状态中...</div>
+                </div>
+              ) : nodeStatus?.error ? (
+                <div className="text-center py-8 text-red-500">{nodeStatus.error}</div>
+              ) : nodeStatus ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Phase</div>
+                      <div className="text-lg font-bold text-slate-800">{nodeStatus.phase}</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Pod IP</div>
+                      <div className="text-lg font-bold text-slate-800 font-mono">{nodeStatus.pod_ip || '-'}</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Host IP</div>
+                      <div className="text-lg font-bold text-slate-800 font-mono">{nodeStatus.host_ip || '-'}</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Node</div>
+                      <div className="text-lg font-bold text-slate-800 truncate">{nodeStatus.node_name || '-'}</div>
+                    </div>
+                  </div>
+                  
+                  {nodeStatus.container_statuses?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase mb-2">容器状态</div>
+                      <div className="space-y-2">
+                        {nodeStatus.container_statuses.map((cs: any, i: number) => (
+                          <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-800">{cs.name}</span>
+                              <span className={`text-xs font-bold px-2 py-1 rounded ${cs.ready ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {cs.ready ? 'Ready' : 'Not Ready'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1">{cs.state}</div>
+                            <div className="text-xs text-slate-400 mt-1">重启次数: {cs.restart_count}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {nodeStatus.conditions?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase mb-2">条件</div>
+                      <div className="space-y-1">
+                        {nodeStatus.conditions.map((c: any, i: number) => (
+                          <div key={i} className="flex items-center gap-2 text-sm">
+                            {c.status === 'True' ? <CheckCircle size={14} className="text-green-500" /> : <XCircle size={14} className="text-red-500" />}
+                            <span className="font-bold text-slate-700">{c.type}</span>
+                            {c.reason && <span className="text-slate-400">({c.reason})</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button onClick={() => setIsStatusModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Events Modal */}
+      {isEventsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-50 rounded-lg">
+                  <Clock size={20} className="text-orange-600" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800">执行历史</h3>
+              </div>
+              <button onClick={() => setIsEventsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
+                <Plus size={24} className="rotate-45" />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              {loadingEvents ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <Loader2 className="animate-spin text-blue-500" size={32} />
+                  <div className="text-slate-500 font-bold">获取事件中...</div>
+                </div>
+              ) : nodeEvents.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">暂无事件记录</div>
+              ) : (
+                <div className="space-y-3">
+                  {nodeEvents.map((event, i) => (
+                    <div key={i} className={`p-4 rounded-xl border ${event.type === 'Warning' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {event.type === 'Warning' ? <AlertCircle size={14} className="text-red-500" /> : <CheckCircle size={14} className="text-green-500" />}
+                        <span className="font-bold text-slate-800">{event.reason}</span>
+                        {event.count > 1 && <span className="text-xs bg-slate-200 px-2 py-0.5 rounded-full">x{event.count}</span>}
+                      </div>
+                      <div className="text-sm text-slate-600">{event.message}</div>
+                      {event.last_timestamp && (
+                        <div className="text-xs text-slate-400 mt-2">{new Date(event.last_timestamp).toLocaleString()}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button onClick={() => setIsEventsModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Metrics Modal */}
+      {isMetricsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-50 rounded-lg">
+                  <BarChart2 size={20} className="text-purple-600" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800">资源监控</h3>
+              </div>
+              <button onClick={() => setIsMetricsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
+                <Plus size={24} className="rotate-45" />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              {loadingMetrics ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <Loader2 className="animate-spin text-blue-500" size={32} />
+                  <div className="text-slate-500 font-bold">获取指标中...</div>
+                </div>
+              ) : nodeMetrics?.error ? (
+                <div className="text-center py-8 text-red-500">{nodeMetrics.error}</div>
+              ) : nodeMetrics ? (
+                <div className="space-y-4">
+                  <div className="text-xs text-slate-400 mb-2">需要安装 Metrics Server 才能获取资源指标</div>
+                  {nodeMetrics.containers?.map((c: any, i: number) => (
+                    <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="font-bold text-slate-800 mb-3">{c.name}</div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-[10px] font-black text-slate-400 uppercase">CPU</div>
+                          <div className="text-lg font-bold text-blue-600 font-mono">{c.cpu}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-black text-slate-400 uppercase">Memory</div>
+                          <div className="text-lg font-bold text-purple-600 font-mono">{c.memory}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button onClick={() => setIsMetricsModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terminal Modal - 使用xterm.js */}
+      {isTerminalModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl w-full max-w-6xl shadow-2xl overflow-hidden animate-in zoom-in-95 border border-slate-700" style={{ height: '70vh' }}>
+            <XTerminal
+              ws={terminalWs}
+              connected={terminalConnected}
+              podName={terminalPodName}
+              onClose={handleCloseTerminal}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Access Service Modal */}
+      {isAccessModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-cyan-50 rounded-lg">
+                  <Database size={20} className="text-cyan-600" />
+                </div>
+                <h3 className="text-xl font-black text-slate-800">访问服务</h3>
+              </div>
+              <button 
+                onClick={() => setIsAccessModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
+              >
+                <Plus size={24} className="rotate-45" />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              {loadingAccess ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <Loader2 className="animate-spin text-blue-500" size={32} />
+                  <div className="text-slate-500 font-bold">获取访问信息中...</div>
+                </div>
+              ) : serviceAccessInfo?.error ? (
+                <div className="text-center py-8 text-red-500">{serviceAccessInfo.error}</div>
+              ) : serviceAccessInfo ? (
+                <div className="space-y-6">
+                  {/* 服务基本信息 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Service名称</div>
+                      <div className="text-lg font-bold text-slate-800">{serviceAccessInfo.name}</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Service类型</div>
+                      <div className="text-lg font-bold text-slate-800">{serviceAccessInfo.type}</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Cluster IP</div>
+                      <div className="text-lg font-bold text-slate-800 font-mono">{serviceAccessInfo.cluster_ip || '-'}</div>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase">Namespace</div>
+                      <div className="text-lg font-bold text-slate-800">{serviceAccessInfo.namespace}</div>
+                    </div>
+                  </div>
+                  
+                  {/* 端口信息 */}
+                  {serviceAccessInfo.ports?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase mb-3">端口配置</div>
+                      <div className="space-y-2">
+                        {serviceAccessInfo.ports.map((port: any, i: number) => (
+                          <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-slate-800">{port.name || `port-${i}`}</span>
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">{port.protocol}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-sm">
+                              <div>
+                                <span className="text-slate-400">Port:</span>
+                                <span className="font-mono font-bold text-slate-700 ml-1">{port.port}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400">Target:</span>
+                                <span className="font-mono font-bold text-slate-700 ml-1">{port.target_port}</span>
+                              </div>
+                              {port.node_port && (
+                                <div>
+                                  <span className="text-slate-400">NodePort:</span>
+                                  <span className="font-mono font-bold text-cyan-600 ml-1">{port.node_port}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 访问方式 */}
+                  {serviceAccessInfo.access_urls?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase mb-3">访问方式</div>
+                      <div className="space-y-3">
+                        {serviceAccessInfo.access_urls.map((access: any, i: number) => (
+                          <div key={i} className="p-4 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl border border-cyan-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                access.type === 'NodePort' ? 'bg-orange-100 text-orange-700' :
+                                access.type === 'LoadBalancer' ? 'bg-green-100 text-green-700' :
+                                'bg-slate-100 text-slate-700'
+                              }`}>{access.type}</span>
+                              <span className="text-sm text-slate-500">{access.port_name}</span>
+                            </div>
+                            <div className="font-mono text-sm text-slate-700 break-all">{access.url}</div>
+                            {access.type === 'ClusterIP' && (
+                              <button
+                                onClick={() => handleOpenProxyUrl(access.port, '/')}
+                                className="mt-3 w-full py-2 bg-cyan-600 text-white rounded-lg font-bold hover:bg-cyan-700 transition-all text-sm"
+                              >
+                                通过代理访问
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 代理访问说明 */}
+                  <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-100">
+                    <div className="text-xs font-black text-yellow-700 mb-2">访问说明</div>
+                    <ul className="text-xs text-yellow-700 space-y-1 list-disc list-inside">
+                      <li><strong>ClusterIP</strong>: 仅集群内部可访问，可通过代理访问</li>
+                      <li><strong>NodePort</strong>: 通过节点IP和NodePort访问，需确保防火墙开放</li>
+                      <li><strong>LoadBalancer</strong>: 通过外部负载均衡器IP访问</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button onClick={() => setIsAccessModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Unsaved Changes Modal */}
       {showUnsavedChangesModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]">

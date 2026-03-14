@@ -43,10 +43,6 @@ export const AppTemplateDetailPage: React.FC<{ templateId: string, onBack: () =>
     description: '',
     scope: 'project' as TemplateScope,
     replicas: 1,
-    service_ports: [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
-    service_name: '',
-    create_service: true,
-    service_type: 'ClusterIP' as 'ClusterIP' | 'LoadBalancer' | 'NodePort',
     containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
   });
 
@@ -61,10 +57,6 @@ export const AppTemplateDetailPage: React.FC<{ templateId: string, onBack: () =>
         description: data.description || '',
         scope: data.scope || 'project',
         replicas: data.replicas || 1,
-        service_ports: data.service_ports && data.service_ports.length > 0 ? data.service_ports : [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
-        service_name: data.service_name || '',
-        create_service: data.create_service ?? true,
-        service_type: data.service_type || 'ClusterIP',
         containers: (data.containers || []).map((c: any) => ({
           ...c,
           command: c.command ? c.command.join(', ') : '',
@@ -96,7 +88,6 @@ export const AppTemplateDetailPage: React.FC<{ templateId: string, onBack: () =>
     
     const payload = {
       ...formData,
-      service_ports: formData.service_ports.filter(p => p.port > 0),
       containers: formData.containers.map((c: any) => {
         const formatProbe = (p: any) => {
           if (!p || (!p.port && p.type !== 'exec')) return undefined;
@@ -240,114 +231,6 @@ export const AppTemplateDetailPage: React.FC<{ templateId: string, onBack: () =>
                 className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600 disabled:opacity-50"
                 value={formData.replicas} onChange={(e) => setFormData({...formData, replicas: parseInt(e.target.value)})}
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">服务端口 (Service Ports)</label>
-                {isEditMode && (
-                  <button 
-                    type="button" 
-                    onClick={() => setFormData({...formData, service_ports: [...formData.service_ports, { name: 'http-' + formData.service_ports.length, port: 80, target_port: 80, protocol: 'TCP' }]})}
-                    className="text-[9px] font-black text-blue-600 hover:underline uppercase"
-                  >
-                    + 添加端口
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {formData.service_ports.map((p, pIdx) => (
-                  <div key={pIdx} className="flex gap-2 items-center">
-                    <input 
-                      disabled={!isEditMode}
-                      placeholder="Name" 
-                      className="w-24 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-bold disabled:opacity-70 disabled:bg-slate-100"
-                      value={p.name} onChange={e => {
-                        const n = [...formData.service_ports];
-                        n[pIdx].name = e.target.value;
-                        setFormData({...formData, service_ports: n});
-                      }}
-                    />
-                    <input 
-                      disabled={!isEditMode}
-                      type="number" placeholder="Port" 
-                      className="w-20 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-mono disabled:opacity-70 disabled:bg-slate-100"
-                      value={p.port} onChange={e => {
-                        const n = [...formData.service_ports];
-                        n[pIdx].port = parseInt(e.target.value);
-                        setFormData({...formData, service_ports: n});
-                      }}
-                    />
-                    <input 
-                      disabled={!isEditMode}
-                      type="number" placeholder="Target" 
-                      className="w-20 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-mono disabled:opacity-70 disabled:bg-slate-100"
-                      value={p.target_port} onChange={e => {
-                        const n = [...formData.service_ports];
-                        n[pIdx].target_port = parseInt(e.target.value);
-                        setFormData({...formData, service_ports: n});
-                      }}
-                    />
-                    <select 
-                      disabled={!isEditMode}
-                      className="w-24 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-bold disabled:opacity-70 disabled:bg-slate-100"
-                      value={p.protocol} onChange={e => {
-                        const n = [...formData.service_ports];
-                        n[pIdx].protocol = e.target.value;
-                        setFormData({...formData, service_ports: n});
-                      }}
-                    >
-                      <option value="TCP">TCP</option>
-                      <option value="UDP">UDP</option>
-                    </select>
-                    {isEditMode && formData.service_ports.length > 1 && (
-                      <button 
-                        type="button"
-                        onClick={() => setFormData({...formData, service_ports: formData.service_ports.filter((_, i) => i !== pIdx)})}
-                        className="p-2 text-slate-400 hover:text-red-500"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1.5 col-span-1 md:col-span-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service 名称</label>
-                <input 
-                  disabled={!isEditMode}
-                  placeholder="自动生成" 
-                  className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all disabled:opacity-70 disabled:bg-slate-100"
-                  value={formData.service_name} onChange={e => setFormData({...formData, service_name: e.target.value})}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service 类型</label>
-                <select 
-                  disabled={!isEditMode}
-                  className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 disabled:opacity-70 disabled:bg-slate-100"
-                  value={formData.service_type} onChange={e => setFormData({...formData, service_type: e.target.value as any})}
-                >
-                  <option value="ClusterIP">ClusterIP</option>
-                  <option value="LoadBalancer">LoadBalancer</option>
-                  <option value="NodePort">NodePort</option>
-                </select>
-              </div>
-              <div className="flex items-center pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    disabled={!isEditMode}
-                    type="checkbox" 
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                    checked={formData.create_service}
-                    onChange={e => setFormData({...formData, create_service: e.target.checked})}
-                  />
-                  <span className="text-xs font-black text-slate-700 uppercase">创建 Service</span>
-                </label>
-              </div>
             </div>
 
             <div className="space-y-1.5">

@@ -62,10 +62,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
     description: '',
     scope: 'project' as TemplateScope,
     replicas: 1,
-    service_ports: [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
-    service_name: '',
-    create_service: true,
-    service_type: 'ClusterIP' as 'ClusterIP' | 'LoadBalancer' | 'NodePort',
     containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
   });
 
@@ -134,7 +130,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
     const payload = {
       ...formData,
       project_id: formData.scope === 'project' ? projectId : undefined,
-      service_ports: formData.service_ports.filter(p => p.port > 0),
       containers: formData.containers.map((c: any) => {
         const formatProbe = (p: any) => {
           if (!p.port && p.type !== 'exec') return undefined;
@@ -172,11 +167,7 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
       await api.workflow.createAppTemplate(payload);
       setIsModalOpen(false);
       setFormData({
-        name: '', description: '', scope: 'project', replicas: 1, 
-        service_ports: [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
-        service_name: '',
-        create_service: true,
-        service_type: 'ClusterIP',
+        name: '', description: '', scope: 'project', replicas: 1,
         containers: [ JSON.parse(JSON.stringify(defaultContainer)) ]
       });
       loadTemplates();
@@ -234,7 +225,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
             <tr>
               <th className="px-8 py-6">应用组件信息</th>
               <th className="px-6 py-6">运行实例 (Replicas)</th>
-              <th className="px-6 py-6">服务端口 / 类型</th>
               <th className="px-6 py-6">容器栈</th>
               <th className="px-6 py-6">创建者/更新时间</th>
               <th className="px-8 py-6 text-right">操作</th>
@@ -243,7 +233,7 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
           <tbody className="divide-y divide-slate-50">
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-32 text-center">
+                <td colSpan={5} className="py-32 text-center">
                   <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
                 </td>
@@ -278,26 +268,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                   </div>
                 </td>
                 <td className="px-6 py-6">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      {t.service_ports && t.service_ports.length > 0 ? t.service_ports.map((p: any, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[9px] font-black uppercase" title={`${p.name}: ${p.port}->${p.target_port}/${p.protocol}`}>
-                          {p.port}
-                        </span>
-                      )) : (
-                        <span className="text-[10px] font-bold text-slate-400">-</span>
-                      )}
-                    </div>
-                    {t.create_service && (
-                      <div className="flex items-center gap-1">
-                        <Globe size={10} className="text-slate-400" />
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{t.service_type || 'ClusterIP'}</span>
-                        {t.service_name && <span className="text-[9px] font-mono text-slate-400">({t.service_name})</span>}
-                      </div>
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-6">
                   <div className="flex flex-wrap gap-1.5">
                     {t.containers?.map((c, idx) => (
                       <span key={idx} className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 text-[9px] font-black uppercase" title={c.image}>
@@ -329,7 +299,7 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
               </tr>
             )) : (
               <tr>
-                <td colSpan={6} className="py-40 text-center">
+                <td colSpan={5} className="py-40 text-center">
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
                     <Layers size={40} />
                   </div>
@@ -427,105 +397,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                     className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     value={formData.replicas} onChange={(e) => setFormData({...formData, replicas: parseInt(e.target.value)})}
                   />
-               </div>
-
-               <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">服务端口 (Service Ports)</label>
-                    <button 
-                      type="button" 
-                      onClick={() => setFormData({...formData, service_ports: [...formData.service_ports, { name: 'http-' + formData.service_ports.length, port: 80, target_port: 80, protocol: 'TCP' }]})}
-                      className="text-[9px] font-black text-blue-600 hover:underline uppercase"
-                    >
-                      + 添加端口
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {formData.service_ports.map((p, pIdx) => (
-                      <div key={pIdx} className="flex gap-2 items-center">
-                        <input 
-                          placeholder="Name" 
-                          className="w-24 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-bold"
-                          value={p.name} onChange={e => {
-                            const n = [...formData.service_ports];
-                            n[pIdx].name = e.target.value;
-                            setFormData({...formData, service_ports: n});
-                          }}
-                        />
-                        <input 
-                          type="number" placeholder="Port" 
-                          className="w-20 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-mono"
-                          value={p.port} onChange={e => {
-                            const n = [...formData.service_ports];
-                            n[pIdx].port = parseInt(e.target.value);
-                            setFormData({...formData, service_ports: n});
-                          }}
-                        />
-                        <input 
-                          type="number" placeholder="Target" 
-                          className="w-20 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-mono"
-                          value={p.target_port} onChange={e => {
-                            const n = [...formData.service_ports];
-                            n[pIdx].target_port = parseInt(e.target.value);
-                            setFormData({...formData, service_ports: n});
-                          }}
-                        />
-                        <select 
-                          className="w-24 px-4 py-2 bg-slate-50 rounded-xl border-none outline-none text-xs font-bold"
-                          value={p.protocol} onChange={e => {
-                            const n = [...formData.service_ports];
-                            n[pIdx].protocol = e.target.value;
-                            setFormData({...formData, service_ports: n});
-                          }}
-                        >
-                          <option value="TCP">TCP</option>
-                          <option value="UDP">UDP</option>
-                        </select>
-                        {formData.service_ports.length > 1 && (
-                          <button 
-                            type="button"
-                            onClick={() => setFormData({...formData, service_ports: formData.service_ports.filter((_, i) => i !== pIdx)})}
-                            className="p-2 text-slate-400 hover:text-red-500"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5 col-span-1 md:col-span-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service 名称</label>
-                    <input 
-                      placeholder="自动生成" 
-                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800 transition-all"
-                      value={formData.service_name} onChange={e => setFormData({...formData, service_name: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Service 类型</label>
-                    <select 
-                      className="w-full px-4 py-3 bg-slate-50 rounded-xl border-none outline-none focus:ring-4 ring-blue-500/10 text-sm font-bold text-slate-800"
-                      value={formData.service_type} onChange={e => setFormData({...formData, service_type: e.target.value as any})}
-                    >
-                      <option value="ClusterIP">ClusterIP</option>
-                      <option value="LoadBalancer">LoadBalancer</option>
-                      <option value="NodePort">NodePort</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center pt-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        checked={formData.create_service}
-                        onChange={e => setFormData({...formData, create_service: e.target.checked})}
-                      />
-                      <span className="text-xs font-black text-slate-700 uppercase">创建 Service</span>
-                    </label>
-                  </div>
                </div>
 
                <div className="space-y-1.5">

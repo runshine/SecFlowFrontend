@@ -16,10 +16,10 @@ jobs:
           submodules: 'true'
 
       - name: clean to default_local
-        run: sed -i 's/http:\/\/localhost:8080//g'   ./13-secflow-service/image_build/secflow-frontend/api/base.ts
+        run: sed -i 's/http:\/\/localhost:8080//g'   ./api/base.ts
 
       - name: cat base.ts
-        run: cat ./13-secflow-service/image_build/secflow-frontend/api/base.ts
+        run: cat ./api/base.ts
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

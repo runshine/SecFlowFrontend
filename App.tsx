@@ -2,6 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
+
+// 声明全局构建时间变量
+declare const __BUILD_TIME__: string;
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
@@ -358,6 +361,9 @@ const App: React.FC = () => {
 
         <p className="mt-8 text-center text-[10px] text-slate-600 font-medium leading-relaxed">
           &copy; 2025 SecFlow 极速安全测试平台 <br/> 受信任的二进制分发与自动化渗透环境
+        </p>
+        <p className="mt-2 text-center text-[9px] text-slate-700 font-medium">
+          版本: {__BUILD_TIME__}
         </p>
       </div>
     </div>

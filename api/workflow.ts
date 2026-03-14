@@ -1,6 +1,6 @@
 
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, WorkflowStatus } from '../types/types';
+import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, WorkflowStatus, AppWorkflow, AppWorkflowLogs } from '../types/types';
 
 export const workflowApi = {
   /**
@@ -150,6 +150,75 @@ export const workflowApi = {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${id}`, { method: 'DELETE', headers: getHeaders() });
     return handleResponse(response);
   },
+
+  // --- App Workflow Instances (单应用工作流) ---
+  listAppWorkflows: async (params: { project_id?: string; status?: string } = {}): Promise<{ items: AppWorkflow[]; total: number }> => {
+    const query = new URLSearchParams(params as any).toString();
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows?${query}`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+  getAppWorkflow: async (id: string): Promise<AppWorkflow> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+  createAppWorkflow: async (payload: any): Promise<AppWorkflow> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(response);
+  },
+  updateAppWorkflow: async (id: string, payload: any): Promise<AppWorkflow> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(response);
+  },
+  deleteAppWorkflow: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+    return handleResponse(response);
+  },
+  initializeAppWorkflow: async (id: string, force: boolean = false) => {
+    const query = force ? '?force=true' : '';
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/initialize${query}`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return handleResponse(response);
+  },
+  startAppWorkflow: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/start`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return handleResponse(response);
+  },
+  stopAppWorkflow: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/stop`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return handleResponse(response);
+  },
+  syncAppWorkflowStatus: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/sync-status`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return handleResponse(response);
+  },
+  getAppWorkflowLogs: async (id: string, params: { tail_lines?: number; container?: string; previous?: boolean; timestamps?: boolean } = {}): Promise<AppWorkflowLogs> => {
+    const query = new URLSearchParams(params as any).toString();
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/logs?${query}`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
   // --- Workflow Nodes & Edges ---
   createNode: async (instanceId: string, payload: any) => {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes`, {

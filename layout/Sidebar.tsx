@@ -1,16 +1,16 @@
 
 import React from 'react';
-import { 
-  Shield, 
-  LayoutDashboard, 
-  Box, 
-  Briefcase, 
-  FileBox, 
-  Database, 
-  ShieldCheck, 
-  Target, 
-  LogOut, 
-  PanelLeftClose, 
+import {
+  Shield,
+  LayoutDashboard,
+  Box,
+  Briefcase,
+  FileBox,
+  Database,
+  ShieldCheck,
+  Target,
+  LogOut,
+  PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
   Monitor,
@@ -181,14 +181,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ]} 
         />
 
-        <SidebarItem 
-          id="workflow-root" 
-          label="安全测试工作流" 
-          icon={<Workflow size={20} />} 
+        <SidebarItem
+          id="workflow-root"
+          label="安全测试工作流"
+          icon={<Workflow size={20} />}
           healthStatus={workflowHealth}
           applyHealth={true}
           children={[
             { id: 'workflow-apps', label: '应用模板', icon: <Layers size={14} /> },
+            { id: 'workflow-app-instances', label: '应用实例', icon: <Box size={14} /> },
             { id: 'workflow-jobs', label: '任务模板', icon: <Zap size={14} /> },
             { id: 'workflow-instances', label: '工作流实例', icon: <Activity size={14} /> }
           ]}

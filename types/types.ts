@@ -20,6 +20,8 @@ export interface UserInfo {
 // --- Workflow Service Types ---
 
 export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped';
+export type AppWorkflowStatus = 'pending' | 'initializing' | 'initialized' | 'running' | 'succeeded' | 'failed' | 'stopped';
+export type AppNodeStatus = 'pending' | 'not_ready' | 'ready' | 'stopped' | 'failed';
 export type TemplateScope = 'global' | 'project';
 export type NodeType = 'app' | 'job';
 
@@ -194,6 +196,60 @@ export interface WorkflowNodeInstance {
   input_env_vars?: any[];
   input_volume_mounts?: any[];
   created_at: string;
+}
+
+export interface AppWorkflowNode {
+  id: string;
+  name: string;
+  node_type: 'app';
+  template_id: string;
+  status: AppNodeStatus;
+  k8s_resource_name?: string;
+  service_name?: string;
+  message?: string;
+  env_vars?: Array<{ name: string; value: string }>;
+  volume_mounts?: VolumeMount[];
+  resources?: ResourceRequirements;
+  started_at?: string;
+  finished_at?: string;
+  created_at: string;
+  init_logs?: string;
+}
+
+export interface AppWorkflow {
+  id: string;
+  name: string;
+  description?: string;
+  project_id: string;
+  status: AppWorkflowStatus;
+  workflow_type: 'simple_app';
+  node: AppWorkflowNode;
+  template_id: string;
+  template_name: string;
+  service_name: string;
+  service_ports: ServicePort[];
+  service_type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+  replicas?: number;
+  env_vars?: Array<{ name: string; value: string }>;
+  volume_mounts?: VolumeMount[];
+  resources?: ResourceRequirements;
+  created_by?: string;
+  created_at: string;
+  updated_at?: string;
+  started_at?: string;
+  finished_at?: string;
+  message?: string;
+}
+
+export interface AppWorkflowLogs {
+  workflow_id: string;
+  node_id: string;
+  resource_name: string;
+  pod_name: string;
+  namespace: string;
+  logs: string;
+  container?: string;
+  previous: boolean;
 }
 
 // --- End Workflow Types ---
@@ -465,13 +521,13 @@ export interface DeployScriptListResponse {
   items: DeployScriptItem[];
 }
 
-export type ViewType = 
+export type ViewType =
   | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
-  | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail'
-  | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
+  | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
+  | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system'
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'
-  | 'sys-settings' | 'change-password' 
+  | 'sys-settings' | 'change-password'
   | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online';

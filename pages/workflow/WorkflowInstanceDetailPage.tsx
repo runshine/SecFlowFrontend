@@ -89,6 +89,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     service_name: '',
     service_ports: [] as { name: string, port: number, target_port: number, protocol: string }[],
     service_type: 'ClusterIP' as 'ClusterIP' | 'NodePort' | 'LoadBalancer',
+    ingress_type: '' as '' | 'nginx',
+    ingress_host: '',
     timeout_seconds: null as number | null
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
@@ -121,6 +123,43 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [maxZIndex, setMaxZIndex] = useState(1000);
   const [draggingTerminal, setDraggingTerminal] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // Toast 状态
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
+  const showToast = (message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // 确认对话框状态
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  const showConfirm = (message: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setConfirmDialog({
+        message,
+        onConfirm: () => {
+          setConfirmDialog(null);
+          resolve(true);
+        },
+        onCancel: () => {
+          setConfirmDialog(null);
+          resolve(false);
+        },
+      });
+    });
+  };
+
+  const handleConfirmClose = () => {
+    if (confirmDialog) {
+      confirmDialog.onCancel();
+    }
+  };
 
   const loadInstance = async (updateBaseline = false) => {
     try {
@@ -357,9 +396,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       }
       
       await loadInstance(true);
-      alert("保存成功");
+      showToast("保存成功", "success");
     } catch (e: any) {
-      alert("保存失败: " + e.message);
+      showToast("保存失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -427,7 +466,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       setAddNodeStep('configure');
     } catch (e) {
       console.error(e);
-      alert("获取模板详情失败");
+      showToast("获取模板详情失败", "error");
     } finally {
       setLoading(false);
     }
@@ -435,7 +474,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
 
   const handleCreateNode = async () => {
     if (!selectedTemplate || !newNodeConfig.name) {
-      alert("请填写完整信息");
+      showToast("请填写完整信息", "warning");
       return;
     }
 
@@ -451,22 +490,22 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       if (missingVolumes.length > 0) {
         errorMsg += "\n存储挂载:\n" + missingVolumes.map(v => ` - ${v.mount_path}`).join('\n');
       }
-      alert(errorMsg);
+      showToast(errorMsg, "error");
       return;
     }
 
     if (selectedTemplate.type === 'app' && newNodeConfig.create_service) {
       if (!newNodeConfig.service_name || !newNodeConfig.service_name.trim()) {
-        alert("服务名称不能为空");
+        showToast("服务名称不能为空", "warning");
         return;
       }
       if (newNodeConfig.service_ports.length === 0) {
-        alert("请至少添加一个服务端口");
+        showToast("请至少添加一个服务端口", "warning");
         return;
       }
       const invalidPorts = newNodeConfig.service_ports.filter(sp => !sp.port || !sp.target_port);
       if (invalidPorts.length > 0) {
-        alert("服务端口配置不完整，请检查端口号");
+        showToast("服务端口配置不完整，请检查端口号", "warning");
         return;
       }
     }
@@ -480,7 +519,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           env_vars: newNodeConfig.env_vars.filter(e => e.value),
           volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name)
         });
-        alert("更新成功");
+        showToast("更新成功", "success");
       } else {
         const payload: any = {
           node_type: selectedTemplate.type,
@@ -505,7 +544,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         }
         
         await api.workflow.createNode(instanceId, payload);
-        alert("创建成功");
+        showToast("创建成功", "success");
       }
       
       setIsAddNodeModalOpen(false);
@@ -523,7 +562,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
            errorMsg += ` - [${d.type}] ${d.container}: ${d.message}\n`;
         });
       }
-      alert(errorMsg);
+      showToast(errorMsg, "error");
     } finally {
       setLoading(false);
     }
@@ -573,9 +612,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       await api.workflow.uninitializeInstance(instanceId);
       setIsUninitModalOpen(false);
       await loadInstance();
-      alert("反初始化成功");
+      showToast("反初始化成功", "success");
     } catch (e: any) {
-      alert("反初始化失败: " + e.message);
+      showToast("反初始化失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -645,7 +684,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       setAddNodeStep('configure');
       setIsAddNodeModalOpen(true);
     } catch (e: any) {
-      alert("复制节点失败: " + e.message);
+      showToast("复制节点失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -673,7 +712,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
-      alert("节点尚未创建K8S资源");
+      showToast("节点尚未创建K8S资源", "warning");
       return;
     }
     
@@ -705,7 +744,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
-      alert("节点尚未创建K8S资源");
+      showToast("节点尚未创建K8S资源", "warning");
       return;
     }
     
@@ -734,7 +773,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
-      alert("节点尚未创建K8S资源");
+      showToast("节点尚未创建K8S资源", "warning");
       return;
     }
     
@@ -765,19 +804,19 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
-      alert("节点尚未创建K8S资源");
+      showToast("节点尚未创建K8S资源", "warning");
       return;
     }
-    
-    if (!confirm(`确定要重启节点 "${node.data.name}" 吗？`)) return;
-    
+
+    if (!(await showConfirm(`确定要重启节点 "${node.data.name}" 吗？`))) return;
+
     setRestarting(true);
     try {
       await api.k8s.restartDeployment(instance.project_id, node.data.k8s_resource_name);
-      alert("重启命令已发送");
+      showToast("重启命令已发送", "success");
       loadInstance();
     } catch (e: any) {
-      alert("重启失败: " + e.message);
+      showToast("重启失败: " + e.message, "error");
     } finally {
       setRestarting(false);
     }
@@ -790,19 +829,19 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
-      alert("节点尚未创建K8S资源");
+      showToast("节点尚未创建K8S资源", "warning");
       return;
     }
-    
-    if (!confirm(`确定要重试任务 "${node.data.name}" 吗？这将删除并重建Job。`)) return;
-    
+
+    if (!(await showConfirm(`确定要重试任务 "${node.data.name}" 吗？这将删除并重建Job。`))) return;
+
     setRecreating(true);
     try {
       await api.k8s.recreateJob(instance.project_id, node.data.k8s_resource_name);
-      alert("重试命令已发送");
+      showToast("重试命令已发送", "success");
       loadInstance();
     } catch (e: any) {
-      alert("重试失败: " + e.message);
+      showToast("重试失败: " + e.message, "error");
     } finally {
       setRecreating(false);
     }
@@ -832,13 +871,13 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           handleFocusTerminal(floatingTerminals[0].id);
         }
       }
-      alert("已有终端窗口打开，请先关闭当前终端后再打开新终端");
+      showToast("已有终端窗口打开，请先关闭当前终端后再打开新终端", "warning");
       return;
     }
 
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
-      alert("节点尚未创建K8S资源");
+      showToast("节点尚未创建K8S资源", "warning");
       return;
     }
 
@@ -879,10 +918,10 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
 
         setTerminalWs(ws);
       } else {
-        alert("未找到运行的Pod");
+        showToast("未找到运行的Pod", "warning");
       }
     } catch (e: any) {
-      alert("获取Pod失败: " + e.message);
+      showToast("获取Pod失败: " + e.message, "error");
     }
   };
 
@@ -948,7 +987,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
 
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.k8s_resource_name) {
-      alert("节点尚未创建K8S资源");
+      showToast("节点尚未创建K8S资源", "warning");
       return;
     }
 
@@ -1002,10 +1041,10 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
 
         setFloatingTerminals(prev => [...prev, newTerminal]);
       } else {
-        alert("未找到运行的Pod");
+        showToast("未找到运行的Pod", "warning");
       }
     } catch (e: any) {
-      alert("获取Pod失败: " + e.message);
+      showToast("获取Pod失败: " + e.message, "error");
     }
   };
 
@@ -1107,7 +1146,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     
     const node = nodes.find(n => n.id === nodeId);
     if (!node?.data.service_name) {
-      alert("该节点未创建Service，无法直接访问");
+      showToast("该节点未创建Service，无法直接访问", "warning");
       return;
     }
     
@@ -1194,7 +1233,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       setAddNodeStep('configure');
       setIsAddNodeModalOpen(true);
     } catch (e: any) {
-      alert("获取节点详情失败: " + e.message);
+      showToast("获取节点详情失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -1267,9 +1306,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       setLoading(true);
                       await api.workflow.initializeInstance(instanceId);
                       await loadInstance();
-                      alert("初始化成功");
+                      showToast("初始化成功", "success");
                     } catch (e: any) {
-                      alert("初始化失败: " + e.message);
+                      showToast("初始化失败: " + e.message, "error");
                     } finally {
                       setLoading(false);
                     }
@@ -1285,9 +1324,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                     setLoading(true);
                     await api.workflow.syncInstanceStatus(instanceId);
                     await loadInstance();
-                    alert("同步成功");
+                    showToast("同步成功", "success");
                   } catch (e: any) {
-                    alert("同步失败: " + e.message);
+                    showToast("同步失败: " + e.message, "error");
                   } finally {
                     setLoading(false);
                   }
@@ -1331,15 +1370,15 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             <div className="font-bold text-yellow-800 mb-1">工作流状态警告</div>
             <div className="text-sm text-yellow-700">{instance.message}</div>
             <div className="mt-3 flex gap-2">
-              <button 
+              <button
                 onClick={async () => {
-                  if (confirm('确定要取消初始化并清理资源吗？')) {
+                  if (await showConfirm('确定要取消初始化并清理资源吗？')) {
                     try {
                       setLoading(true);
                       await api.workflow.uninitializeInstance(instanceId);
                       await loadInstance();
                     } catch (e: any) {
-                      alert('操作失败: ' + e.message);
+                      showToast('操作失败: ' + e.message, "error");
                     } finally {
                       setLoading(false);
                     }
@@ -1356,7 +1395,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                     await api.workflow.initializeInstance(instanceId);
                     await loadInstance();
                   } catch (e: any) {
-                    alert('重新初始化失败: ' + e.message);
+                    showToast('重新初始化失败: ' + e.message, "error");
                   } finally {
                     setLoading(false);
                   }
@@ -2022,6 +2061,46 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                                 </div>
                               ))}
                             </div>
+                          </div>
+
+                          {/* Ingress 配置 */}
+                          <div className="space-y-2 pt-2 border-t border-indigo-100">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[9px] font-black text-slate-500 uppercase">Ingress 配置</label>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Ingress 类型</label>
+                                <select
+                                  className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
+                                  value={newNodeConfig.ingress_type}
+                                  onChange={e => setNewNodeConfig({...newNodeConfig, ingress_type: e.target.value as '' | 'nginx'})}
+                                >
+                                  <option value="">不创建 Ingress</option>
+                                  <option value="nginx">Nginx Ingress</option>
+                                </select>
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-slate-400 uppercase">域名</label>
+                                <input
+                                  type="text"
+                                  className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
+                                  value={newNodeConfig.ingress_host}
+                                  onChange={e => setNewNodeConfig({...newNodeConfig, ingress_host: e.target.value})}
+                                  placeholder="example.com"
+                                  disabled={!newNodeConfig.ingress_type}
+                                />
+                              </div>
+                            </div>
+                            {newNodeConfig.ingress_type && (
+                              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                  <span className="text-[9px] font-black text-emerald-700 uppercase">Ingress IP</span>
+                                </div>
+                                <div className="mt-1 text-sm font-mono font-bold text-emerald-800">172.31.30.101</div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -2697,6 +2776,85 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
               <span className="max-w-[120px] truncate">{terminal.nodeName}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Toast 通知 */}
+      {toast && (
+        <div
+          className="fixed top-4 left-1/2 z-[99999]"
+          style={{
+            transform: 'translateX(-50%)',
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <style>{`
+            @keyframes slideIn {
+              from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+              }
+              to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+              }
+            }
+          `}</style>
+          <div className={`px-6 py-3 rounded-xl shadow-2xl border font-bold text-sm flex items-center gap-2 ${
+            toast.type === 'success' ? 'bg-green-600 text-white border-green-500' :
+            toast.type === 'error' ? 'bg-red-600 text-white border-red-500' :
+            toast.type === 'warning' ? 'bg-yellow-500 text-yellow-900 border-yellow-400' :
+            'bg-slate-800 text-white border-slate-700'
+          }`}>
+            {toast.type === 'success' && <CheckCircle size={18} />}
+            {toast.type === 'error' && <XCircle size={18} />}
+            {toast.type === 'warning' && <AlertCircle size={18} />}
+            {toast.type === 'info' && <Activity size={18} />}
+            {toast.message}
+          </div>
+        </div>
+      )}
+
+      {/* 确认对话框 */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
+          <style>{`
+            @keyframes zoomIn {
+              from {
+                opacity: 0;
+                transform: scale(0.95);
+              }
+              to {
+                opacity: 1;
+                transform: scale(1);
+              }
+            }
+          `}</style>
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+            style={{ animation: 'zoomIn 0.2s ease-out' }}
+          >
+            <div className="p-6 text-center">
+              <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle size={28} />
+              </div>
+              <p className="text-slate-700 font-bold text-base">{confirmDialog.message}</p>
+            </div>
+            <div className="flex border-t border-slate-100">
+              <button
+                onClick={confirmDialog.onCancel}
+                className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="flex-1 py-3 text-orange-600 font-bold hover:bg-orange-50 transition-all border-l border-slate-100"
+              >
+                确定
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

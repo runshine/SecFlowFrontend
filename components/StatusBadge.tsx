@@ -3,7 +3,7 @@ import React from 'react';
 
 export const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const s = status?.toLowerCase();
-  const isActive = ['active', 'valid', 'running', 'bound', 'owner', 'healthy', 'success'].includes(s);
+  const isActive = ['active', 'valid', 'running', 'bound', 'owner', 'healthy', 'success', 'ready'].includes(s);
   const isInvalid = ['invalid', 'failed', 'offline', 'error'].includes(s);
   const isPending = ['pending', 'checking', 'admin'].includes(s);
   

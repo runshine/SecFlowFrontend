@@ -19,7 +19,7 @@ export interface UserInfo {
 
 // --- Workflow Service Types ---
 
-export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped';
+export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped' | 'ready';
 export type AppWorkflowStatus = 'pending' | 'initializing' | 'initialized' | 'running' | 'succeeded' | 'failed' | 'stopped';
 export type AppNodeStatus = 'pending' | 'not_ready' | 'ready' | 'stopped' | 'failed';
 export type TemplateScope = 'global' | 'project';

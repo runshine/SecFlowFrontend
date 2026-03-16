@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
-import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
+import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics } from './types/types';
 
 // 声明全局构建时间变量
 declare const __BUILD_TIME__: string;
@@ -81,6 +81,7 @@ const App: React.FC = () => {
   const [packageStats, setPackageStats] = useState<PackageStats | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
+  const [pvcStats, setPvcStats] = useState<PVCStatistics | null>(null);
 
   // Health Status
   const [resourceServiceHealthy, setResourceServiceHealthy] = useState<boolean | null>(null);
@@ -200,10 +201,13 @@ const App: React.FC = () => {
           setAgents(agentList);
           fetchDashboardServicesCount(agentList.filter(a => a.status === 'online'));
         }).catch(e => console.error(e));
-        
+
         api.environment.getTemplates().then(d => setTemplates(d.templates || [])).catch(e => console.error(e));
         api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
+
+        // Fetch PVC statistics for dashboard
+        api.resources.getStatistics().then(d => setPvcStats(d)).catch(e => console.error(e));
       }
     }
   }, [selectedProjectId, currentView, token]);
@@ -253,13 +257,14 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard': return (
-        <DashboardPage 
-          projects={projects} 
-          agents={agents} 
-          staticPackages={staticPackages} 
+        <DashboardPage
+          projects={projects}
+          agents={agents}
+          staticPackages={staticPackages}
           templates={templates}
           servicesCount={dashboardServicesCount}
-          setCurrentView={setCurrentView} 
+          pvcStats={pvcStats}
+          setCurrentView={setCurrentView}
         />
       );
       case 'project-mgmt': return (

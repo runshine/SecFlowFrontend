@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Briefcase, Monitor, Package, ChevronRight, Layout, Zap } from 'lucide-react';
-import { SecurityProject, Agent, StaticPackage, EnvTemplate } from '../types/types';
+import { Briefcase, Monitor, Package, ChevronRight, Layout, Zap, HardDrive } from 'lucide-react';
+import { SecurityProject, Agent, StaticPackage, EnvTemplate, PVCStatistics } from '../types/types';
 
 interface DashboardPageProps {
   projects: SecurityProject[];
@@ -9,81 +9,95 @@ interface DashboardPageProps {
   staticPackages: StaticPackage[];
   templates: EnvTemplate[];
   servicesCount: number;
+  pvcStats: PVCStatistics | null;
   setCurrentView: (view: string) => void;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ 
-  projects, 
-  agents, 
-  staticPackages, 
+export const DashboardPage: React.FC<DashboardPageProps> = ({
+  projects,
+  agents,
+  staticPackages,
   templates,
   servicesCount,
-  setCurrentView 
+  pvcStats,
+  setCurrentView
 }) => {
   // Ensure we are filtering based on the 'online' status string as defined in Agent type
   const onlineAgentsCount = (agents || []).filter(a => a.status === 'online').length;
-  
+
   const stats = [
-    { 
-      id: 'project-mgmt', 
-      label: '活动项目', 
-      value: (projects || []).length, 
-      icon: <Briefcase size={24} />, 
-      bg: 'bg-blue-100', 
-      text: 'text-blue-600' 
+    {
+      id: 'project-mgmt',
+      label: '活动项目',
+      value: (projects || []).length,
+      icon: <Briefcase size={24} />,
+      bg: 'bg-blue-100',
+      text: 'text-blue-600'
     },
-    { 
-      id: 'env-agent', 
-      label: '存活 Agent', 
-      value: onlineAgentsCount, 
-      icon: <Monitor size={24} />, 
-      bg: 'bg-indigo-100', 
-      text: 'text-indigo-600' 
+    {
+      id: 'env-agent',
+      label: '存活 Agent',
+      value: onlineAgentsCount,
+      icon: <Monitor size={24} />,
+      bg: 'bg-indigo-100',
+      text: 'text-indigo-600'
     },
-    { 
-      id: 'env-template', 
-      label: '环境模板', 
-      value: (templates || []).length, 
-      icon: <Layout size={24} />, 
-      bg: 'bg-amber-100', 
-      text: 'text-amber-600' 
+    {
+      id: 'env-template',
+      label: '环境模板',
+      value: (templates || []).length,
+      icon: <Layout size={24} />,
+      bg: 'bg-amber-100',
+      text: 'text-amber-600'
     },
-    { 
-      id: 'env-service', 
-      label: '已部署服务', 
-      value: servicesCount, 
-      icon: <Zap size={24} />, 
-      bg: 'bg-green-100', 
-      text: 'text-green-600' 
+    {
+      id: 'env-service',
+      label: '已部署服务',
+      value: servicesCount,
+      icon: <Zap size={24} />,
+      bg: 'bg-green-100',
+      text: 'text-green-600'
     },
-    { 
-      id: 'static-packages', 
-      label: '受信任软件包', 
-      value: (staticPackages || []).length, 
-      icon: <Package size={24} />, 
-      bg: 'bg-purple-100', 
-      text: 'text-purple-600' 
+    {
+      id: 'static-packages',
+      label: '受信任软件包',
+      value: (staticPackages || []).length,
+      icon: <Package size={24} />,
+      bg: 'bg-purple-100',
+      text: 'text-purple-600'
+    },
+    {
+      id: 'pvc-storage',
+      label: 'PVC 存储卷',
+      value: pvcStats?.total_pvcs || 0,
+      subtext: pvcStats ? `${pvcStats.total_storage_gi} Gi` : '0 Gi',
+      icon: <HardDrive size={24} />,
+      bg: 'bg-cyan-100',
+      text: 'text-cyan-600'
     }
   ];
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in duration-500">
       <h1 className="text-3xl font-black text-slate-800 tracking-tight">SecFlow 控制台</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         {stats.map(stat => (
-          <div 
-            key={stat.id} 
-            onClick={() => setCurrentView(stat.id)} 
-            className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
+          <div
+            key={stat.id}
+            onClick={() => setCurrentView(stat.id)}
+            className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
           >
-            <div className={`w-14 h-14 ${stat.bg} ${stat.text} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+            <div className={`w-12 h-12 ${stat.bg} ${stat.text} rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
               {stat.icon}
             </div>
             <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">{stat.label}</p>
-            <div className="text-4xl font-black mt-2 flex items-center justify-between text-slate-900">
+            <div className="text-3xl font-black mt-2 flex items-center justify-between text-slate-900">
               {stat.value}
-              <ChevronRight className="text-slate-200 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" size={28} />
+              <ChevronRight className="text-slate-200 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" size={24} />
             </div>
+            {'subtext' in stat && stat.subtext && (
+              <p className="text-xs font-bold text-slate-400 mt-1">{stat.subtext}</p>
+            )}
           </div>
         ))}
       </div>

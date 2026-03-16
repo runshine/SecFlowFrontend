@@ -350,6 +350,13 @@ export interface ProjectPVC {
   resource_name?: string;
 }
 
+export interface PVCStatistics {
+  total_pvcs: number;
+  total_storage_gi: number;
+  status_counts: Record<string, number>;
+  namespaces_count: number;
+}
+
 export interface Agent {
   key: string;
   hostname: string;

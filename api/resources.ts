@@ -110,5 +110,15 @@ export const resourcesApi = {
   getPVCs: async (projectId: string): Promise<{ pvcs: ProjectPVC[]; total: number }> => {
     const response = await fetch(`${API_BASE}/api/resource/pvcs?project_id=${projectId}`, { headers: getHeaders() });
     return handleResponse(response);
+  },
+
+  getStatistics: async (): Promise<{
+    total_pvcs: number;
+    total_storage_gi: number;
+    status_counts: Record<string, number>;
+    namespaces_count: number;
+  }> => {
+    const response = await fetch(`${API_BASE}/api/resource/pvcs/statistics`, { headers: getHeaders() });
+    return handleResponse(response);
   }
 };

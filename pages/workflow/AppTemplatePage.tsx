@@ -67,7 +67,7 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     loadTemplates();
@@ -97,11 +97,11 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
     );
   }, [templates, searchTerm]);
 
-  const totalPages = Math.ceil(filteredTemplates.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(filteredTemplates.length / pageSize) || 1;
   const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredTemplates.slice(start, start + itemsPerPage);
-  }, [filteredTemplates, currentPage]);
+    const start = (currentPage - 1) * pageSize;
+    return filteredTemplates.slice(start, start + pageSize);
+  }, [filteredTemplates, currentPage, pageSize]);
 
   const handleDelete = (id: string) => {
     setDeletingId(id);
@@ -312,11 +312,24 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
 
         {/* Footer Pagination */}
         <div className="mt-auto px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Showing {Math.min(filteredTemplates.length, itemsPerPage)} / {filteredTemplates.length} results
-          </span>
           <div className="flex items-center gap-4">
-             <button 
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">每页</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition-all"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              条 | 共 {filteredTemplates.length} 条
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+             <button
                 disabled={currentPage === 1 || loading}
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"
@@ -325,8 +338,8 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
               </button>
               <div className="flex items-center gap-1.5">
                 {Array.from({ length: totalPages }).map((_, i) => (
-                  <button 
-                    key={i} 
+                  <button
+                    key={i}
                     onClick={() => setCurrentPage(i + 1)}
                     className={`w-9 h-9 rounded-xl text-[10px] font-black transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-400 hover:bg-slate-50 border border-slate-200'}`}
                   >
@@ -334,7 +347,7 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                   </button>
                 ))}
               </div>
-              <button 
+              <button
                 disabled={currentPage === totalPages || loading}
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"

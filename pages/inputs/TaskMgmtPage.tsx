@@ -1,19 +1,20 @@
 
-import React, { useState, useEffect } from 'react';
-import { 
-  Loader2, 
-  Terminal, 
-  RefreshCw, 
-  Clock, 
-  Trash2, 
-  Search, 
-  Workflow, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Loader2,
+  Terminal,
+  RefreshCw,
+  Clock,
+  Trash2,
+  Search,
+  Workflow,
   History,
   AlertTriangle,
   X,
   FileBox,
   Layers,
   ChevronRight,
+  ChevronLeft,
   ShieldCheck,
   CheckCircle2
 } from 'lucide-react';
@@ -27,10 +28,14 @@ export const TaskMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   const [searchTerm, setSearchTerm] = useState('');
   const [logModal, setLogModal] = useState<{ show: boolean; taskId: string; logs: string[] }>({ show: false, taskId: '', logs: [] });
   const [logLoading, setLogLoading] = useState(false);
-  
+
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; taskId: string | null }>({ show: false, taskId: null });
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     if (projectId) {
@@ -83,10 +88,19 @@ export const TaskMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
-  const filteredTasks = tasks.filter(t => 
-    t.task_id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.task_type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t =>
+      t.task_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.task_type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [tasks, searchTerm]);
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredTasks.length / pageSize) || 1;
+  const paginatedTasks = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTasks.slice(start, start + pageSize);
+  }, [filteredTasks, currentPage, pageSize]);
 
   return (
     <div className="p-10 space-y-10 animate-in fade-in duration-500 pb-24 h-full overflow-y-auto">
@@ -175,7 +189,7 @@ export const TaskMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                 </tr>
               ) : loading && tasks.length === 0 ? (
                 <tr><td colSpan={6} className="py-24 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" size={40} /></td></tr>
-              ) : filteredTasks.map(t => (
+              ) : paginatedTasks.map(t => (
                 <tr key={t.task_id} className="hover:bg-slate-50 transition-all group">
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-4">
@@ -249,6 +263,47 @@ export const TaskMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {filteredTasks.length > 0 && (
+          <div className="flex items-center justify-between px-8 py-4 bg-white border border-slate-200 rounded-[2rem] shadow-sm">
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">每页</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition-all"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                条 | 共 {filteredTasks.length} 条
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
+                className="p-2 text-slate-400 hover:text-slate-800 disabled:opacity-30 transition-all"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <span className="px-4 py-2 bg-slate-100 rounded-xl text-sm font-black text-slate-800">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+                className="p-2 text-slate-400 hover:text-slate-800 disabled:opacity-30 transition-all"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Log Viewer Modal */}

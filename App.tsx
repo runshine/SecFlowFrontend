@@ -206,8 +206,8 @@ const App: React.FC = () => {
         api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
 
-        // Fetch PVC statistics for dashboard
-        api.resources.getStatistics().then(d => setPvcStats(d)).catch(e => console.error(e));
+        // Fetch PVC statistics for dashboard (current project)
+        api.resources.getStatistics(selectedProjectId).then(d => setPvcStats(d)).catch(e => console.error(e));
       }
     }
   }, [selectedProjectId, currentView, token]);

@@ -218,97 +218,110 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
         />
       </div>
 
-      {/* List Content */}
-      <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[550px]">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-            <tr>
-              <th className="px-8 py-6">应用组件信息</th>
-              <th className="px-6 py-6">运行实例 (Replicas)</th>
-              <th className="px-6 py-6">容器栈</th>
-              <th className="px-6 py-6">创建者/更新时间</th>
-              <th className="px-8 py-6 text-right">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="py-32 text-center">
-                  <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
-                </td>
-              </tr>
-            ) : paginatedItems.length > 0 ? paginatedItems.map(t => (
-              <tr key={t.id} className="hover:bg-slate-50 transition-all group">
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-black shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
-                      <Layers size={22} />
+      {/* List Content - Card Grid */}
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[550px] p-6">
+        {loading ? (
+          <div className="py-32 text-center">
+            <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
+          </div>
+        ) : paginatedItems.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {paginatedItems.map(t => (
+              <div
+                key={t.id}
+                className="group relative bg-slate-50 hover:bg-white border-2 border-slate-100 hover:border-blue-200 rounded-2xl p-6 transition-all shadow-sm hover:shadow-md cursor-pointer"
+                onClick={() => onNavigateToDetail(t.id)}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-100 group-hover:bg-blue-500 rounded-xl flex items-center justify-center transition-all shadow-sm">
+                      <Layers className="text-blue-600 group-hover:text-white transition-colors" size={22} />
                     </div>
                     <div className="min-w-0">
-                      <p 
-                        className="text-sm font-black text-slate-800 truncate cursor-pointer hover:text-blue-600 transition-colors"
-                        onClick={() => onNavigateToDetail(t.id)}
-                      >
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight truncate group-hover:text-blue-600 transition-colors">
                         {t.name}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Hash size={10} className="text-slate-300" />
-                        <span className="text-[10px] font-mono text-slate-400 font-bold truncate max-w-[150px]">{t.id}</span>
-                      </div>
+                      </h4>
+                      <span className="text-[10px] font-mono text-slate-400 font-bold truncate block max-w-[150px]">
+                        {t.id.slice(0, 8)}
+                      </span>
                     </div>
                   </div>
-                </td>
-                <td className="px-6 py-6">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
-                      {t.replicas}
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Instances</span>
-                  </div>
-                </td>
-                <td className="px-6 py-6">
+                </div>
+
+                {/* Description */}
+                <p className="text-xs text-slate-500 mb-4 line-clamp-2 min-h-[32px] font-medium">
+                  {t.description || '暂无描述信息'}
+                </p>
+
+                {/* Containers */}
+                <div className="mb-4">
+                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">容器栈</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {t.containers?.map((c, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 text-[9px] font-black uppercase" title={c.image}>
+                    {t.containers?.slice(0, 3).map((c, idx) => (
+                      <span key={idx} className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100 text-[9px] font-black uppercase" title={c.image}>
                         {c.name}
                       </span>
                     ))}
+                    {t.containers && t.containers.length > 3 && (
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-bold">
+                        +{t.containers.length - 3}
+                      </span>
+                    )}
                   </div>
-                </td>
-                <td className="px-6 py-6">
+                </div>
+
+                {/* Stats */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex-1 bg-white rounded-xl p-3 border border-slate-100">
+                    <div className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">Replicas</div>
+                    <div className="text-sm font-black text-slate-700">{t.replicas}</div>
+                  </div>
+                  <div className="flex-1 bg-white rounded-xl p-3 border border-slate-100">
+                    <div className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">Service</div>
+                    <div className="text-sm font-black text-slate-700 truncate">{t.service_type || 'ClusterIP'}</div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase">
                       <Monitor size={12} className="text-blue-500" /> {t.created_by || 'system'}
                     </div>
-                    <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase">
-                      <Clock size={10} /> {t.updated_at ? new Date(t.updated_at).toLocaleString() : (t.created_at ? new Date(t.created_at).toLocaleString() : 'N/A')}
+                    <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400">
+                      <Clock size={10} /> {t.updated_at ? new Date(t.updated_at).toLocaleDateString() : (t.created_at ? new Date(t.created_at).toLocaleDateString() : 'N/A')}
                     </div>
                   </div>
-                </td>
-                <td className="px-8 py-6 text-right">
-                  <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onNavigateToDetail(t.id)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="查看详细编排">
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onNavigateToDetail(t.id); }}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      title="查看详情"
+                    >
                       <ExternalLink size={16} />
                     </button>
-                    <button onClick={() => handleDelete(t.id)} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="注销模板">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      title="删除模板"
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>
-                </td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={5} className="py-40 text-center">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
-                    <Layers size={40} />
-                  </div>
-                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的应用模板资产</p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-40 text-center">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+              <Layers size={40} />
+            </div>
+            <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的应用模板资产</p>
+          </div>
+        )}
 
         {/* Footer Pagination */}
         <div className="mt-auto px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">

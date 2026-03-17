@@ -112,13 +112,14 @@ export const resourcesApi = {
     return handleResponse(response);
   },
 
-  getStatistics: async (): Promise<{
+  getStatistics: async (projectId?: string): Promise<{
     total_pvcs: number;
     total_storage_gi: number;
     status_counts: Record<string, number>;
     namespaces_count: number;
   }> => {
-    const response = await fetch(`${API_BASE}/api/resource/pvcs/statistics`, { headers: getHeaders() });
+    const params = projectId ? `?project_id=${projectId}` : '';
+    const response = await fetch(`${API_BASE}/api/resource/pvcs/statistics${params}`, { headers: getHeaders() });
     return handleResponse(response);
   }
 };

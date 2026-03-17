@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Loader2, Trash2, Play, Square, RefreshCw, Power, AlertCircle, Box, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Loader2, Trash2, Play, Square, RefreshCw, Power, AlertCircle, Box, ChevronLeft, ChevronRight, ArrowLeft, Container, Layers } from 'lucide-react';
 import { api } from '../../api/api';
 import { AppWorkflow, AppTemplate, AppWorkflowStatus } from '../../types/types';
 
@@ -18,7 +18,9 @@ export const AppInstancePage: React.FC<{
 
   // 创建模态框状态
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [createStep, setCreateStep] = useState<'select-template' | 'fill-form'>('select-template');
   const [templates, setTemplates] = useState<AppTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -33,10 +35,6 @@ export const AppInstancePage: React.FC<{
   // 删除确认模态框
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  // 模板选择器状态
-  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
-  const [hoveredTemplate, setHoveredTemplate] = useState<AppTemplate | null>(null);
 
   // 模板依赖状态
   const [selectedTemplate, setSelectedTemplate] = useState<AppTemplate | null>(null);
@@ -177,10 +175,7 @@ export const AppInstancePage: React.FC<{
               alert(`请选择PVC用于挂载路径: ${mount.mount_path} (容器: ${container.name})`);
               return;
             }
-            if (!config.sub_path) {
-              alert(`请填写子路径用于挂载路径: ${mount.mount_path} (容器: ${container.name})`);
-              return;
-            }
+            // 子路径为非必填项，不填写时默认使用PVC根路径
           }
         }
       }
@@ -212,11 +207,11 @@ export const AppInstancePage: React.FC<{
             container.input_volume_mounts.forEach(mount => {
               const key = `${container.name}.${mount.mount_path}`;
               const config = inputVolumeMountConfigs[key];
-              if (config && config.pvc_name && config.sub_path) {
+              if (config && config.pvc_name) {
                 volumeMounts.push({
                   pvc_name: config.pvc_name,
                   mount_path: mount.mount_path,
-                  sub_path: config.sub_path,
+                  sub_path: config.sub_path || '',  // 子路径可为空，默认使用PVC根路径
                   read_only: config.read_only
                 });
               }
@@ -256,9 +251,10 @@ export const AppInstancePage: React.FC<{
     setSelectedTemplate(null);
     setInputEnvVarValues({});
     setInputVolumeMountConfigs({});
+    setCreateStep('select-template');
   };
 
-  // 处理模板选择：获取完整详情并解析依赖
+  // 处理模板选择：获取完整详情并解析依赖，进入表单阶段
   const handleTemplateSelect = async (templateId: string) => {
     try {
       // 获取完整模板详情
@@ -294,19 +290,38 @@ export const AppInstancePage: React.FC<{
       setInputVolumeMountConfigs(volumeConfigs);
 
       // 更新表单数据
-      setFormData({ ...formData, template_id: templateId });
-      setIsTemplateDropdownOpen(false);
+      setFormData({
+        ...formData,
+        template_id: templateId,
+        service_ports: template.service_ports || [{ name: 'http', port: 80, target_port: 80, protocol: 'TCP' }],
+        service_type: template.service_type || 'ClusterIP',
+        replicas: template.replicas || 1
+      });
+
+      // 加载PVC列表
+      loadPVCList();
+
+      // 进入表单填写阶段
+      setCreateStep('fill-form');
     } catch (error) {
       console.error('Failed to load template details:', error);
       alert('加载模板详情失败');
     }
   };
 
-  const openCreateModal = () => {
-    loadTemplates();
-    resetForm();
-    loadPVCList();
+  const openCreateModal = async () => {
     setIsModalOpen(true);
+    setCreateStep('select-template');
+    setLoadingTemplates(true);
+    try {
+      const res = await api.workflow.listAppTemplates({ project_id: projectId });
+      setTemplates(res.items || []);
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+      alert('加载模板列表失败');
+    } finally {
+      setLoadingTemplates(false);
+    }
   };
 
   // 加载PVC列表
@@ -563,12 +578,124 @@ export const AppInstancePage: React.FC<{
       {/* 创建实例模态框 */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-8">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-8 border-b border-slate-100">
-              <h2 className="text-2xl font-black text-slate-900">创建应用实例</h2>
-              <p className="text-sm text-slate-500 mt-1">基于应用模板创建新的工作流实例</p>
-            </div>
-            <div className="p-8 space-y-6">
+          <div className="bg-white rounded-3xl shadow-2xl w-[95%] max-w-7xl max-h-[90vh] overflow-y-auto">
+            {/* 第一步：选择模板 */}
+            {createStep === 'select-template' && (
+              <>
+                <div className="p-8 border-b border-slate-100">
+                  <h2 className="text-2xl font-black text-slate-900">选择应用模板</h2>
+                  <p className="text-sm text-slate-500 mt-1">请选择一个应用模板来创建实例</p>
+                </div>
+                <div className="p-8">
+                  {loadingTemplates ? (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="animate-spin text-blue-600" size={32} />
+                    </div>
+                  ) : templates.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20">
+                      <Box className="text-slate-300 mb-4" size={64} />
+                      <p className="text-slate-400 font-medium">暂无可用模板</p>
+                      <p className="text-sm text-slate-400 mt-1">请先创建应用模板</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {templates.map((template) => (
+                        <button
+                          key={template.id}
+                          onClick={() => handleTemplateSelect(template.id)}
+                          className="group text-left p-6 bg-slate-50 hover:bg-blue-50 border-2 border-slate-200 hover:border-blue-300 rounded-2xl transition-all"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 rounded-xl flex items-center justify-center transition-colors">
+                                <Container className="text-blue-600" size={20} />
+                              </div>
+                              <div>
+                                <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                                  {template.name}
+                                </h3>
+                                <p className="text-xs text-slate-400">{template.id}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <p className="text-sm text-slate-600 mb-4 line-clamp-2 min-h-[40px]">
+                            {template.description || '暂无描述'}
+                          </p>
+
+                          <div className="space-y-2 text-xs text-slate-500">
+                            <div className="flex items-center gap-2">
+                              <Layers size={14} className="text-slate-400" />
+                              <span>{template.containers.length} 个容器</span>
+                            </div>
+                            {template.service_ports && template.service_ports.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400">端口:</span>
+                                <span>{template.service_ports.map(p => `${p.port}`).join(', ')}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-4">
+                              <span>类型: {template.service_type || 'ClusterIP'}</span>
+                              <span>副本: {template.replicas}</span>
+                            </div>
+                          </div>
+
+                          {template.containers.some(c =>
+                            (c.input_env_vars && c.input_env_vars.length > 0) ||
+                            (c.input_volume_mounts && c.input_volume_mounts.length > 0)
+                          ) && (
+                            <div className="mt-3 pt-3 border-t border-slate-200">
+                              <div className="flex gap-2 flex-wrap">
+                                {template.containers.some(c => c.input_env_vars && c.input_env_vars.length > 0) && (
+                                  <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded-lg text-xs font-medium">
+                                    需要环境变量
+                                  </span>
+                                )}
+                                {template.containers.some(c => c.input_volume_mounts && c.input_volume_mounts.length > 0) && (
+                                  <span className="px-2 py-1 bg-purple-100 text-purple-600 rounded-lg text-xs font-medium">
+                                    需要存储挂载
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="p-8 border-t border-slate-100 flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-6 py-3 text-slate-600 hover:text-slate-700 font-medium transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 第二步：填写表单 */}
+            {createStep === 'fill-form' && (
+              <>
+                <div className="p-8 border-b border-slate-100">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setCreateStep('select-template')}
+                      className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+                      title="返回选择模板"
+                    >
+                      <ArrowLeft size={20} className="text-slate-500" />
+                    </button>
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">创建应用实例</h2>
+                      <p className="text-sm text-slate-500 mt-1">
+                        基于「{selectedTemplate?.name}」模板创建实例
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-8 space-y-6">
               {/* 名称 */}
               <div>
                 <label className="block text-xs font-black text-slate-500 uppercase mb-2">实例名称 *</label>
@@ -591,107 +718,65 @@ export const AppInstancePage: React.FC<{
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-blue-500 resize-none"
                 />
               </div>
-              {/* 选择模板 */}
-              <div>
-                <label className="block text-xs font-black text-slate-500 uppercase mb-2">应用模板 *</label>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:border-blue-500 text-left flex items-center justify-between"
-                  >
-                    <span className={formData.template_id ? 'text-slate-900' : 'text-slate-400'}>
-                      {formData.template_id
-                        ? templates.find(t => t.id === formData.template_id)?.name
-                        : '选择模板...'}
-                    </span>
-                    <svg
-                      className={`w-4 h-4 text-slate-400 transition-transform ${isTemplateDropdownOpen ? 'rotate-180' : ''}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
 
-                  {isTemplateDropdownOpen && (
-                    <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-lg max-h-80 overflow-y-auto">
-                      {templates.length === 0 ? (
-                        <div className="px-4 py-3 text-sm text-slate-400 text-center">暂无可用模板</div>
-                      ) : (
-                        templates.map((tpl) => (
-                          <div
-                            key={tpl.id}
-                            className="relative"
-                            onMouseEnter={() => setHoveredTemplate(tpl)}
-                            onMouseLeave={() => setHoveredTemplate(null)}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleTemplateSelect(tpl.id)}
-                              className={`w-full px-4 py-3 text-left text-sm hover:bg-blue-50 transition-colors flex items-center justify-between ${
-                                formData.template_id === tpl.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-slate-700'
-                              }`}
-                            >
-                              <span>{tpl.name}</span>
-                              {formData.template_id === tpl.id && (
-                                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                            </button>
+              {/* 模板信息概览 */}
+              {selectedTemplate && (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                  <div className="text-xs font-black text-slate-500 uppercase mb-3">模板信息</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">副本数</div>
+                      <div className="font-bold text-slate-700">{selectedTemplate.replicas}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">服务类型</div>
+                      <div className="font-bold text-slate-700">{selectedTemplate.service_type || 'ClusterIP'}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">创建服务</div>
+                      <div className="font-bold text-slate-700">
+                        {selectedTemplate.create_service !== false ? '是' : '否'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">容器数量</div>
+                      <div className="font-bold text-slate-700">{selectedTemplate.containers.length}</div>
+                    </div>
+                  </div>
 
-                            {/* Tooltip - 显示详细信息 */}
-                            {hoveredTemplate?.id === tpl.id && (
-                              <div className="fixed left-[45%] top-1/2 -translate-y-1/2 w-80 bg-slate-900 text-white rounded-xl shadow-2xl p-4 z-[9999] max-h-[80vh] overflow-y-auto">
-                                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">模板详情</div>
-                                <div className="space-y-3">
-                                  <div>
-                                    <div className="text-xs font-medium text-slate-400 mb-1">描述</div>
-                                    <div className="text-sm">{tpl.description || '暂无描述'}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-xs font-medium text-slate-400 mb-1">容器配置</div>
-                                    <div className="text-sm">{tpl.containers.length} 个容器</div>
-                                    {tpl.containers.map((container, idx) => (
-                                      <div key={idx} className="text-xs text-slate-300 mt-1 pl-2">
-                                        • {container.name}: {container.image}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  {tpl.service_ports && tpl.service_ports.length > 0 && (
-                                    <div>
-                                      <div className="text-xs font-medium text-slate-400 mb-1">服务端口</div>
-                                      <div className="text-sm space-y-1">
-                                        {tpl.service_ports.map((port, idx) => (
-                                          <div key={idx} className="text-xs text-slate-300">
-                                            {port.name}: {port.port} → {port.target_port} ({port.protocol || 'TCP'})
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div className="flex gap-4 text-xs">
-                                    <div>
-                                      <span className="text-slate-400">服务类型: </span>
-                                      <span>{tpl.service_type || 'ClusterIP'}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-slate-400">副本数: </span>
-                                      <span>{tpl.replicas}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
+                  {/* 容器镜像列表 */}
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <div className="text-xs text-slate-400 mb-2">容器配置</div>
+                    <div className="space-y-2">
+                      {selectedTemplate.containers.map((container, idx) => (
+                        <div key={idx} className="flex items-start gap-3 text-sm">
+                          <div className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Container size={14} className="text-blue-600" />
                           </div>
-                        ))
-                      )}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-slate-700">{container.name}</div>
+                            <div className="text-xs text-slate-500 truncate">{container.image}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 服务端口 */}
+                  {selectedTemplate.service_ports && selectedTemplate.service_ports.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-200">
+                      <div className="text-xs text-slate-400 mb-2">服务端口</div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTemplate.service_ports.map((port, idx) => (
+                          <span key={idx} className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600">
+                            {port.name}: {port.port} → {port.target_port} ({port.protocol || 'TCP'})
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
 
               {/* 模板依赖配置 */}
               {selectedTemplate && (
@@ -782,7 +867,7 @@ export const AppInstancePage: React.FC<{
                                   </div>
                                   <div>
                                     <label className="block text-xs font-medium text-slate-500 mb-1">
-                                      子路径 <span className="text-red-500">*</span>
+                                      子路径
                                     </label>
                                     <input
                                       type="text"
@@ -791,8 +876,8 @@ export const AppInstancePage: React.FC<{
                                         ...inputVolumeMountConfigs,
                                         [key]: { ...config, sub_path: e.target.value }
                                       })}
-                                      placeholder="例如: data/config"
-                                      className={`w-full px-3 py-2 border ${!config.sub_path ? 'border-red-300' : 'border-slate-200'} rounded-lg text-sm outline-none focus:border-purple-500`}
+                                      placeholder="例如: data/config (留空则使用PVC根路径)"
+                                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-purple-500"
                                     />
                                   </div>
                                 </div>
@@ -842,22 +927,33 @@ export const AppInstancePage: React.FC<{
                 />
               </div>
             </div>
-            <div className="p-8 border-t border-slate-100 flex items-center justify-end gap-3">
+            <div className="p-8 border-t border-slate-100 flex items-center justify-between gap-3">
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-6 py-3 text-slate-600 hover:text-slate-700 font-medium transition-colors"
+                onClick={() => setCreateStep('select-template')}
+                className="px-6 py-3 text-slate-600 hover:text-slate-700 font-medium transition-colors flex items-center gap-2"
               >
-                取消
+                <ArrowLeft size={16} />
+                返回选择模板
               </button>
-              <button
-                onClick={handleCreate}
-                disabled={isSubmitting}
-                className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 disabled:active:scale-100"
-              >
-                {isSubmitting && <Loader2 className="animate-spin" size={16} />}
-                创建实例
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-6 py-3 text-slate-600 hover:text-slate-700 font-medium transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleCreate}
+                  disabled={isSubmitting}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 disabled:active:scale-100"
+                >
+                  {isSubmitting && <Loader2 className="animate-spin" size={16} />}
+                  创建实例
+                </button>
+              </div>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -40,7 +40,9 @@ import {
   Key,
   Layers,
   Activity,
-  GitBranch
+  GitBranch,
+  Building2,
+  FolderOpen
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -71,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   codeAuditHealth = null,
   workflowHealth = null
 }) => {
-  const isUserMgmtMode = currentView.startsWith('user-mgmt-');
+  const isUserMgmtMode = currentView.startsWith('user-mgmt-') || currentView.startsWith('org-mgmt-');
 
   const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false }: any) => {
     const isExpanded = expandedMenus.has(id);
@@ -232,6 +234,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { id: 'user-mgmt-perms', label: '功能权限分配', icon: <Settings size={14} /> },
               { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> },
               { id: 'user-mgmt-machine', label: '机机凭证管理', icon: <Cpu size={14} /> }
+            ]} 
+          />
+          
+          <SidebarItem 
+            id="org-mgmt-root" 
+            label="组织架构管理" 
+            icon={<Building2 size={20} />} 
+            children={[
+              { id: 'org-mgmt-departments', label: '部门结构管理', icon: <Building2 size={14} /> },
+              { id: 'org-mgmt-members', label: '部门成员管理', icon: <Users size={14} /> },
+              { id: 'org-mgmt-projects', label: '项目权限管理', icon: <FolderOpen size={14} /> }
             ]} 
           />
        </div>

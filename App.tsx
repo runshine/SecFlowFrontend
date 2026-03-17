@@ -49,6 +49,11 @@ import { PermMgmtPage } from './pages/user/PermMgmtPage';
 import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
 import { MachineTokenPage } from './pages/user/MachineTokenPage';
 
+// Organization Pages
+import { DepartmentPage } from './pages/org/DepartmentPage';
+import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
+import { ProjectPage } from './pages/org/ProjectPage';
+
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -63,7 +68,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'workflow-root']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'org-mgmt-root', 'workflow-root']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
@@ -309,6 +314,11 @@ const App: React.FC = () => {
       case 'user-mgmt-perms': return <PermMgmtPage />;
       case 'user-mgmt-online': return <OnlineSessionPage />;
       case 'user-mgmt-machine': return <MachineTokenPage />;
+
+      // Organization Pages
+      case 'org-mgmt-departments': return <DepartmentPage />;
+      case 'org-mgmt-members': return <DepartmentMemberPage />;
+      case 'org-mgmt-projects': return <ProjectPage />;
 
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
     }

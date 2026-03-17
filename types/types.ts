@@ -237,6 +237,45 @@ export interface MachineToken {
   expires_at: string | null;
 }
 
+export interface Department {
+  id: number;
+  name: string;
+  description?: string;
+  parent_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentMember {
+  id: number;
+  user_id: number;
+  username: string;
+  department_id: number;
+  department_name: string;
+  role: 'leader' | 'vice_leader' | 'member';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: number | string;  // 支持项目空间的字符串ID
+  name: string;
+  description?: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+  departments?: Department[];
+  project_space_id?: string;  // 项目空间的字符串ID
+  org_id?: number;  // 组织架构系统的整数ID
+  sync_error?: string;  // 同步错误信息
+  owner_id?: string;
+  owner_name?: string;
+  owner_department_id?: number;
+  owner_department_name?: string;
+  roles?: any[];
+  can_edit?: boolean;  // 当前用户是否可以编辑/删除该项目
+}
+
 export interface SecurityProject {
   id: string;
   name: string;
@@ -244,6 +283,7 @@ export interface SecurityProject {
   owner_id?: string;
   owner_name?: string;
   status?: string;
+  is_public?: boolean;
   created_at?: string;
   updated_at?: string;
   k8s_namespace?: string;
@@ -474,4 +514,5 @@ export type ViewType =
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'
   | 'sys-settings' | 'change-password' 
-  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online';
+  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online'
+  | 'org-mgmt-departments' | 'org-mgmt-members' | 'org-mgmt-projects';

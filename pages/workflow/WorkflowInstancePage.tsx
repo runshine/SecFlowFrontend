@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { WorkflowInstance, WorkflowStatus } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -9,14 +9,14 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
+
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -30,6 +30,13 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
     trigger_type: 'manual',
     trigger_enabled: false
   });
+
+  // Toast 状态
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
+  const showToast = (message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     if (projectId) {
@@ -80,7 +87,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       setFormData({ name: '', description: '', run_mode: 'once', trigger_type: 'manual', trigger_enabled: false });
       loadInstances();
     } catch (e: any) {
-      alert("创建失败: " + e.message);
+      showToast("创建失败: " + e.message, "error");
     }
   };
 
@@ -89,7 +96,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.startInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("启动失败: " + e.message);
+      showToast("启动失败: " + e.message, "error");
     }
   };
 
@@ -98,7 +105,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.stopInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("停止失败: " + e.message);
+      showToast("停止失败: " + e.message, "error");
     }
   };
 
@@ -107,7 +114,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.syncInstanceStatus(id);
       loadInstances();
     } catch (e: any) {
-      alert("同步失败: " + e.message);
+      showToast("同步失败: " + e.message, "error");
     }
   };
 
@@ -116,7 +123,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.activateInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("激活失败: " + e.message);
+      showToast("激活失败: " + e.message, "error");
     }
   };
 
@@ -125,7 +132,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.deactivateInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("停用失败: " + e.message);
+      showToast("停用失败: " + e.message, "error");
     }
   };
 
@@ -144,7 +151,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       setDeletingId(null);
       loadInstances();
     } catch (e: any) {
-      alert("删除失败: " + e.message);
+      showToast("删除失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -158,9 +165,9 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       setIsUninitModalOpen(false);
       setUninitId(null);
       loadInstances();
-      alert("反初始化成功");
+      showToast("反初始化成功", "success");
     } catch (e: any) {
-      alert("反初始化失败: " + e.message);
+      showToast("反初始化失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -310,9 +317,9 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                         try {
                           await api.workflow.initializeInstance(instance.id);
                           loadInstances();
-                          alert("初始化成功");
+                          showToast("初始化成功", "success");
                         } catch (e: any) {
-                          alert("初始化失败: " + e.message);
+                          showToast("初始化失败: " + e.message, "error");
                         }
                       }} title="初始化" className="p-3 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-600 hover:text-white transition-all">
                         <Activity size={16} />
@@ -534,6 +541,42 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                 确认删除
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast 通知 */}
+      {toast && (
+        <div
+          className="fixed top-4 left-1/2 z-[99999]"
+          style={{
+            transform: 'translateX(-50%)',
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <style>{`
+            @keyframes slideIn {
+              from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+              }
+              to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+              }
+            }
+          `}</style>
+          <div className={`px-6 py-3 rounded-xl shadow-2xl border font-bold text-sm flex items-center gap-2 ${
+            toast.type === 'success' ? 'bg-green-600 text-white border-green-500' :
+            toast.type === 'error' ? 'bg-red-600 text-white border-red-500' :
+            toast.type === 'warning' ? 'bg-yellow-500 text-yellow-900 border-yellow-400' :
+            'bg-slate-800 text-white border-slate-700'
+          }`}>
+            {toast.type === 'success' && <CheckCircle size={18} />}
+            {toast.type === 'error' && <XCircle size={18} />}
+            {toast.type === 'warning' && <AlertCircle size={18} />}
+            {toast.type === 'info' && <Activity size={18} />}
+            {toast.message}
           </div>
         </div>
       )}

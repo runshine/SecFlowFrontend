@@ -17,11 +17,15 @@ import {
   Clock,
   Hash,
   ExternalLink,
+<<<<<<< HEAD
   Layers,
   ChevronLeft,
   ChevronRight,
   FileText,
   HardDrive
+=======
+  Layers
+>>>>>>> 351f985 (提交组织管理前端代码)
 } from 'lucide-react';
 import { JobTemplate, TemplateScope } from '../../types/types';
 import { api } from '../../api/api';
@@ -40,10 +44,13 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+<<<<<<< HEAD
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
   const defaultContainer = { 
     name: 'main', 
     image: '', 
@@ -81,7 +88,6 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
         project_id: scope === 'project' ? projectId : 'all' 
       });
       setTemplates(res.items || []);
-      setCurrentPage(1);
     } catch (e) {
       console.error(e);
     } finally {
@@ -96,12 +102,15 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
     );
   }, [templates, searchTerm]);
 
+<<<<<<< HEAD
   const totalPages = Math.ceil(filteredTemplates.length / pageSize) || 1;
   const paginatedItems = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredTemplates.slice(start, start + pageSize);
   }, [filteredTemplates, currentPage, pageSize]);
 
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
   const handleDelete = (id: string) => {
     setDeletingId(id);
     setIsDeleteModalOpen(true);
@@ -215,6 +224,7 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
         />
       </div>
 
+<<<<<<< HEAD
       {/* List Content - Card Grid */}
       <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm p-6">
         {loading ? (
@@ -387,6 +397,108 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
               <ChevronRight size={18} />
             </button>
           </div>
+=======
+      {/* List Content */}
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">任务组件信息</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">容器编排</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">运行策略</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">注册时间</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-32 text-center">
+                    <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
+                  </td>
+                </tr>
+              ) : filteredTemplates.length > 0 ? filteredTemplates.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm group-hover:bg-amber-600 group-hover:text-white transition-all">
+                        <Zap size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 
+                            className="text-sm font-black text-slate-800 tracking-tight truncate cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={() => onNavigateToDetail(t.id)}
+                          >
+                            {t.name}
+                          </h4>
+                          <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-mono font-bold uppercase tracking-tighter">
+                            {t.id.slice(0, 8)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-1 font-medium italic">
+                          {t.description || '暂无描述信息'}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-wrap gap-1.5 max-w-xs">
+                      {t.containers?.map((c, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-100 text-[9px] font-black uppercase whitespace-nowrap">
+                          {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center justify-center gap-6">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Retry</span>
+                        <span className="text-[11px] font-black text-slate-600">{t.backoff_limit}</span>
+                      </div>
+                      <div className="w-px h-4 bg-slate-100"></div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">TTL</span>
+                        <span className="text-[11px] font-black text-slate-600">{t.ttl_seconds_after_finished}s</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex flex-col items-end">
+                      <span className="text-[11px] font-bold text-slate-500">{t.created_at?.split('T')[0]}</span>
+                      <span className="text-[9px] font-medium text-slate-300">{t.created_at?.split('T')[1]?.slice(0, 5)}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => onNavigateToDetail(t.id)} className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                        <ExternalLink size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(t.id)}
+                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={5} className="py-40 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                      <Zap size={32} />
+                    </div>
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的任务模板资产</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+>>>>>>> 351f985 (提交组织管理前端代码)
         </div>
       </div>
 

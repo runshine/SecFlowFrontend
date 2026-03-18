@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Trash2, 
-  ChevronRight, 
-  AlertTriangle, 
+import {
+  Plus,
+  Search,
+  Trash2,
+  ChevronRight,
+  AlertTriangle,
   Loader2,
   Calendar,
   Box,
@@ -20,7 +20,10 @@ import {
   CheckSquare,
   Square,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Globe,
+  Lock,
+  Edit3
 } from 'lucide-react';
 import { SecurityProject } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -45,7 +48,10 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState<{show: boolean, ids: string[]}>({ show: false, ids: [] });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newProject, setNewProject] = useState({ name: '', description: '', k8s_namespace: '' });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<SecurityProject | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', description: '', is_public: false });
+  const [newProject, setNewProject] = useState({ name: '', description: '', k8s_namespace: '', is_public: false });
   const [error, setError] = useState<string | null>(null);
   
   // Selection State
@@ -87,10 +93,11 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
     try {
       await api.projects.create({
         name: newProject.name,
-        description: newProject.description
+        description: newProject.description,
+        is_public: newProject.is_public
       });
       setIsCreateModalOpen(false);
-      setNewProject({ name: '', description: '', k8s_namespace: '' });
+      setNewProject({ name: '', description: '', k8s_namespace: '', is_public: false });
       await refreshProjects();
     } catch (err: any) {
       setError(err.message || "创建项目失败");
@@ -139,6 +146,39 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
   const handleRowClick = (id: string) => {
     setActiveProjectId(id);
     setCurrentView('project-detail');
+  };
+
+  const openEditModal = (e: React.MouseEvent, project: SecurityProject) => {
+    e.stopPropagation();
+    setEditingProject(project);
+    setEditForm({
+      name: project.name,
+      description: project.description || '',
+      is_public: project.is_public ?? false
+    });
+    setError(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProject) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await api.projects.update(editingProject.id, {
+        name: editForm.name,
+        description: editForm.description,
+        is_public: editForm.is_public
+      });
+      setIsEditModalOpen(false);
+      setEditingProject(null);
+      await refreshProjects();
+    } catch (err: any) {
+      setError(err.message || "更新项目失败");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -307,7 +347,14 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                     </td>
                     <td className="px-8 py-5 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
+                        <button
+                          onClick={(e) => openEditModal(e, project)}
+                          className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                          title="编辑项目"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button
                           onClick={(e) => handleDeleteClick(e, [project.id])}
                           className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                           title="删除项目"
@@ -366,7 +413,7 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目简述</label>
-                <textarea 
+                <textarea
                   rows={3}
                   placeholder="描述该项目的评估目标与范围..."
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-blue-500/10 font-bold text-slate-800 transition-all resize-none"
@@ -374,7 +421,43 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                   onChange={e => setNewProject({...newProject, description: e.target.value})}
                 />
               </div>
-              
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目可见性 *</label>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setNewProject({...newProject, is_public: true})}
+                    className={`flex-1 py-4 rounded-2xl font-black transition-all ${
+                      newProject.is_public
+                        ? 'bg-green-600 text-white shadow-lg shadow-green-500/20'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    <Globe size={20} className="mx-auto mb-2" />
+                    公开项目
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewProject({...newProject, is_public: false})}
+                    className={`flex-1 py-4 rounded-2xl font-black transition-all ${
+                      !newProject.is_public
+                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    <Lock size={20} className="mx-auto mb-2" />
+                    私有项目
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 ml-1">
+                  {newProject.is_public
+                    ? '公开项目：所有用户均可查看'
+                    : '私有项目：仅项目成员可查看'
+                  }
+                </p>
+              </div>
+
               <div className="pt-4 flex gap-4">
                 <button 
                   type="button"
@@ -412,14 +495,14 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
               </p>
             </div>
             <div className="px-10 pb-10 flex gap-4">
-              <button 
+              <button
                 onClick={() => setShowConfirm({ show: false, ids: [] })}
                 disabled={isDeleting}
                 className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
               >
                 保留
               </button>
-              <button 
+              <button
                 onClick={executeDelete}
                 disabled={isDeleting}
                 className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
@@ -428,6 +511,103 @@ export const ProjectMgmtPage: React.FC<ProjectMgmtPageProps> = ({
                 确认销毁
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {isEditModalOpen && editingProject && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-10 pb-0">
+              <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-[1.5rem] flex items-center justify-center mb-6">
+                <Edit3 size={32} />
+              </div>
+              <h3 className="text-3xl font-black text-slate-800 tracking-tight">编辑项目</h3>
+              <p className="text-slate-500 mt-2 font-medium">修改项目名称、描述及可见性设置</p>
+            </div>
+
+            <form onSubmit={handleEditProject} className="p-10 space-y-6">
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl text-xs font-black flex items-center gap-3">
+                  <AlertTriangle size={16} /> {error}
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目名称 *</label>
+                <input
+                  required
+                  placeholder="例如：核心业务 API 渗透测试"
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-amber-500/10 font-bold text-slate-800 transition-all"
+                  value={editForm.name}
+                  onChange={e => setEditForm({...editForm, name: e.target.value})}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目简述</label>
+                <textarea
+                  rows={3}
+                  placeholder="描述该项目的评估目标与范围..."
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-amber-500/10 font-bold text-slate-800 transition-all resize-none"
+                  value={editForm.description}
+                  onChange={e => setEditForm({...editForm, description: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">项目可见性 *</label>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({...editForm, is_public: true})}
+                    className={`flex-1 py-4 rounded-2xl font-black transition-all ${
+                      editForm.is_public
+                        ? 'bg-green-600 text-white shadow-lg shadow-green-500/20'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    <Globe size={20} className="mx-auto mb-2" />
+                    公开项目
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({...editForm, is_public: false})}
+                    className={`flex-1 py-4 rounded-2xl font-black transition-all ${
+                      !editForm.is_public
+                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    <Lock size={20} className="mx-auto mb-2" />
+                    私有项目
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 ml-1">
+                  {editForm.is_public
+                    ? '公开项目：所有用户均可查看'
+                    : '私有项目：仅项目成员可查看'
+                  }
+                </p>
+              </div>
+
+              <div className="pt-4 flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black hover:bg-amber-700 shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Edit3 size={20} />}
+                  保存修改
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

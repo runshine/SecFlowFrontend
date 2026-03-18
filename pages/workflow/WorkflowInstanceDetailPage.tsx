@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
+import { 
+  ReactFlow, 
+  MiniMap, 
+  Controls, 
+  Background, 
+  useNodesState, 
+  useEdgesState, 
   addEdge,
   Connection,
   Edge,
@@ -14,11 +14,14 @@ import {
   Panel
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+<<<<<<< HEAD
 import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw, Clock, BarChart2, Database, AlertCircle, CheckCircle, XCircle, Zap, ExternalLink } from 'lucide-react';
+=======
+import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw } from 'lucide-react';
+>>>>>>> 351f985 (提交组织管理前端代码)
 import { api } from '../../api/api';
 import { WorkflowInstance, WorkflowNodeInstance, WorkflowStatus } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
-import { XTerminal } from '../../components/XTerminal';
 
 const nodeColor = (status: WorkflowStatus) => {
   switch (status) {
@@ -48,6 +51,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [nodeLogs, setNodeLogs] = useState<string>('');
   const [loadingLogs, setLoadingLogs] = useState(false);
   
+<<<<<<< HEAD
   // 新增：节点交互操作状态
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
@@ -74,6 +78,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [terminalDragOffset, setTerminalDragOffset] = useState({ x: 0, y: 0 });
   const [isDraggingTerminal, setIsDraggingTerminal] = useState(false);
 
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
   const [isAddNodeModalOpen, setIsAddNodeModalOpen] = useState(false);
   const [isEditingNode, setIsEditingNode] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -83,6 +89,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [newNodeConfig, setNewNodeConfig] = useState({
     name: '',
     env_vars: [] as { name: string, value: string }[],
+<<<<<<< HEAD
     volume_mounts: [] as { mount_path: string, pvc_name: string, sub_path?: string }[],
     position: null as { x: number, y: number } | null,
     create_service: true,
@@ -92,14 +99,13 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     ingress_type: '' as '' | 'nginx',
     ingress_host: '',
     timeout_seconds: null as number | null
+=======
+    volume_mounts: [] as { mount_path: string, pvc_name: string }[],
+    position: null as { x: number, y: number } | null
+>>>>>>> 351f985 (提交组织管理前端代码)
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
   const [pvcs, setPvcs] = useState<any[]>([]);
-  
-  // 访问服务相关状态
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
-  const [serviceAccessInfo, setServiceAccessInfo] = useState<any>(null);
-  const [loadingAccess, setLoadingAccess] = useState(false);
   
   const [initialNodes, setInitialNodes] = useState<Node[]>([]);
   const [initialEdges, setInitialEdges] = useState<Edge[]>([]);
@@ -417,9 +423,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // Initialize config with required inputs
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
       
-      const servicePorts: { name: string, port: number, target_port: number, protocol: string }[] = [];
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
           c.input_env_vars.forEach((iv: any) => {
@@ -435,32 +440,13 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             }
           });
         }
-        if (c.ports) {
-          c.ports.forEach((p: any) => {
-            if (!servicePorts.find(sp => sp.port === p.container_port)) {
-              servicePorts.push({
-                name: p.name || `port-${p.container_port}`,
-                port: p.container_port,
-                target_port: p.container_port,
-                protocol: p.protocol || 'TCP'
-              });
-            }
-          });
-        }
       });
-      
-      const autoServiceName = template.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
       
       setNewNodeConfig({
         name: template.name,
         env_vars: envVars,
         volume_mounts: volumeMounts,
-        position: null,
-        create_service: template.type === 'app',
-        service_name: template.type === 'app' ? autoServiceName : '',
-        service_ports: template.type === 'app' ? servicePorts : [],
-        service_type: 'ClusterIP',
-        timeout_seconds: null
+        position: null
       });
       
       setAddNodeStep('configure');
@@ -493,6 +479,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       showToast(errorMsg, "error");
       return;
     }
+<<<<<<< HEAD
 
     if (selectedTemplate.type === 'app' && newNodeConfig.create_service) {
       if (!newNodeConfig.service_name || !newNodeConfig.service_name.trim()) {
@@ -509,6 +496,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         return;
       }
     }
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
     
     try {
       setLoading(true);
@@ -521,7 +510,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         });
         showToast("更新成功", "success");
       } else {
-        const payload: any = {
+        const payload = {
           node_type: selectedTemplate.type,
           template_id: selectedTemplate.id,
           name: newNodeConfig.name,
@@ -529,19 +518,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           env_vars: newNodeConfig.env_vars.filter(e => e.value),
           volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name)
         };
-        
-        if (selectedTemplate.type === 'app') {
-          payload.create_service = newNodeConfig.create_service;
-          if (newNodeConfig.create_service) {
-            payload.service_name = newNodeConfig.service_name;
-            payload.service_ports = newNodeConfig.service_ports;
-            payload.service_type = newNodeConfig.service_type;
-          }
-        }
-        
-        if (newNodeConfig.timeout_seconds) {
-          payload.timeout_seconds = newNodeConfig.timeout_seconds;
-        }
         
         await api.workflow.createNode(instanceId, payload);
         showToast("创建成功", "success");
@@ -645,7 +621,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // 3. Populate config from node details
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -673,12 +649,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         position: { 
           x: (nodeDetails.position?.x || 0) + 50, 
           y: (nodeDetails.position?.y || 0) + 50 
-        },
-        create_service: nodeDetails.create_service ?? true,
-        service_name: nodeDetails.service_name || '',
-        service_ports: nodeDetails.service_ports || [],
-        service_type: nodeDetails.service_type || 'ClusterIP',
-        timeout_seconds: nodeDetails.timeout_seconds || null
+        }
       });
       
       setAddNodeStep('configure');
@@ -705,6 +676,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     }
   };
 
+<<<<<<< HEAD
   // 新增：获取节点状态
   const handleViewStatus = async (nodeId: string) => {
     setMenu(null);
@@ -1171,6 +1143,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     window.open(url, '_blank');
   };
 
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
   const handleModifyNode = async (nodeId: string) => {
     setMenu(null);
     try {
@@ -1197,7 +1171,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       // 3. Populate config from node details
       // We merge the template's required inputs with the node's provided values
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -1222,12 +1196,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         name: nodeDetails.name,
         env_vars: envVars,
         volume_mounts: volumeMounts,
-        position: null,
-        create_service: nodeDetails.create_service ?? true,
-        service_name: nodeDetails.service_name || '',
-        service_ports: nodeDetails.service_ports || [],
-        service_type: nodeDetails.service_type || 'ClusterIP',
-        timeout_seconds: nodeDetails.timeout_seconds || null
+        position: null
       });
       
       setAddNodeStep('configure');
@@ -1270,11 +1239,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-black text-slate-800 tracking-tight">{instance?.name}</h2>
               {instance?.status && <StatusBadge status={instance.status} />}
-              {instance?.has_warning && (
-                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full flex items-center gap-1">
-                  <AlertCircle size={12} /> 警告
-                </span>
-              )}
             </div>
             <p className="text-xs font-mono text-slate-400 mt-1">ID: {instance?.id}</p>
           </div>
@@ -1362,6 +1326,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Warning Banner */}
       {instance?.has_warning && instance?.message && (
         <div className="mx-6 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-3">
@@ -1409,6 +1374,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       )}
 
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* React Flow Canvas */}
@@ -1481,6 +1448,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                   </button>
                 </>
               ) : (
+<<<<<<< HEAD
                 <>
                   {/* 状态监控 */}
                   <button 
@@ -1576,6 +1544,14 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                     return null;
                   })()}
                 </>
+=======
+                <button 
+                  onClick={() => handleViewLogs(menu.id)}
+                  className="w-full px-4 py-2 text-left text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-all"
+                >
+                  <Terminal size={14} /> 查看日志
+                </button>
+>>>>>>> 351f985 (提交组织管理前端代码)
               )}
             </div>
           )}
@@ -1942,6 +1918,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       </div>
                     </div>
                   )}
+<<<<<<< HEAD
 
                   {selectedTemplate?.type === 'app' && (
                     <div className="space-y-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
@@ -2117,6 +2094,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       placeholder="可选，单位：秒"
                     />
                   </div>
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
                 </div>
               )}
             </div>
@@ -2193,6 +2172,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           </div>
         </div>
       )}
+<<<<<<< HEAD
 
       {/* Status Modal */}
       {isStatusModalOpen && (
@@ -2625,6 +2605,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       )}
 
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
       {/* Unsaved Changes Modal */}
       {showUnsavedChangesModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]">

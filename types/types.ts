@@ -19,9 +19,13 @@ export interface UserInfo {
 
 // --- Workflow Service Types ---
 
+<<<<<<< HEAD
 export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped' | 'ready';
 export type AppWorkflowStatus = 'pending' | 'initializing' | 'initialized' | 'running' | 'succeeded' | 'failed' | 'stopped';
 export type AppNodeStatus = 'pending' | 'not_ready' | 'ready' | 'stopped' | 'failed';
+=======
+export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped';
+>>>>>>> 351f985 (提交组织管理前端代码)
 export type TemplateScope = 'global' | 'project';
 export type NodeType = 'app' | 'job';
 
@@ -167,8 +171,6 @@ export interface WorkflowInstance {
   last_run_at?: string;
   nodes: WorkflowNodeInstance[];
   edges?: WorkflowEdge[];
-  has_warning?: boolean;
-  message?: string;
   created_by?: string;
   started_at?: string;
   finished_at?: string;
@@ -200,6 +202,7 @@ export interface WorkflowNodeInstance {
   created_at: string;
 }
 
+<<<<<<< HEAD
 export interface AppWorkflowNode {
   id: string;
   name: string;
@@ -267,6 +270,8 @@ export interface IngressController {
   ingress_class: string;
 }
 
+=======
+>>>>>>> 351f985 (提交组织管理前端代码)
 // --- End Workflow Types ---
 
 export interface Role {
@@ -308,6 +313,44 @@ export interface MachineToken {
   expires_at: string | null;
 }
 
+export interface Department {
+  id: number;
+  name: string;
+  description?: string;
+  parent_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentMember {
+  id: number;
+  user_id: number;
+  username: string;
+  department_id: number;
+  department_name: string;
+  role: 'leader' | 'vice_leader' | 'member';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: number | string;  // 支持项目空间的字符串ID
+  name: string;
+  description?: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+  departments?: Department[];
+  project_space_id?: string;  // 项目空间的字符串ID
+  org_id?: number;  // 组织架构系统的整数ID
+  sync_error?: string;  // 同步错误信息
+  owner_id?: string;
+  owner_name?: string;
+  owner_department_id?: number;
+  owner_department_name?: string;
+  roles?: any[];
+}
+
 export interface SecurityProject {
   id: string;
   name: string;
@@ -315,6 +358,7 @@ export interface SecurityProject {
   owner_id?: string;
   owner_name?: string;
   status?: string;
+  is_public?: boolean;
   created_at?: string;
   updated_at?: string;
   k8s_namespace?: string;
@@ -610,14 +654,20 @@ export interface DeployScriptListResponse {
   items: DeployScriptItem[];
 }
 
+<<<<<<< HEAD
 export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
+=======
+export type ViewType = 
+  | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
+>>>>>>> 351f985 (提交组织管理前端代码)
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
-  | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
-  | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system'
+  | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail'
+  | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'
+<<<<<<< HEAD
   | 'sys-settings' | 'change-password'
   | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online';
 
@@ -758,3 +808,8 @@ export interface AgentIngressRouteInfo {
   updated_at?: string | null;
   deleted_at?: string | null;
 }
+=======
+  | 'sys-settings' | 'change-password' 
+  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online'
+  | 'org-mgmt-departments' | 'org-mgmt-members' | 'org-mgmt-projects';
+>>>>>>> 351f985 (提交组织管理前端代码)

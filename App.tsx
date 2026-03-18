@@ -1,10 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
+<<<<<<< HEAD
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics, AdminDashboardStats } from './types/types';
 
 // 声明全局构建时间变量
 declare const __BUILD_TIME__: string;
+=======
+import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
+>>>>>>> 351f985 (提交组织管理前端代码)
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
@@ -38,8 +42,6 @@ import { JobTemplatePage } from './pages/workflow/JobTemplatePage';
 import { JobTemplateDetailPage } from './pages/workflow/JobTemplateDetailPage';
 import { AppTemplatePage } from './pages/workflow/AppTemplatePage';
 import { AppTemplateDetailPage } from './pages/workflow/AppTemplateDetailPage';
-import { AppInstancePage } from './pages/workflow/AppInstancePage';
-import { AppInstanceDetailPage } from './pages/workflow/AppInstanceDetailPage';
 
 // Pentest Pages
 import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
@@ -54,8 +56,15 @@ import { PermMgmtPage } from './pages/user/PermMgmtPage';
 import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
 import { MachineTokenPage } from './pages/user/MachineTokenPage';
 
+<<<<<<< HEAD
 // Admin Dashboard
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
+=======
+// Organization Pages
+import { DepartmentPage } from './pages/org/DepartmentPage';
+import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
+import { ProjectPage } from './pages/org/ProjectPage';
+>>>>>>> 351f985 (提交组织管理前端代码)
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
@@ -67,12 +76,11 @@ const App: React.FC = () => {
   const [activeInstanceId, setActiveInstanceId] = useState<string>('');
   const [activeAppTemplateId, setActiveAppTemplateId] = useState<string>('');
   const [activeJobTemplateId, setActiveJobTemplateId] = useState<string>('');
-  const [activeAppWorkflowId, setActiveAppWorkflowId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'workflow-root']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'org-mgmt-root', 'workflow-root']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
@@ -337,8 +345,6 @@ const App: React.FC = () => {
       case 'workflow-job-detail': return <JobTemplateDetailPage templateId={activeJobTemplateId} onBack={() => setCurrentView('workflow-jobs')} />;
       case 'workflow-apps': return <AppTemplatePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveAppTemplateId(id); setCurrentView('workflow-app-detail'); }} />;
       case 'workflow-app-detail': return <AppTemplateDetailPage templateId={activeAppTemplateId} onBack={() => setCurrentView('workflow-apps')} />;
-      case 'workflow-app-instances': return <AppInstancePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveAppWorkflowId(id); setCurrentView('workflow-app-instance-detail'); }} />;
-      case 'workflow-app-instance-detail': return <AppInstanceDetailPage instanceId={activeAppWorkflowId} onBack={() => setCurrentView('workflow-app-instances')} />;
 
       case 'engine-validation': return <WorkflowPlaceholder title="安全验证" icon={<ShieldCheck />} />;
       case 'pentest-risk': return <WorkflowPlaceholder title="风险评估" icon={<ShieldAlert />} />;
@@ -359,6 +365,11 @@ const App: React.FC = () => {
       case 'user-mgmt-perms': return <PermMgmtPage />;
       case 'user-mgmt-online': return <OnlineSessionPage />;
       case 'user-mgmt-machine': return <MachineTokenPage />;
+
+      // Organization Pages
+      case 'org-mgmt-departments': return <DepartmentPage />;
+      case 'org-mgmt-members': return <DepartmentMemberPage />;
+      case 'org-mgmt-projects': return <ProjectPage />;
 
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
     }
@@ -403,9 +414,6 @@ const App: React.FC = () => {
 
         <p className="mt-8 text-center text-[10px] text-slate-600 font-medium leading-relaxed">
           &copy; 2025 SecFlow 极速安全测试平台 <br/> 受信任的二进制分发与自动化渗透环境
-        </p>
-        <p className="mt-2 text-center text-[9px] text-slate-700 font-medium">
-          版本: {__BUILD_TIME__}
         </p>
       </div>
     </div>

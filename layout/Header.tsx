@@ -3,6 +3,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Search, RotateCw, ShieldCheck, Clock, Settings, UserCog, Lock, LogOut, Calendar } from 'lucide-react';
 import { SecurityProject, UserInfo, ViewType } from '../types/types';
 
+// 声明全局构建时间变量
+declare const __BUILD_TIME__: string;
+
 interface HeaderProps {
   user: UserInfo | null;
   projects: SecurityProject[];
@@ -23,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   isProjectDropdownOpen, setIsProjectDropdownOpen, searchQuery, setSearchQuery, 
   fetchProjects, isRefreshing, setCurrentView, handleLogout
 }) => {
+  const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -90,6 +94,9 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-1.5">
                  <Calendar size={10} /> {formatDate(currentTime)}
+              </p>
+              <p className="text-[8px] font-bold text-slate-500 mt-0.5">
+                 v{buildTime}
               </p>
            </div>
 

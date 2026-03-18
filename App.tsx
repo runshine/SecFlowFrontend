@@ -35,6 +35,8 @@ import { JobTemplatePage } from './pages/workflow/JobTemplatePage';
 import { JobTemplateDetailPage } from './pages/workflow/JobTemplateDetailPage';
 import { AppTemplatePage } from './pages/workflow/AppTemplatePage';
 import { AppTemplateDetailPage } from './pages/workflow/AppTemplateDetailPage';
+import { AppInstancePage } from './pages/workflow/AppInstancePage';
+import { AppInstanceDetailPage } from './pages/workflow/AppInstanceDetailPage';
 
 // Pentest Pages
 import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
@@ -64,6 +66,7 @@ const App: React.FC = () => {
   const [activeInstanceId, setActiveInstanceId] = useState<string>('');
   const [activeAppTemplateId, setActiveAppTemplateId] = useState<string>('');
   const [activeJobTemplateId, setActiveJobTemplateId] = useState<string>('');
+  const [activeAppWorkflowId, setActiveAppWorkflowId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -294,6 +297,8 @@ const App: React.FC = () => {
       case 'workflow-job-detail': return <JobTemplateDetailPage templateId={activeJobTemplateId} onBack={() => setCurrentView('workflow-jobs')} />;
       case 'workflow-apps': return <AppTemplatePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveAppTemplateId(id); setCurrentView('workflow-app-detail'); }} />;
       case 'workflow-app-detail': return <AppTemplateDetailPage templateId={activeAppTemplateId} onBack={() => setCurrentView('workflow-apps')} />;
+      case 'workflow-app-instances': return <AppInstancePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveAppWorkflowId(id); setCurrentView('workflow-app-instance-detail'); }} />;
+      case 'workflow-app-instance-detail': return <AppInstanceDetailPage instanceId={activeAppWorkflowId} onBack={() => setCurrentView('workflow-app-instances')} />;
 
       case 'engine-validation': return <WorkflowPlaceholder title="安全验证" icon={<ShieldCheck />} />;
       case 'pentest-risk': return <WorkflowPlaceholder title="风险评估" icon={<ShieldAlert />} />;

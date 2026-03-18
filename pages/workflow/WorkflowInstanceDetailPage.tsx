@@ -14,14 +14,11 @@ import {
   Panel
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-<<<<<<< HEAD
 import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw, Clock, BarChart2, Database, AlertCircle, CheckCircle, XCircle, Zap, ExternalLink } from 'lucide-react';
-=======
-import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw } from 'lucide-react';
->>>>>>> 351f985 (提交组织管理前端代码)
 import { api } from '../../api/api';
 import { WorkflowInstance, WorkflowNodeInstance, WorkflowStatus } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
+import { XTerminal } from '../../components/XTerminal';
 
 const nodeColor = (status: WorkflowStatus) => {
   switch (status) {
@@ -48,10 +45,12 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [menu, setMenu] = useState<{ id: string; top: number; left: number; right: number; bottom: number } | null>(null);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [isUninitModalOpen, setIsUninitModalOpen] = useState(false);
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [nodeLogs, setNodeLogs] = useState<string>('');
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [loadingAccess, setLoadingAccess] = useState(false);
+  const [serviceAccessInfo, setServiceAccessInfo] = useState<any>(null);
   
-<<<<<<< HEAD
   // 新增：节点交互操作状态
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
@@ -78,8 +77,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [terminalDragOffset, setTerminalDragOffset] = useState({ x: 0, y: 0 });
   const [isDraggingTerminal, setIsDraggingTerminal] = useState(false);
 
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
   const [isAddNodeModalOpen, setIsAddNodeModalOpen] = useState(false);
   const [isEditingNode, setIsEditingNode] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -89,7 +86,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [newNodeConfig, setNewNodeConfig] = useState({
     name: '',
     env_vars: [] as { name: string, value: string }[],
-<<<<<<< HEAD
     volume_mounts: [] as { mount_path: string, pvc_name: string, sub_path?: string }[],
     position: null as { x: number, y: number } | null,
     create_service: true,
@@ -99,10 +95,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     ingress_type: '' as '' | 'nginx',
     ingress_host: '',
     timeout_seconds: null as number | null
-=======
-    volume_mounts: [] as { mount_path: string, pvc_name: string }[],
-    position: null as { x: number, y: number } | null
->>>>>>> 351f985 (提交组织管理前端代码)
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
   const [pvcs, setPvcs] = useState<any[]>([]);
@@ -423,7 +415,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // Initialize config with required inputs
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
       
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -479,7 +471,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       showToast(errorMsg, "error");
       return;
     }
-<<<<<<< HEAD
 
     if (selectedTemplate.type === 'app' && newNodeConfig.create_service) {
       if (!newNodeConfig.service_name || !newNodeConfig.service_name.trim()) {
@@ -496,8 +487,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         return;
       }
     }
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
     
     try {
       setLoading(true);
@@ -621,7 +610,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // 3. Populate config from node details
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -676,7 +665,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     }
   };
 
-<<<<<<< HEAD
   // 新增：获取节点状态
   const handleViewStatus = async (nodeId: string) => {
     setMenu(null);
@@ -1143,8 +1131,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     window.open(url, '_blank');
   };
 
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
   const handleModifyNode = async (nodeId: string) => {
     setMenu(null);
     try {
@@ -1171,7 +1157,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       // 3. Populate config from node details
       // We merge the template's required inputs with the node's provided values
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -1326,7 +1312,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       </div>
 
-<<<<<<< HEAD
       {/* Warning Banner */}
       {instance?.has_warning && instance?.message && (
         <div className="mx-6 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-3">
@@ -1374,8 +1359,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       )}
 
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* React Flow Canvas */}
@@ -1448,7 +1431,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                   </button>
                 </>
               ) : (
-<<<<<<< HEAD
                 <>
                   {/* 状态监控 */}
                   <button 
@@ -1544,14 +1526,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                     return null;
                   })()}
                 </>
-=======
-                <button 
-                  onClick={() => handleViewLogs(menu.id)}
-                  className="w-full px-4 py-2 text-left text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-all"
-                >
-                  <Terminal size={14} /> 查看日志
-                </button>
->>>>>>> 351f985 (提交组织管理前端代码)
               )}
             </div>
           )}
@@ -1918,7 +1892,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       </div>
                     </div>
                   )}
-<<<<<<< HEAD
 
                   {selectedTemplate?.type === 'app' && (
                     <div className="space-y-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
@@ -2094,8 +2067,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       placeholder="可选，单位：秒"
                     />
                   </div>
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
                 </div>
               )}
             </div>
@@ -2172,7 +2143,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           </div>
         </div>
       )}
-<<<<<<< HEAD
 
       {/* Status Modal */}
       {isStatusModalOpen && (
@@ -2605,8 +2575,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         </div>
       )}
 
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
       {/* Unsaved Changes Modal */}
       {showUnsavedChangesModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]">

@@ -19,13 +19,9 @@ export interface UserInfo {
 
 // --- Workflow Service Types ---
 
-<<<<<<< HEAD
 export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped' | 'ready';
 export type AppWorkflowStatus = 'pending' | 'initializing' | 'initialized' | 'running' | 'succeeded' | 'failed' | 'stopped';
 export type AppNodeStatus = 'pending' | 'not_ready' | 'ready' | 'stopped' | 'failed';
-=======
-export type WorkflowStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'stopped';
->>>>>>> 351f985 (提交组织管理前端代码)
 export type TemplateScope = 'global' | 'project';
 export type NodeType = 'app' | 'job';
 
@@ -202,7 +198,6 @@ export interface WorkflowNodeInstance {
   created_at: string;
 }
 
-<<<<<<< HEAD
 export interface AppWorkflowNode {
   id: string;
   name: string;
@@ -270,8 +265,6 @@ export interface IngressController {
   ingress_class: string;
 }
 
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
 // --- End Workflow Types ---
 
 export interface Role {
@@ -654,20 +647,14 @@ export interface DeployScriptListResponse {
   items: DeployScriptItem[];
 }
 
-<<<<<<< HEAD
 export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
-=======
-export type ViewType = 
-  | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
->>>>>>> 351f985 (提交组织管理前端代码)
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'
-<<<<<<< HEAD
   | 'sys-settings' | 'change-password'
   | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online';
 
@@ -808,8 +795,3 @@ export interface AgentIngressRouteInfo {
   updated_at?: string | null;
   deleted_at?: string | null;
 }
-=======
-  | 'sys-settings' | 'change-password' 
-  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online'
-  | 'org-mgmt-departments' | 'org-mgmt-members' | 'org-mgmt-projects';
->>>>>>> 351f985 (提交组织管理前端代码)

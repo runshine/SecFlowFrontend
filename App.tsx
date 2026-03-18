@@ -1,14 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
-<<<<<<< HEAD
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics, AdminDashboardStats } from './types/types';
 
 // 声明全局构建时间变量
 declare const __BUILD_TIME__: string;
-=======
-import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
->>>>>>> 351f985 (提交组织管理前端代码)
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
@@ -56,15 +52,11 @@ import { PermMgmtPage } from './pages/user/PermMgmtPage';
 import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
 import { MachineTokenPage } from './pages/user/MachineTokenPage';
 
-<<<<<<< HEAD
 // Admin Dashboard
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
-=======
-// Organization Pages
 import { DepartmentPage } from './pages/org/DepartmentPage';
 import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
 import { ProjectPage } from './pages/org/ProjectPage';
->>>>>>> 351f985 (提交组织管理前端代码)
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));

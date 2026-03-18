@@ -229,7 +229,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
         />
       </div>
 
-<<<<<<< HEAD
       {/* List Content - Card Grid */}
       <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[550px] p-6">
         {loading ? (
@@ -250,35 +249,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-blue-100 group-hover:bg-blue-500 rounded-xl flex items-center justify-center transition-all shadow-sm">
                       <Layers className="text-blue-600 group-hover:text-white transition-colors" size={22} />
-=======
-      {/* List Content */}
-      <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden flex flex-col min-h-[550px]">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-            <tr>
-              <th className="px-8 py-6">应用组件信息</th>
-              <th className="px-6 py-6">运行实例 (Replicas)</th>
-              <th className="px-6 py-6">服务端口 / 类型</th>
-              <th className="px-6 py-6">容器栈</th>
-              <th className="px-6 py-6">创建者/更新时间</th>
-              <th className="px-8 py-6 text-right">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="py-32 text-center">
-                  <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
-                </td>
-              </tr>
-            ) : paginatedItems.length > 0 ? paginatedItems.map(t => (
-              <tr key={t.id} className="hover:bg-slate-50 transition-all group">
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-black shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
-                      <Layers size={22} />
->>>>>>> 351f985 (提交组织管理前端代码)
                     </div>
                     <div className="min-w-0">
                       <h4 className="text-sm font-black text-slate-800 tracking-tight truncate group-hover:text-blue-600 transition-colors">
@@ -289,7 +259,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                       </span>
                     </div>
                   </div>
-<<<<<<< HEAD
                 </div>
 
                 {/* Description */}
@@ -300,38 +269,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                 {/* Containers */}
                 <div className="mb-4">
                   <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">容器栈</div>
-=======
-                </td>
-                <td className="px-6 py-6">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
-                      {t.replicas}
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Instances</span>
-                  </div>
-                </td>
-                <td className="px-6 py-6">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex flex-wrap gap-1.5">
-                      {t.service_ports && t.service_ports.length > 0 ? t.service_ports.map((p: any, idx) => (
-                        <span key={idx} className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[9px] font-black uppercase" title={`${p.name}: ${p.port}->${p.target_port}/${p.protocol}`}>
-                          {p.port}
-                        </span>
-                      )) : (
-                        <span className="text-[10px] font-bold text-slate-400">-</span>
-                      )}
-                    </div>
-                    {t.create_service && (
-                      <div className="flex items-center gap-1">
-                        <Globe size={10} className="text-slate-400" />
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{t.service_type || 'ClusterIP'}</span>
-                        {t.service_name && <span className="text-[9px] font-mono text-slate-400">({t.service_name})</span>}
-                      </div>
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-6">
->>>>>>> 351f985 (提交组织管理前端代码)
                   <div className="flex flex-wrap gap-1.5">
                     {t.containers?.slice(0, 3).map((c, idx) => (
                       <span key={idx} className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100 text-[9px] font-black uppercase" title={c.image}>
@@ -410,7 +347,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                       <Trash2 size={16} />
                     </button>
                   </div>
-<<<<<<< HEAD
                 </div>
               </div>
             ))}
@@ -423,22 +359,6 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
             <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的应用模板资产</p>
           </div>
         )}
-=======
-                </td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={6} className="py-40 text-center">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
-                    <Layers size={40} />
-                  </div>
-                  <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的应用模板资产</p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
->>>>>>> 351f985 (提交组织管理前端代码)
 
         {/* Footer Pagination */}
         <div className="mt-auto px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">

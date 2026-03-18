@@ -8,11 +8,8 @@ import { codeServerApi } from './codeServer';
 import { secmateNGApi } from './secmateNG';
 import { deployScriptApi } from './deployScript';
 import { workflowApi } from './workflow';
-<<<<<<< HEAD
 import { k8sApi } from './k8s';
 import { adminApi } from './admin';
-=======
->>>>>>> 351f985 (提交组织管理前端代码)
 
 export const api = {
   auth: authApi,
@@ -23,11 +20,7 @@ export const api = {
   codeServer: codeServerApi,
   secmateNG: secmateNGApi,
   deployScript: deployScriptApi,
-<<<<<<< HEAD
   workflow: workflowApi,
   k8s: k8sApi,
   admin: adminApi
-=======
-  workflow: workflowApi
->>>>>>> 351f985 (提交组织管理前端代码)
 };

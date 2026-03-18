@@ -247,6 +247,17 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     a.ip_address.includes(searchTerm)
   );
 
+  const getPermissionInfo = (agent: Agent) => {
+    if (typeof agent.is_allowed === 'boolean') {
+      return agent.is_allowed
+        ? { label: '允许', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+        : { label: '离线/受限', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+    }
+    return agent.status === 'online'
+      ? { label: '允许', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+      : { label: '离线/受限', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+  };
+
   const toggleSelectAllFilteredAgents = () => {
     if (filteredAgents.length === 0) return;
     setSelectedAgentKeys(prev => {
@@ -476,18 +487,20 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                 <th className="px-6 py-6">网络配置 (IP)</th>
                 <th className="px-6 py-6">实时资源载荷 (CPU/Mem)</th>
                 <th className="px-6 py-6">持续运行时间 (Uptime)</th>
+                <th className="px-6 py-6">准入状态</th>
                 <th className="px-8 py-6 text-right">活跃状态</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {!projectId ? (
                 <tr>
-                  <td colSpan={6} className="py-40 text-center">
+                  <td colSpan={7} className="py-40 text-center">
                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">请先在顶部菜单选择项目</p>
                   </td>
                 </tr>
               ) : filteredAgents.map(agent => {
                 const isOnline = agent.status === 'online';
+                const permission = getPermissionInfo(agent);
                 const sys = agent.system_info;
                 const formatted = sys?.formatted;
                 const daemon = agent.daemon_info;
@@ -573,6 +586,18 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                          <p className="text-[9px] font-black text-slate-300 uppercase ml-5 tracking-widest truncate max-w-[180px]">Last: {agent.last_seen?.split('.')[0].replace('T', ' ')}</p>
                       </div>
                     </td>
+                    <td className="px-6 py-6">
+                      <div className="flex flex-col gap-2">
+                        <span className={`inline-flex w-fit px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${permission.className}`}>
+                          {permission.label}
+                        </span>
+                        {agent.allow_reason && (
+                          <span className="text-[10px] text-slate-500 max-w-[200px] truncate" title={agent.allow_reason}>
+                            {agent.allow_reason}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex items-center justify-end gap-4">
                         <LiveIndicator status={agent.status} />
@@ -584,7 +609,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
               })}
               {!loading && projectId && filteredAgents.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-40 text-center">
+                  <td colSpan={7} className="py-40 text-center">
                     <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
                       <Monitor size={40} />
                     </div>

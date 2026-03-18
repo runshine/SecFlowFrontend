@@ -57,6 +57,19 @@ import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
 import { ProjectPage } from './pages/org/ProjectPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 
+const PROJECT_REQUIRED_VIEWS = new Set<string>([
+  'env-agent', 'env-service', 'env-template', 'env-tasks',
+  'workflow-apps', 'workflow-app-detail',
+  'workflow-app-instances', 'workflow-app-instance-detail',
+  'workflow-jobs', 'workflow-job-detail',
+  'workflow-instances', 'workflow-instance-detail',
+  'engine-validation',
+  'pentest-risk', 'pentest-system', 'pentest-threat', 'pentest-orch',
+  'pentest-exec-code', 'pentest-exec-work', 'pentest-exec-secmate',
+  'pentest-report',
+  'security-assessment'
+]);
+
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -86,6 +99,7 @@ const App: React.FC = () => {
   const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
   const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
   const [adminStatsLoading, setAdminStatsLoading] = useState(false);
+
 
   // Health Status
   const [resourceServiceHealthy, setResourceServiceHealthy] = useState<boolean | null>(null);
@@ -211,6 +225,12 @@ const App: React.FC = () => {
       localStorage.setItem('last_project_id', selectedProjectId);
     }
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId && PROJECT_REQUIRED_VIEWS.has(currentView)) {
+      setCurrentView('dashboard');
+    }
+  }, [selectedProjectId, currentView]);
 
   const fetchDashboardServicesCount = async (onlineAgents: Agent[]) => {
     if (onlineAgents.length === 0) return;
@@ -416,6 +436,7 @@ const App: React.FC = () => {
       <Sidebar 
         user={user} 
         currentView={currentView} 
+        hasSelectedProject={!!selectedProjectId}
         isSidebarCollapsed={isSidebarCollapsed} 
         setIsSidebarCollapsed={setIsSidebarCollapsed} 
         expandedMenus={expandedMenus} 

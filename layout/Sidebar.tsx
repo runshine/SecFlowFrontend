@@ -49,6 +49,7 @@ import { UserInfo, ViewType } from '../types/types';
 interface SidebarProps {
   user: UserInfo | null;
   currentView: ViewType | string;
+  hasSelectedProject: boolean;
   isSidebarCollapsed: boolean;
   setIsSidebarCollapsed: (v: boolean) => void;
   expandedMenus: Set<string>;
@@ -64,7 +65,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
-  user, currentView, isSidebarCollapsed, setIsSidebarCollapsed, 
+  user, currentView, hasSelectedProject, isSidebarCollapsed, setIsSidebarCollapsed, 
   expandedMenus, setExpandedMenus, setCurrentView, handleLogout,
   resourceHealth = null,
   staticPackageHealth = null,
@@ -75,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const isUserMgmtMode = currentView.startsWith('user-mgmt-') || currentView.startsWith('org-mgmt-');
 
-  const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false }: any) => {
+  const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false, disabled = false }: any) => {
     const isExpanded = expandedMenus.has(id);
     const isActive = currentView === id;
     const hasChildren = children && children.length > 0;
@@ -91,6 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <div className="space-y-1">
         <div onClick={() => {
+            if (disabled) return;
             if (hasChildren) {
               setExpandedMenus(prev => {
                 const next = new Set(prev);
@@ -100,9 +102,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             } else setCurrentView(id);
           }}
           className={`flex items-center gap-3 px-4 py-2.5 rounded-2xl cursor-pointer transition-all ${
-            isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-bold' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            disabled
+              ? 'text-slate-600 bg-slate-900/40 cursor-not-allowed opacity-55'
+              : isActive
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-bold'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
           }`}
           style={{ marginLeft: depth > 0 ? `${depth * 0.75}rem` : '0' }}
+          title={disabled ? '请先选择项目后再使用此功能' : undefined}
         >
           {iconElement}
           {!isSidebarCollapsed && (
@@ -122,6 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             depth={depth + 1} 
             healthStatus={child.id === 'pentest-exec-code' ? codeAuditHealth : (child.healthStatus !== undefined ? child.healthStatus : healthStatus)}
             applyHealth={child.id === 'pentest-exec-code' ? true : (child.applyHealth !== undefined ? child.applyHealth : applyHealth)}
+            disabled={disabled || !!child.disabled}
           />
         ))}
       </div>
@@ -191,6 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id="env-mgmt" 
           label="环境服务" 
           icon={<Database size={20} />} 
+          disabled={!hasSelectedProject}
           healthStatus={envHealth}
           applyHealth={true}
           children={[
@@ -205,6 +214,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id="workflow-root" 
           label="安全测试工作流" 
           icon={<Workflow size={20} />} 
+          disabled={!hasSelectedProject}
           healthStatus={workflowHealth}
           applyHealth={true}
           children={[
@@ -215,8 +225,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ]}
         />
         
-        <SidebarItem id="engine-validation" label="安全验证" icon={<ShieldCheck size={20} />} />
-        <SidebarItem id="pentest-root" label="渗透测试" icon={<Target size={20} />} children={[
+        <SidebarItem id="engine-validation" label="安全验证" icon={<ShieldCheck size={20} />} disabled={!hasSelectedProject} />
+        <SidebarItem id="pentest-root" label="渗透测试" icon={<Target size={20} />} disabled={!hasSelectedProject} children={[
           { id: 'pentest-risk', label: '风险评估' }, 
           { id: 'pentest-system', label: '系统分析' }, 
           { id: 'pentest-threat', label: '威胁分析' }, 
@@ -228,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ]},
           { id: 'pentest-report', label: '报告', icon: <FileText size={14} /> }
         ]} />
-        <SidebarItem id="security-assessment" label="安全评估" icon={<ClipboardCheck size={20} />} />
+        <SidebarItem id="security-assessment" label="安全评估" icon={<ClipboardCheck size={20} />} disabled={!hasSelectedProject} />
       </div>
     </nav>
   );

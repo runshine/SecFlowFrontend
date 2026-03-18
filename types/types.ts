@@ -419,6 +419,9 @@ export interface Agent {
   last_seen?: string;
   pod_id?: string;
   services?: any[];
+  is_allowed?: boolean;
+  is_offline?: boolean;
+  allow_reason?: string;
 }
 
 // Docker Compose 解析相关类型定义

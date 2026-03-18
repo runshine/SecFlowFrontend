@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    const buildTime = env.BUILD_TIME || new Date().toISOString().replace('T', ' ').slice(0, 19);
     return {
       server: {
         port: 3000,
@@ -11,6 +12,7 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
+        __BUILD_TIME__: JSON.stringify(buildTime),
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },

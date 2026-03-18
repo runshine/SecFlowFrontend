@@ -26,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   isProjectDropdownOpen, setIsProjectDropdownOpen, searchQuery, setSearchQuery, 
   fetchProjects, isRefreshing, setCurrentView, handleLogout
 }) => {
+  const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -95,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
                  <Calendar size={10} /> {formatDate(currentTime)}
               </p>
               <p className="text-[8px] font-bold text-slate-500 mt-0.5">
-                 v{__BUILD_TIME__}
+                 v{buildTime}
               </p>
            </div>
 

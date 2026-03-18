@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { WorkflowInstance, WorkflowStatus } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -9,15 +9,14 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Pagination
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(1000);
-  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
+
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -32,29 +31,48 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
     trigger_enabled: false
   });
 
+  // Toast 状态
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
+  const showToast = (message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   useEffect(() => {
     if (projectId) {
-      loadInstances(1);
-      const interval = setInterval(() => loadInstances(page), 10000);
+      loadInstances();
+      const interval = setInterval(() => loadInstances(), 10000);
       return () => clearInterval(interval);
     }
-  }, [projectId, page, pageSize]);
+  }, [projectId]);
 
-  const loadInstances = async (p = page) => {
+  const loadInstances = async () => {
     try {
-      const res = await api.workflow.listInstances({ 
-        project_id: projectId,
-        page: p,
-        page_size: pageSize
+      const res = await api.workflow.listInstances({
+        project_id: projectId
       });
       setInstances((res as any).item || (res as any).items || []);
-      setTotal((res as any).total || 0);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
   };
+
+  // 搜索过滤
+  const filteredInstances = useMemo(() => {
+    return instances.filter(i =>
+      i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [instances, searchTerm]);
+
+  // 分页计算
+  const totalPages = Math.ceil(filteredInstances.length / pageSize) || 1;
+  const paginatedInstances = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredInstances.slice(start, start + pageSize);
+  }, [filteredInstances, page, pageSize]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +87,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       setFormData({ name: '', description: '', run_mode: 'once', trigger_type: 'manual', trigger_enabled: false });
       loadInstances();
     } catch (e: any) {
-      alert("创建失败: " + e.message);
+      showToast("创建失败: " + e.message, "error");
     }
   };
 
@@ -78,7 +96,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.startInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("启动失败: " + e.message);
+      showToast("启动失败: " + e.message, "error");
     }
   };
 
@@ -87,7 +105,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.stopInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("停止失败: " + e.message);
+      showToast("停止失败: " + e.message, "error");
     }
   };
 
@@ -96,7 +114,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.syncInstanceStatus(id);
       loadInstances();
     } catch (e: any) {
-      alert("同步失败: " + e.message);
+      showToast("同步失败: " + e.message, "error");
     }
   };
 
@@ -105,7 +123,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.activateInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("激活失败: " + e.message);
+      showToast("激活失败: " + e.message, "error");
     }
   };
 
@@ -114,7 +132,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       await api.workflow.deactivateInstance(id);
       loadInstances();
     } catch (e: any) {
-      alert("停用失败: " + e.message);
+      showToast("停用失败: " + e.message, "error");
     }
   };
 
@@ -133,7 +151,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       setDeletingId(null);
       loadInstances();
     } catch (e: any) {
-      alert("删除失败: " + e.message);
+      showToast("删除失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -147,9 +165,9 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       setIsUninitModalOpen(false);
       setUninitId(null);
       loadInstances();
-      alert("反初始化成功");
+      showToast("反初始化成功", "success");
     } catch (e: any) {
-      alert("反初始化失败: " + e.message);
+      showToast("反初始化失败: " + e.message, "error");
     } finally {
       setLoading(false);
     }
@@ -233,7 +251,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
           <tbody className="divide-y divide-slate-50">
             {loading && instances.length === 0 ? (
               <tr><td colSpan={7} className="py-32 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" size={40} /></td></tr>
-            ) : instances.filter(i => i.name.includes(searchTerm)).map(instance => (
+            ) : paginatedInstances.map(instance => (
               <tr key={instance.id} className={`hover:bg-slate-50 transition-all group ${selectedIds.includes(instance.id) ? 'bg-blue-50/30' : ''}`}>
                 <td className="px-8 py-6">
                   <input 
@@ -299,9 +317,9 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                         try {
                           await api.workflow.initializeInstance(instance.id);
                           loadInstances();
-                          alert("初始化成功");
+                          showToast("初始化成功", "success");
                         } catch (e: any) {
-                          alert("初始化失败: " + e.message);
+                          showToast("初始化失败: " + e.message, "error");
                         }
                       }} title="初始化" className="p-3 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-600 hover:text-white transition-all">
                         <Activity size={16} />
@@ -363,13 +381,26 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
       </div>
 
       {/* Pagination */}
-      {total > 0 && (
+      {filteredInstances.length > 0 && (
         <div className="flex items-center justify-between px-8 py-4 bg-white border border-slate-200 rounded-[2rem] shadow-sm">
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            共 {total} 个实例 | 每页 {pageSize} 条
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">每页</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition-all"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              条 | 共 {filteredInstances.length} 条
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <button 
+            <button
               disabled={page === 1}
               onClick={() => setPage(page - 1)}
               className="p-2 text-slate-400 hover:text-slate-800 disabled:opacity-30 transition-all"
@@ -377,10 +408,10 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
               <ChevronLeft size={20} />
             </button>
             <span className="px-4 py-2 bg-slate-100 rounded-xl text-sm font-black text-slate-800">
-              {page} / {Math.ceil(total / pageSize) || 1}
+              {page} / {totalPages}
             </span>
-            <button 
-              disabled={page >= Math.ceil(total / pageSize)}
+            <button
+              disabled={page >= totalPages}
               onClick={() => setPage(page + 1)}
               className="p-2 text-slate-400 hover:text-slate-800 disabled:opacity-30 transition-all"
             >
@@ -510,6 +541,42 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                 确认删除
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast 通知 */}
+      {toast && (
+        <div
+          className="fixed top-4 left-1/2 z-[99999]"
+          style={{
+            transform: 'translateX(-50%)',
+            animation: 'slideIn 0.3s ease-out'
+          }}
+        >
+          <style>{`
+            @keyframes slideIn {
+              from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+              }
+              to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+              }
+            }
+          `}</style>
+          <div className={`px-6 py-3 rounded-xl shadow-2xl border font-bold text-sm flex items-center gap-2 ${
+            toast.type === 'success' ? 'bg-green-600 text-white border-green-500' :
+            toast.type === 'error' ? 'bg-red-600 text-white border-red-500' :
+            toast.type === 'warning' ? 'bg-yellow-500 text-yellow-900 border-yellow-400' :
+            'bg-slate-800 text-white border-slate-700'
+          }`}>
+            {toast.type === 'success' && <CheckCircle size={18} />}
+            {toast.type === 'error' && <XCircle size={18} />}
+            {toast.type === 'warning' && <AlertCircle size={18} />}
+            {toast.type === 'info' && <Activity size={18} />}
+            {toast.message}
           </div>
         </div>
       )}

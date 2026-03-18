@@ -134,10 +134,10 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       setTemplates(data.templates);
       setSelectedNames(new Set());
 
-      // 为 yaml 类型的模板获取解析数据
+      // 为 yaml/archive 类型模板获取解析数据，卡片显示模式保持一致
       const parsedData: Record<string, any> = {};
       for (const template of data.templates) {
-        if (template.type === 'yaml') {
+        if (template.type === 'yaml' || template.type === 'archive') {
           try {
             const parsed = await api.environment.getParsedCompose(template.name);
             parsedData[template.name] = parsed;
@@ -1211,7 +1211,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
                   {/* Card Content - Structured Template Info */}
                   <div className="p-6 space-y-4">
-                    {t.type === 'yaml' && compose ? (
+                    {compose ? (
                       <>
                         {/* Services Summary */}
                         <div className="flex items-center gap-3">
@@ -1291,25 +1291,10 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                           </div>
                         </div>
                       </>
-                    ) : t.type === 'yaml' && !compose ? (
+                    ) : (t.type === 'yaml' || t.type === 'archive') && !compose ? (
                       <div className="flex items-center gap-3 text-slate-400">
                         <Loader2 size={16} className="animate-spin" />
                         <span className="text-xs">正在解析模板...</span>
-                      </div>
-                    ) : t.type === 'archive' ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
-                            <FileArchive size={16} className="text-amber-600" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">归档模板</p>
-                            <p className="text-sm font-black text-slate-800">完整项目结构</p>
-                          </div>
-                        </div>
-                        <div className="bg-amber-50/50 rounded-xl p-4 border border-amber-100/50">
-                          <p className="text-xs text-amber-700">包含完整的项目文件结构，支持多文件配置和自定义目录</p>
-                        </div>
                       </div>
                     ) : null}
                   </div>

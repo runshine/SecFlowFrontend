@@ -55,7 +55,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [newNodeConfig, setNewNodeConfig] = useState({
     name: '',
     env_vars: [] as { name: string, value: string }[],
-    volume_mounts: [] as { mount_path: string, pvc_name: string }[],
+    volume_mounts: [] as { mount_path: string, pvc_name: string, sub_path?: string }[],
     position: null as { x: number, y: number } | null
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
@@ -321,7 +321,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // Initialize config with required inputs
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
       
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -500,7 +500,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // 3. Populate config from node details
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -581,7 +581,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       // 3. Populate config from node details
       // We merge the template's required inputs with the node's provided values
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {

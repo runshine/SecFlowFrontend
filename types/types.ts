@@ -719,3 +719,42 @@ export interface DaemonAgentInfo {
   services_error?: number;
   services?: DaemonAgentServiceBrief[];
 }
+
+export interface AgentTtydConnectionInfo {
+  agent_key: string;
+  agent_ip: string;
+  agent_status: string;
+  ttyd_port: number;
+  reachable: boolean;
+  probe_error?: string | null;
+  http_url: string;
+  ws_url: string;
+  open_path: string;
+}
+
+export interface AgentIngressRouteInfo {
+  route_id: string;
+  project_id: string;
+  namespace: string;
+  agent_key: string;
+  target_port: number;
+  external_ips: string[];
+  host: string;
+  path: string;
+  ingress_type: string;
+  path_type: string;
+  service_port: number;
+  ingress_name: string;
+  service_name: string;
+  tls_enabled: boolean;
+  tls_secret_name?: string | null;
+  websocket_enabled: boolean;
+  status: string;
+  access_url?: string | null;
+  owner_service?: string | null;
+  created_by?: string | null;
+  metadata?: Record<string, any>;
+  created_at?: string | null;
+  updated_at?: string | null;
+  deleted_at?: string | null;
+}

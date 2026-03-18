@@ -347,7 +347,7 @@ const App: React.FC = () => {
       case 'pentest-orch': return <WorkflowPlaceholder title="测试编排" icon={<Workflow />} />;
       case 'pentest-exec-code': return <ExecutionCodeAuditPage projectId={selectedProjectId} />;
       case 'pentest-exec-work': return <ExecutionWorkPlatformPage projectId={selectedProjectId} />;
-      case 'pentest-exec-secmate': return <SecMateNGPage />;
+      case 'pentest-exec-secmate': return <SecMateNGPage projectId={selectedProjectId} />;
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
 

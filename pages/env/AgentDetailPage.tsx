@@ -33,9 +33,10 @@ import {
   Search,
   Check,
   CheckSquare,
-  X
+  X,
+  SquareTerminal
 } from 'lucide-react';
-import { Agent, AgentService, AsyncTask, DaemonAgentInfo, DaemonService, EnvTemplate } from '../../types/types';
+import { Agent, AgentService, AsyncTask, DaemonAgentInfo, DaemonService, EnvTemplate, AgentTtydConnectionInfo, AgentIngressRouteInfo } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
@@ -50,7 +51,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   const [agent, setAgent] = useState<Agent | null>(null);
   const [services, setServices] = useState<AgentService[]>([]);
   const [tasks, setTasks] = useState<AsyncTask[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'processes' | 'network' | 'disks' | 'services' | 'daemon-services'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'processes' | 'network' | 'disks' | 'services'>('overview');
 
   // Daemon Services State
   const [daemonServices, setDaemonServices] = useState<DaemonService[]>([]);
@@ -61,6 +62,11 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   const [selectedService, setSelectedService] = useState<DaemonService | null>(null);
   const [daemonAgentInfo, setDaemonAgentInfo] = useState<DaemonAgentInfo | null>(null);
   const [daemonAgentHealth, setDaemonAgentHealth] = useState<any>(null);
+  const [ttydInfo, setTtydInfo] = useState<AgentTtydConnectionInfo | null>(null);
+  const [ttydLoading, setTtydLoading] = useState(false);
+  const [showTtydShell, setShowTtydShell] = useState(false);
+  const [ingressRoutes, setIngressRoutes] = useState<AgentIngressRouteInfo[]>([]);
+  const [ingressLoading, setIngressLoading] = useState(false);
 
   // Batch deploy templates for current agent
   const [isBatchDeployModalOpen, setIsBatchDeployModalOpen] = useState(false);
@@ -102,6 +108,12 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
         setDaemonAgentHealth(daemonHealthResp || null);
       } catch (e) {
         console.warn('Failed to load daemon agent health', e);
+      }
+      try {
+        const ttydResp = await api.environment.getAgentTtydConnection(agentKey);
+        setTtydInfo(ttydResp || null);
+      } catch (e) {
+        console.warn('Failed to load ttyd connection info', e);
       }
     } catch (err) {
       console.error("Failed to load agent detail", err);
@@ -145,6 +157,60 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       setDaemonAgentHealth(healthResp || null);
     } catch (err) {
       console.error("Failed to load daemon agent info", err);
+    }
+  };
+
+  const loadTtydConnection = async () => {
+    if (!agentKey) return;
+    setTtydLoading(true);
+    try {
+      const resp = await api.environment.getAgentTtydConnection(agentKey);
+      setTtydInfo(resp || null);
+    } catch (err) {
+      console.error("Failed to load ttyd connection info", err);
+      setTtydInfo(null);
+    } finally {
+      setTtydLoading(false);
+    }
+  };
+
+  const loadIngressRoutes = async () => {
+    if (!agentKey || !projectId) return;
+    setIngressLoading(true);
+    try {
+      const resp = await api.environment.listAgentIngressRoutes(agentKey, projectId);
+      setIngressRoutes(resp?.items || []);
+    } catch (err) {
+      console.error('Failed to load ingress routes', err);
+      setIngressRoutes([]);
+    } finally {
+      setIngressLoading(false);
+    }
+  };
+
+  const handleCreateIngressRoute = async (targetPort: number, websocketEnabled: boolean) => {
+    try {
+      await api.environment.createAgentIngressRoute(agentKey, {
+        project_id: projectId,
+        target_port: targetPort,
+        host_prefix: `${agentKey}-${targetPort}`,
+        websocket_enabled: websocketEnabled,
+        force_recreate: true,
+      });
+      await loadIngressRoutes();
+    } catch (err) {
+      console.error('Failed to create ingress route', err);
+      alert('创建Ingress路由失败');
+    }
+  };
+
+  const handleDeleteIngressRoute = async (routeId: string) => {
+    try {
+      await api.environment.deleteAgentIngressRoute(agentKey, routeId, projectId);
+      await loadIngressRoutes();
+    } catch (err) {
+      console.error('Failed to delete ingress route', err);
+      alert('删除Ingress路由失败');
     }
   };
 
@@ -299,11 +365,13 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
     return dt.toLocaleString();
   };
 
-  // Load daemon services when tab changes
+  // 概览页加载基础服务与TTYD连接信息
   useEffect(() => {
-    if (activeTab === 'daemon-services' && agentKey) {
+    if (activeTab === 'overview' && agentKey) {
       loadDaemonServices();
       loadDaemonAgentInfo();
+      loadTtydConnection();
+      loadIngressRoutes();
     }
   }, [activeTab, agentKey]);
 
@@ -377,8 +445,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
           { id: 'processes', label: '进程监控', icon: <Terminal size={16} /> },
           { id: 'network', label: '网卡配置', icon: <Network size={16} /> },
           { id: 'disks', label: '存储挂载', icon: <HardDrive size={16} /> },
-          { id: 'services', label: '节点服务', icon: <Layers size={16} /> },
-          { id: 'daemon-services', label: '基本服务', icon: <Zap size={16} /> }
+          { id: 'services', label: '节点服务', icon: <Layers size={16} /> }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -671,7 +738,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
             </div>
           )}
 
-          {activeTab === 'daemon-services' && (
+          {activeTab === 'overview' && (
             <div className="space-y-6 animate-in fade-in">
               {/* Agent 离线提示 */}
               {agent.status !== 'online' && (
@@ -683,6 +750,141 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
                   </div>
                 </div>
               )}
+
+              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <SquareTerminal size={16} className="text-emerald-600" /> TTYD 终端转发
+                  </h4>
+                  <button
+                    onClick={loadTtydConnection}
+                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                    title="刷新TTYD连接状态"
+                  >
+                    <RefreshCw size={16} className={ttydLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">HTTP 入口</p>
+                    <p className="text-xs font-mono font-black text-slate-700 break-all">{ttydInfo?.http_url || 'N/A'}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">WebSocket 入口</p>
+                    <p className="text-xs font-mono font-black text-slate-700 break-all">{ttydInfo?.ws_url || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${ttydInfo?.reachable ? 'bg-green-50 text-green-600 border-green-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+                    {ttydInfo?.reachable ? 'TTYD 可达' : 'TTYD 不可达'}
+                  </span>
+                  <button
+                    onClick={() => ttydInfo?.http_url && window.open(ttydInfo.http_url, '_blank', 'noopener,noreferrer')}
+                    disabled={!ttydInfo?.http_url}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <ExternalLink size={14} /> 新窗口打开终端
+                  </button>
+                  <button
+                    onClick={() => setShowTtydShell(v => !v)}
+                    disabled={!ttydInfo?.http_url}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <TerminalSquare size={14} /> {showTtydShell ? '收起内嵌终端' : '展开内嵌终端'}
+                  </button>
+                </div>
+
+                {ttydInfo?.probe_error && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                    探测错误: {ttydInfo.probe_error}
+                  </p>
+                )}
+
+                {showTtydShell && ttydInfo?.http_url && (
+                  <div className="mt-5 border border-slate-200 rounded-2xl overflow-hidden">
+                    <iframe
+                      src={ttydInfo.http_url}
+                      title={`ttyd-${agentKey}`}
+                      className="w-full h-[520px] bg-black"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Globe size={16} className="text-blue-600" /> 动态 Ingress 转发
+                  </h4>
+                  <button
+                    onClick={loadIngressRoutes}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                    title="刷新转发规则"
+                  >
+                    <RefreshCw size={16} className={ingressLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-5">
+                  <button
+                    onClick={() => handleCreateIngressRoute(11188, true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700"
+                  >
+                    创建 11188 转发
+                  </button>
+                  <button
+                    onClick={() => handleCreateIngressRoute(11198, true)}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700"
+                  >
+                    创建 11198(TTYD) 转发
+                  </button>
+                </div>
+
+                {ingressLoading ? (
+                  <div className="py-10 flex items-center gap-2 text-xs text-slate-500">
+                    <Loader2 className="animate-spin" size={14} /> 正在加载Ingress路由...
+                  </div>
+                ) : ingressRoutes.length === 0 ? (
+                  <div className="py-8 text-xs text-slate-400">暂无动态Ingress路由</div>
+                ) : (
+                  <div className="space-y-3">
+                    {ingressRoutes.map(route => (
+                      <div key={route.route_id} className="border border-slate-100 rounded-2xl p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-xs font-black text-slate-700">
+                              {route.host}{route.path} - {route.target_port}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-1 font-mono break-all">
+                              {route.access_url || 'N/A'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${route.status === 'ready' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+                              {route.status}
+                            </span>
+                            <button
+                              onClick={() => route.access_url && window.open(route.access_url, '_blank', 'noopener,noreferrer')}
+                              disabled={!route.access_url}
+                              className="px-2 py-1 text-xs bg-slate-900 text-white rounded-lg disabled:opacity-50"
+                            >
+                              打开
+                            </button>
+                            <button
+                              onClick={() => handleDeleteIngressRoute(route.route_id)}
+                              className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8">
                 <div className="flex items-center justify-between mb-6">

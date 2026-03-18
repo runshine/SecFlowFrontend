@@ -1,5 +1,5 @@
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace, DaemonServicesResponse, DaemonServiceLogs } from '../types/types';
+import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace, DaemonServicesResponse, DaemonServiceLogs, AgentTtydConnectionInfo, AgentIngressRouteInfo } from '../types/types';
 
 export const environmentApi = {
   // Global Health Check
@@ -123,6 +123,34 @@ export const environmentApi = {
     handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/daemon-agent-info`, { headers: getHeaders() })),
   getDaemonAgentHealth: async (key: string): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/daemon-agent-health`, { headers: getHeaders() })),
+  getAgentTtydConnection: async (key: string): Promise<AgentTtydConnectionInfo> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/ttyd/connection`, { headers: getHeaders() })),
+  listAgentIngressRoutes: async (key: string, projectId: string): Promise<{ total: number; items: AgentIngressRouteInfo[] }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/ingress-routes?project_id=${projectId}`, { headers: getHeaders() })),
+  createAgentIngressRoute: async (
+    key: string,
+    data: {
+      project_id: string;
+      target_port: number;
+      host?: string;
+      host_prefix?: string;
+      path?: string;
+      websocket_enabled?: boolean;
+      tls_enabled?: boolean;
+      force_recreate?: boolean;
+      metadata?: Record<string, any>;
+    }
+  ): Promise<AgentIngressRouteInfo> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/ingress-routes`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    })),
+  deleteAgentIngressRoute: async (key: string, routeId: string, projectId: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/ingress-routes/${routeId}?project_id=${projectId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    })),
 
   // Daemon Services (守护进程服务)
   getDaemonServices: async (key: string): Promise<DaemonServicesResponse> =>

@@ -1,4 +1,4 @@
-export const API_BASE = 'http://192.168.12.44:8080';
+export const API_BASE = 'http://localhost:8080';
 
 export const getHeaders = () => {
   const token = localStorage.getItem('secflow_token');

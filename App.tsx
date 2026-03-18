@@ -1,10 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
-import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics, AdminDashboardStats } from './types/types';
-
-// 声明全局构建时间变量
-declare const __BUILD_TIME__: string;
+import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
@@ -52,8 +49,7 @@ import { PermMgmtPage } from './pages/user/PermMgmtPage';
 import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
 import { MachineTokenPage } from './pages/user/MachineTokenPage';
 
-// Admin Dashboard
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
+// Organization Pages
 import { DepartmentPage } from './pages/org/DepartmentPage';
 import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
 import { ProjectPage } from './pages/org/ProjectPage';
@@ -84,9 +80,6 @@ const App: React.FC = () => {
   const [packageStats, setPackageStats] = useState<PackageStats | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
-  const [pvcStats, setPvcStats] = useState<PVCStatistics | null>(null);
-  const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
-  const [adminStatsLoading, setAdminStatsLoading] = useState(false);
 
   // Health Status
   const [resourceServiceHealthy, setResourceServiceHealthy] = useState<boolean | null>(null);
@@ -180,37 +173,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Check if user is admin:
-  // 1) UID=1 must always be treated as admin (supports id as number or string)
-  // 2) or has admin role
-  const isAdmin = !!(
-    user && (
-      Number(user.id) === 1 ||
-      (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
-    )
-  );
-
-  // Fetch admin dashboard statistics
-  const fetchAdminStats = async () => {
-    if (!user || !isAdmin) return;
-    setAdminStatsLoading(true);
-    try {
-      const stats = await api.admin.getStatistics();
-      setAdminStats(stats);
-    } catch (e) {
-      console.error('Failed to fetch admin statistics', e);
-    } finally {
-      setAdminStatsLoading(false);
-    }
-  };
-
-  // Fetch admin stats when viewing admin dashboard
-  useEffect(() => {
-    if (token && currentView === 'admin-dashboard' && isAdmin) {
-      fetchAdminStats();
-    }
-  }, [token, currentView, user]);
-
   useEffect(() => {
     if (selectedProjectId) {
       localStorage.setItem('last_project_id', selectedProjectId);
@@ -237,13 +199,10 @@ const App: React.FC = () => {
           setAgents(agentList);
           fetchDashboardServicesCount(agentList.filter(a => a.status === 'online'));
         }).catch(e => console.error(e));
-
+        
         api.environment.getTemplates().then(d => setTemplates(d.templates || [])).catch(e => console.error(e));
         api.staticPackages.list().then(d => setStaticPackages(d.packages || [])).catch(e => console.error(e));
         api.staticPackages.getStats().then(d => setPackageStats(d.statistics)).catch(e => console.error(e));
-
-        // Fetch PVC statistics for dashboard (current project)
-        api.resources.getStatistics(selectedProjectId).then(d => setPvcStats(d)).catch(e => console.error(e));
       }
     }
   }, [selectedProjectId, currentView, token]);
@@ -293,22 +252,13 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard': return (
-        <DashboardPage
-          projects={projects}
-          agents={agents}
-          staticPackages={staticPackages}
+        <DashboardPage 
+          projects={projects} 
+          agents={agents} 
+          staticPackages={staticPackages} 
           templates={templates}
           servicesCount={dashboardServicesCount}
-          pvcStats={pvcStats}
-          setCurrentView={setCurrentView}
-        />
-      );
-      case 'admin-dashboard': return (
-        <AdminDashboardPage
-          adminStats={adminStats}
-          loading={adminStatsLoading}
-          onRefresh={fetchAdminStats}
-          setCurrentView={setCurrentView}
+          setCurrentView={setCurrentView} 
         />
       );
       case 'project-mgmt': return (
@@ -352,7 +302,7 @@ const App: React.FC = () => {
       case 'pentest-orch': return <WorkflowPlaceholder title="测试编排" icon={<Workflow />} />;
       case 'pentest-exec-code': return <ExecutionCodeAuditPage projectId={selectedProjectId} />;
       case 'pentest-exec-work': return <ExecutionWorkPlatformPage projectId={selectedProjectId} />;
-      case 'pentest-exec-secmate': return <SecMateNGPage projectId={selectedProjectId} />;
+      case 'pentest-exec-secmate': return <SecMateNGPage />;
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
 

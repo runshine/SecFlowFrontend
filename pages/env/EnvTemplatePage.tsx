@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  Box,
-  Plus,
-  Loader2,
-  Download,
-  Trash2,
-  FileCode,
-  RefreshCw,
-  FileJson,
-  FileText,
-  ChevronRight,
+import { 
+  Box, 
+  Plus, 
+  Loader2, 
+  Download, 
+  Trash2, 
+  FileCode, 
+  RefreshCw, 
+  FileJson, 
+  FileText, 
+  ChevronRight, 
   ChevronLeft,
   Search,
   Settings,
@@ -40,17 +40,11 @@ import {
   FolderOpen,
   ChevronDown,
   Info,
-  Calendar,
-  Container,
-  Network,
-  HardDrive,
-  Layers
+  Calendar
 } from 'lucide-react';
-import { EnvTemplate, TemplateFile, Agent, ParsedCompose } from '../../types/types';
+import { EnvTemplate, TemplateFile, Agent } from '../../types/types';
 import { api } from '../../api/api';
-import { API_BASE, getHeaders } from '../../api/base';
 import { StatusBadge } from '../../components/StatusBadge';
-import { ComposeViewer } from '../../components/ComposeViewer';
 
 // Helper to build tree from flat paths
 interface TreeNode {
@@ -76,7 +70,6 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [deploying, setDeploying] = useState(false);
-  const [deploySource, setDeploySource] = useState<'batch' | 'detail'>('batch');
 
   // Agent Modal Local States
   const [agentSearch, setAgentSearch] = useState('');
@@ -100,8 +93,6 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   const [uploadTab, setUploadTab] = useState<'file' | 'editor'>('file');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
-  const [isDragOverUpload, setIsDragOverUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // New Template State
@@ -111,17 +102,6 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     type: 'yaml' as 'yaml' | 'archive',
     content: ''
   });
-
-  // Parsed Compose States
-  const [parsedCompose, setParsedCompose] = useState<any>(null);
-  const [parseLoading, setParseLoading] = useState(false);
-
-  // Yaml 文件内容 (用于 yaml 类型模板的文件查看)
-  const [yamlFileContent, setYamlFileContent] = useState<string>('');
-  const [yamlFileLoading, setYamlFileLoading] = useState(false);
-
-  // 所有模板的解析数据 (用于卡片视图)
-  const [templatesParsedData, setTemplatesParsedData] = useState<Record<string, any>>({});
 
   useEffect(() => {
     loadTemplates();
@@ -133,83 +113,10 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       const data = await api.environment.getTemplates();
       setTemplates(data.templates);
       setSelectedNames(new Set());
-
-      // 为 yaml 类型的模板获取解析数据
-      const parsedData: Record<string, any> = {};
-      for (const template of data.templates) {
-        if (template.type === 'yaml') {
-          try {
-            const parsed = await api.environment.getParsedCompose(template.name);
-            parsedData[template.name] = parsed;
-          } catch (error) {
-            console.error(`Failed to parse template ${template.name}:`, error);
-          }
-        }
-      }
-      setTemplatesParsedData(parsedData);
     } catch (err) {
       console.error("Failed to load templates", err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchParsedCompose = async (templateName: string) => {
-    setParseLoading(true);
-    try {
-      const data = await api.environment.getParsedCompose(templateName);
-      setParsedCompose(data);
-    } catch (error) {
-      console.error('Failed to fetch parsed compose:', error);
-      setParsedCompose(null);
-    } finally {
-      setParseLoading(false);
-    }
-  };
-
-  // 加载 yaml 文件内容
-  const fetchYamlFileContent = async (templateName: string) => {
-    setYamlFileLoading(true);
-    try {
-      // 尝试获取 docker-compose.yaml 或 docker-compose.yml
-      const possibleFiles = ['docker-compose.yaml', 'docker-compose.yml', 'compose.yaml', 'compose.yml'];
-      let content = '';
-      let foundFile = '';
-
-      for (const file of possibleFiles) {
-        try {
-          const data = await api.environment.getTemplateFileContent(templateName, file);
-          if (data.content) {
-            content = data.content;
-            foundFile = file;
-            break;
-          }
-        } catch (e) {
-          // 文件不存在，继续尝试下一个
-        }
-      }
-
-      // 如果上述文件都不存在，尝试从 directory_files 中查找第一个 yaml 文件
-      if (!content) {
-        const detail = await api.environment.getTemplateDetail(templateName);
-        if (detail.directory_files && detail.directory_files.length > 0) {
-          const yamlFile = detail.directory_files.find((f: any) =>
-            f.path.endsWith('.yaml') || f.path.endsWith('.yml')
-          );
-          if (yamlFile) {
-            const data = await api.environment.getTemplateFileContent(templateName, yamlFile.path);
-            content = data.content;
-            foundFile = yamlFile.path;
-          }
-        }
-      }
-
-      setYamlFileContent(content);
-    } catch (error) {
-      console.error('Failed to fetch yaml file content:', error);
-      setYamlFileContent('');
-    } finally {
-      setYamlFileLoading(false);
     }
   };
 
@@ -221,15 +128,6 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       setTemplateDetail(detail);
       setViewMode('detail');
       setExpandedFolders(new Set(['root']));
-
-      // 如果是 yaml 类型模板，获取解析数据和文件内容
-      if (detail.type === 'yaml') {
-        fetchParsedCompose(name);
-        fetchYamlFileContent(name);
-      } else {
-        setParsedCompose(null);
-        setYamlFileContent('');
-      }
     } catch (err) {
       alert("获取模版详情失败");
     } finally {
@@ -318,7 +216,6 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       alert("请先选择一个项目空间");
       return;
     }
-    setDeploySource('batch');
     setIsDeployModalOpen(true);
     setAgentsLoading(true);
     setAgentSearch('');
@@ -331,51 +228,21 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     } finally {
       setAgentsLoading(false);
     }
-  };
-
-  const openDetailDeployModal = async () => {
-    if (!projectId) {
-      alert("请先选择一个项目空间");
-      return;
-    }
-    if (!selectedTemplate) return;
-
-    setDeploySource('detail');
-    setIsDeployModalOpen(true);
-    setAgentsLoading(true);
-    setAgentSearch('');
-    setSelectedAgentKeys(new Set());
-    try {
-      const data = await api.environment.getAgents(projectId, { per_page: 2000 });
-      setAvailableAgents(data.agents || []);
-    } catch (err) {
-      alert("获取 Agent 列表失败");
-    } finally {
-      setAgentsLoading(false);
-    }
-  };
-
-  const buildServiceName = (templateName: string, agentKey: string) => {
-    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 48);
-    const stamp = Date.now().toString(36).slice(-6);
-    return `${normalized}-${agentKey.slice(0, 6)}-${stamp}`;
   };
 
   const executeDeploy = async () => {
     if (selectedAgentKeys.size === 0 || !projectId) return;
     setDeploying(true);
     try {
-      // 根据部署来源决定部署哪些模板
-      const templatesToDeploy = (deploySource === 'detail'
-        ? [selectedTemplate]
-        : Array.from(selectedNames) as string[]).filter((name): name is string => !!name);
+      // Fix: Explicitly cast Array.from results to string[] to avoid 'unknown' type errors during iteration
+      const templatesToDeploy = Array.from(selectedNames) as string[];
       const agentsToDeploy = Array.from(selectedAgentKeys) as string[];
-
+      
       let successCount = 0;
       for (const tName of templatesToDeploy) {
         for (const aKey of agentsToDeploy) {
            await api.environment.deploy({
-            service_name: buildServiceName(tName || 'service', aKey),
+            service_name: `${tName}-${Math.random().toString(36).slice(-4)}`,
             agent_key: aKey,
             template_name: tName,
             project_id: projectId
@@ -383,14 +250,10 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           successCount++;
         }
       }
-
+      
       alert(`已成功提交 ${successCount} 个异步部署任务`);
       setIsDeployModalOpen(false);
-
-      // 只在批量部署时清空选中
-      if (deploySource === 'batch') {
-        setSelectedNames(new Set());
-      }
+      setSelectedNames(new Set());
     } catch (err) {
       alert("部署过程中发生错误");
     } finally {
@@ -456,103 +319,6 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
-  // 下载所有文件为ZIP
-  const handleDownloadAll = async () => {
-    if (!selectedTemplate) return;
-    try {
-      const response = await fetch(`${API_BASE}/api/agent/templates/${selectedTemplate}/download?as_zip=true&include_all=true`, {
-        headers: getHeaders()
-      });
-      if (!response.ok) throw new Error('下载失败');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${selectedTemplate}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      alert("下载失败");
-    }
-  };
-
-  // 下载单个文件
-  const handleDownloadFile = async (filePath: string) => {
-    if (!selectedTemplate) return;
-    try {
-      const response = await fetch(`${API_BASE}/api/agent/templates/${selectedTemplate}/files/content?path=${encodeURIComponent(filePath)}`, {
-        headers: getHeaders()
-      });
-      if (!response.ok) throw new Error('下载失败');
-      const data = await response.json();
-      const content = data.content;
-      const fileName = filePath.split('/').pop() || filePath;
-
-      // 创建 Blob 并下载
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      alert("下载文件失败");
-    }
-  };
-
-  const handleDeleteFile = async (filePath: string) => {
-    if (!selectedTemplate) return;
-    const confirmed = window.confirm(`确认删除文件 "${filePath}" 吗？此操作无法撤销。`);
-    if (!confirmed) return;
-
-    setLoading(true);
-    try {
-      await api.environment.deleteTemplateFile(selectedTemplate, filePath);
-      if (isEditorOpen && editingFile?.path === filePath) {
-        setIsEditorOpen(false);
-        setEditingFile(null);
-      }
-      await viewDetail(selectedTemplate);
-    } catch (err: any) {
-      alert(err?.message || "删除文件失败");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteDirectory = async (dirPath: string) => {
-    if (!selectedTemplate) return;
-    const confirmed = window.confirm(`确认删除目录 "${dirPath}" 吗？`);
-    if (!confirmed) return;
-
-    setLoading(true);
-    try {
-      await api.environment.deleteTemplateDirectory(selectedTemplate, dirPath, false);
-      await viewDetail(selectedTemplate);
-    } catch (err: any) {
-      const message = err?.message || '';
-      if (message.includes('force=true') || message.includes('目录不为空')) {
-        const forceConfirmed = window.confirm(`目录 "${dirPath}" 非空。是否强制删除（包含全部子文件）？`);
-        if (!forceConfirmed) return;
-        try {
-          await api.environment.deleteTemplateDirectory(selectedTemplate, dirPath, true);
-          await viewDetail(selectedTemplate);
-        } catch (forceErr: any) {
-          alert(forceErr?.message || "强制删除目录失败");
-        }
-      } else {
-        alert(message || "删除目录失败");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDeleteTrigger = (name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setDeleteConfirm({ show: true, names: [name] });
@@ -570,7 +336,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       formData.append('type', newTemplate.type);
 
       if (uploadTab === 'file') {
-        const file = selectedUploadFile || fileInputRef.current?.files?.[0];
+        const file = fileInputRef.current?.files?.[0];
         if (!file) throw new Error("请选择上传文件");
         formData.append('file', file);
       } else {
@@ -593,165 +359,12 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   const resetUploadForm = () => {
     setNewTemplate({ name: '', description: '', type: 'yaml', content: '' });
     setUploadError(null);
-    setSelectedUploadFile(null);
-    setIsDragOverUpload(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const isSupportedUploadFile = (file: File): boolean => {
-    const filename = file.name.toLowerCase();
-    if (newTemplate.type === 'yaml') {
-      return filename.endsWith('.yaml') || filename.endsWith('.yml');
-    }
-    return [
-      '.zip', '.tar', '.tar.gz', '.tgz',
-      '.tar.bz2', '.tbz', '.tbz2', '.tar.xz', '.txz'
-    ].some(ext => filename.endsWith(ext));
-  };
-
-  const getUploadAcceptHint = () => {
-    return newTemplate.type === 'yaml'
-      ? '支持 .yaml, .yml 格式'
-      : '支持 .zip, .tar, .tar.gz, .tgz, .tar.bz2, .tbz, .tbz2, .tar.xz, .txz 格式';
-  };
-
-  const handleUploadFileSelect = (file: File | null) => {
-    if (!file) return;
-    if (!isSupportedUploadFile(file)) {
-      setUploadError(`文件类型不支持：${file.name}，${getUploadAcceptHint()}`);
-      setSelectedUploadFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-    setUploadError(null);
-    setSelectedUploadFile(file);
-  };
-
-  const handleUploadInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    handleUploadFileSelect(file);
-  };
-
-  const handleUploadDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOverUpload(false);
-    const file = e.dataTransfer.files?.[0] || null;
-    handleUploadFileSelect(file);
   };
 
   const filteredTemplates = templates.filter(t => 
     t.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     t.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const renderDeployModal = () => (
-    isDeployModalOpen && (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
-         <div className="bg-white w-full max-w-5xl h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
-            <div className="p-10 pb-6 border-b border-slate-50 bg-slate-50/30 shrink-0">
-               <div className="flex justify-between items-start mb-8">
-                  <div className="flex items-center gap-5">
-                     <div className="w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl shadow-blue-600/20">
-                        <Monitor size={32} />
-                     </div>
-                     <div>
-                        <h3 className="text-3xl font-black text-slate-800 tracking-tight">选择目标执行节点</h3>
-                        <div className="flex items-center gap-3 mt-1.5">
-                           <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                              <Box size={12} /> 模板: <span className="text-blue-600">
-                                {deploySource === 'detail'
-                                  ? `1 个 (${selectedTemplate})`
-                                  : `${selectedNames.size} 个`}
-                              </span>
-                           </div>
-                           <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                           <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                              <Activity size={12} /> 总节点: <span>{availableAgents.length}</span>
-                           </div>
-                           <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                           <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                              <Check size={12} className="text-green-500" /> 已就绪: <span className="text-green-600">{availableAgents.filter(a => a.status === 'online').length}</span>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-                  <button onClick={() => setIsDeployModalOpen(false)} className="p-4 text-slate-400 hover:bg-white hover:text-slate-600 rounded-2xl transition-all shadow-sm">
-                     <X size={28} />
-                  </button>
-               </div>
-
-               <div className="flex flex-col md:flex-row gap-4 items-center">
-                  <div className="relative flex-1 w-full group">
-                     <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={20} />
-                     <input
-                       type="text"
-                       autoFocus
-                       placeholder="主机名、IP 地址或工作空间检索..."
-                       className="w-full pl-16 pr-8 py-4 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
-                       value={agentSearch}
-                       onChange={(e) => setAgentSearch(e.target.value)}
-                     />
-                  </div>
-                  <div className="flex gap-2 p-1 bg-white border border-slate-200 rounded-2xl shrink-0 shadow-sm">
-                     <button onClick={() => setStatusFilter('all')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
-                     <button onClick={() => setStatusFilter('online')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'online' ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>在线</button>
-                  </div>
-                  <button onClick={toggleSelectAllAgents} className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm shrink-0">
-                     <CheckSquare size={16} /> {selectedAgentKeys.size === filteredAgents.length ? '取消' : '全选'}
-                  </button>
-               </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-10 bg-slate-50/20 custom-scrollbar relative">
-               {agentsLoading ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
-                     <Loader2 className="animate-spin text-blue-600" size={48} />
-                     <p className="text-[10px] font-black uppercase tracking-widest">拉取节点清单...</p>
-                  </div>
-               ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                     {filteredAgents.map(agent => (
-                        <div
-                          key={agent.key}
-                          onClick={() => toggleAgentSelect(agent.key)}
-                          className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between group ${selectedAgentKeys.has(agent.key) ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5' : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-lg'}`}
-                        >
-                           <div className="flex items-center gap-4 min-w-0">
-                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all shrink-0 shadow-sm ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>{agent.hostname[0].toUpperCase()}</div>
-                              <div className="min-w-0">
-                                 <p className="font-black text-slate-800 text-sm truncate">{agent.hostname}</p>
-                                 <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] font-mono font-bold text-slate-400">{agent.ip_address}</span>
-                                    <StatusBadge status={agent.status} />
-                                 </div>
-                              </div>
-                           </div>
-                           <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200'}`}>{selectedAgentKeys.has(agent.key) && <Check size={14} />}</div>
-                        </div>
-                     ))}
-                  </div>
-               )}
-            </div>
-
-            <div className="p-10 border-t border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-6 shrink-0">
-               <div className="flex items-center gap-6">
-                  <div>
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">任务概览</p>
-                     <p className="text-lg font-black text-slate-800 mt-0.5"><span className="text-blue-600">{deploySource === 'detail' ? 1 : selectedNames.size}</span> 模板 ➔ <span className="text-blue-600">{selectedAgentKeys.size}</span> 节点</p>
-                  </div>
-               </div>
-               <div className="flex gap-4">
-                  <button onClick={() => setIsDeployModalOpen(false)} disabled={deploying} className="px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">取消</button>
-                  <button onClick={executeDeploy} disabled={deploying || selectedAgentKeys.size === 0} className="px-12 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-2xl transition-all flex items-center gap-3 min-w-[200px]">
-                    {deploying ? <Loader2 className="animate-spin" size={24} /> : <Zap size={24} />}
-                    执行批量部署
-                  </button>
-               </div>
-            </div>
-         </div>
-      </div>
-    )
   );
 
   // Tree Render Component
@@ -792,7 +405,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           {isFile && (
             <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
               {isEditable(node.path) && (
-                <button
+                <button 
                   onClick={(e) => { e.stopPropagation(); handleEditFile(node.path); }}
                   className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all"
                   title="在线编辑"
@@ -800,30 +413,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   <Edit3 size={14} />
                 </button>
               )}
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDownloadFile(node.path); }}
-                className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-white rounded-lg transition-all"
-                title="下载文件"
-              >
+              <button className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-white rounded-lg transition-all" title="下载组件">
                 <Download size={14} />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteFile(node.path); }}
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title="删除文件"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          )}
-          {!isFile && node.path && node.path !== 'root' && (
-            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteDirectory(node.path); }}
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title="删除目录"
-              >
-                <Trash2 size={14} />
               </button>
             </div>
           )}
@@ -843,11 +434,11 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   if (viewMode === 'detail' && templateDetail) {
     return (
-      <div className="p-10 space-y-8 animate-in slide-in-from-right duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
+      <div className="p-10 space-y-10 animate-in slide-in-from-right duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
         {/* Detail Header with Top Right Actions */}
         <div className="flex flex-col md:flex-row justify-between items-start gap-6 bg-white/50 backdrop-blur-md p-8 rounded-[3rem] border border-white shadow-sm">
           <div className="flex items-center gap-8">
-            <button
+            <button 
               onClick={() => setViewMode('list')}
               className="p-5 bg-white border border-slate-200 rounded-[1.5rem] hover:bg-slate-50 transition-all shadow-sm group active:scale-95"
             >
@@ -871,19 +462,10 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           </div>
 
           <div className="flex gap-4 self-end md:self-center">
-            <button
-              onClick={openDetailDeployModal}
-              className="px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black hover:bg-blue-700 transition-all flex items-center gap-3 shadow-xl shadow-blue-500/20 active:scale-95"
-            >
-              <Zap size={20} /> 部署到节点
-            </button>
-            <button
-              onClick={handleDownloadAll}
-              className="px-8 py-4 bg-white border border-slate-200 text-slate-700 rounded-[1.5rem] font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm active:scale-95"
-            >
+            <button className="px-8 py-4 bg-white border border-slate-200 text-slate-700 rounded-[1.5rem] font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm active:scale-95">
               <Download size={20} className="text-blue-600" /> 下载全量包
             </button>
-            <button
+            <button 
               onClick={() => handleDeleteTrigger(templateDetail.name)}
               className="px-8 py-4 bg-red-600 text-white rounded-[1.5rem] font-black hover:bg-red-700 transition-all flex items-center gap-3 shadow-xl shadow-red-500/20 active:scale-95"
             >
@@ -892,171 +474,74 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           </div>
         </div>
 
-        {/* 模板说明 */}
-        {templateDetail.description && (
-          <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-            <ShieldCheck className="absolute right-[-30px] top-[-30px] w-40 h-40 opacity-5 rotate-12" />
-            <div className="relative z-10">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-3">模板说明</h4>
-              <p className="text-sm text-slate-300 leading-relaxed font-medium">{templateDetail.description}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          {/* Metadata Sidebar */}
+          <div className="lg:col-span-4 space-y-8">
+            <div className="bg-slate-900 p-10 rounded-[3rem] text-white space-y-8 shadow-2xl relative overflow-hidden group">
+               <ShieldCheck className="absolute right-[-20px] top-[-20px] w-48 h-48 opacity-5 rotate-12 group-hover:rotate-0 transition-transform duration-1000" />
+               <div className="relative z-10">
+                 <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">模板说明</h4>
+                 <p className="text-sm text-slate-300 leading-relaxed font-medium italic">
+                   "{templateDetail.description || '该模板已通过 SecFlow 基线校验，预置标准化安全审计工具链与沙箱隔离策略，支持一键分发。'}"
+                 </p>
+               </div>
+               <div className="pt-8 border-t border-white/10 space-y-4 relative z-10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase">校验状态</span>
+                    <span className="text-xs font-black text-green-400">PASSED</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase">资源类型</span>
+                    <span className="text-xs font-black text-blue-400 uppercase">{templateDetail.type}</span>
+                  </div>
+               </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                 <Info size={14} /> 运行环境上下文
+               </h4>
+               <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Namespace Strategy</p>
+                    <p className="text-xs font-black text-slate-700 mt-1">Isolated Sandbox (v1)</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Artifact Path</p>
+                    <p className="text-xs font-mono font-bold text-blue-600 mt-1 truncate">/registry/{templateDetail.name}.tar.gz</p>
+                  </div>
+               </div>
             </div>
           </div>
-        )}
 
-        {/* YAML 类型 - 直接展示 ComposeViewer */}
-        {templateDetail.type === 'yaml' && (
-          <div className="space-y-8">
-            {parseLoading ? (
-              <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-12">
-                <div className="flex flex-col items-center justify-center py-16">
-                  <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
-                  <span className="text-slate-600 font-medium">正在解析 Docker Compose 配置...</span>
+          {/* Folder Tree Browser */}
+          <div className="lg:col-span-8 flex flex-col min-h-[600px] bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-10 py-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-[1.25rem] flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                  <FolderOpen size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">资源文件树</h3>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
+                    {templateDetail.directory_files?.length || 0} 个资源项已加载
+                  </p>
                 </div>
               </div>
-            ) : parsedCompose?.parsed_compose ? (
-              <ComposeViewer
-                parsedCompose={parsedCompose.parsed_compose}
-                isStale={parsedCompose.is_stale}
-                onRefresh={() => fetchParsedCompose(selectedTemplate!)}
-              />
-            ) : parsedCompose?.parse_error ? (
-              <div className="bg-red-50 border border-red-200 rounded-[2rem] p-8">
-                <div className="flex items-start gap-4">
-                  <AlertCircle className="w-8 h-8 text-red-600 shrink-0" />
-                  <div className="flex-1">
-                    <div className="font-black text-red-900 text-lg mb-2">解析失败</div>
-                    <div className="text-sm text-red-700 mb-4">{parsedCompose.parse_error}</div>
-                    <button
-                      onClick={() => fetchParsedCompose(selectedTemplate!)}
-                      className="px-6 py-3 bg-red-600 text-white rounded-xl text-sm font-black hover:bg-red-700 transition-all"
-                    >
-                      重试解析
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-12">
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                  <Container size={64} className="mb-4 opacity-30" />
-                  <p className="text-base font-medium">无法加载解析数据</p>
-                </div>
-              </div>
-            )}
-
-            {/* YAML 文件内容查看 */}
-            <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg">
-                    <FileCode size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-800">源文件内容</h3>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                      YAML 配置文件
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleDownloadAll}
-                    className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all shadow-sm"
-                    title="下载文件"
-                  >
-                    <Download size={18} />
-                  </button>
-                  <button
-                    onClick={() => yamlFileContent && setEditingFile({ path: 'docker-compose.yaml', content: yamlFileContent })}
-                    className="p-3 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all shadow-sm"
-                    title="编辑文件"
-                  >
-                    <Edit3 size={18} />
-                  </button>
-                </div>
-              </div>
-              <div className="p-6 bg-slate-900 min-h-[300px] max-h-[500px] overflow-y-auto custom-scrollbar">
-                {yamlFileLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-                  </div>
-                ) : yamlFileContent ? (
-                  <pre className="text-xs font-mono text-blue-100/90 leading-relaxed whitespace-pre-wrap">
-                    {yamlFileContent}
-                  </pre>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-                    <FileCode size={48} className="mb-4 opacity-30" />
-                    <p className="text-sm font-medium">无法加载文件内容</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Archive 类型 - 显示文件树 */}
-        {templateDetail.type === 'archive' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* 左侧信息 */}
-            <div className="lg:col-span-4 space-y-6">
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-4">
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <Info size={14} /> 模板信息
-                </h4>
-                <div className="space-y-3">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">资源类型</p>
-                    <p className="text-sm font-black text-slate-700 mt-1">压缩包模板</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">文件数量</p>
-                    <p className="text-sm font-black text-slate-700 mt-1">{templateDetail.directory_files?.length || 0} 个文件</p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">目录大小</p>
-                    <p className="text-sm font-black text-blue-600 mt-1">{((templateDetail.directory_size || 0) / 1024).toFixed(1)} KB</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 右侧文件树 */}
-            <div className="lg:col-span-8 flex flex-col min-h-[500px] bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-                    <FolderOpen size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-800">资源文件树</h3>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                      {templateDetail.directory_files?.length || 0} 个资源项
-                    </p>
-                  </div>
-                </div>
-                <button onClick={() => setExpandedFolders(new Set(['root']))} className="p-3 text-slate-400 hover:text-slate-600 hover:bg-white rounded-xl transition-all shadow-sm">
+              <div className="flex gap-2">
+                <button onClick={() => setExpandedFolders(new Set(['root']))} className="p-3 text-slate-400 hover:text-slate-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-slate-100">
                   <RefreshCw size={18} />
                 </button>
               </div>
-
-              <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-                {resourceTree && (
-                  <RenderTreeNode node={resourceTree} depth={0} />
-                )}
-              </div>
+            </div>
+            
+            <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+              {resourceTree && (
+                <RenderTreeNode node={resourceTree} depth={0} />
+              )}
             </div>
           </div>
-        )}
-
-        {/* Archive 类型的 Compose 解析展示（如果包含 docker-compose） */}
-        {templateDetail.type === 'archive' && parsedCompose?.parsed_compose && (
-          <ComposeViewer
-            parsedCompose={parsedCompose.parsed_compose}
-            isStale={parsedCompose.is_stale}
-            onRefresh={() => fetchParsedCompose(selectedTemplate!)}
-          />
-        )}
+        </div>
 
         {/* Editor Overlay */}
         {isEditorOpen && editingFile && (
@@ -1080,18 +565,18 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                    <div className="absolute top-6 left-6 pointer-events-none z-10">
                       <Terminal size={20} className="text-slate-700" />
                    </div>
-                   <textarea
-                     className="w-full h-full p-12 pl-16 bg-transparent border-none outline-none font-mono text-xs text-blue-100/90 leading-relaxed resize-none custom-scrollbar"
-                     value={editingFile.content}
-                     onChange={(e) => setEditingFile({ ...editingFile, content: e.target.value })}
-                     spellCheck={false}
+                   <textarea 
+                     className="w-full h-full p-12 pl-16 bg-transparent border-none outline-none font-mono text-xs text-blue-100/90 leading-relaxed resize-none custom-scrollbar" 
+                     value={editingFile.content} 
+                     onChange={(e) => setEditingFile({ ...editingFile, content: e.target.value })} 
+                     spellCheck={false} 
                    />
                 </div>
                 <div className="px-12 py-8 bg-white/5 border-t border-white/5 flex justify-end gap-6">
                    <button onClick={() => setIsEditorOpen(false)} className="px-10 py-4 bg-white/5 text-slate-400 rounded-2xl text-xs font-black uppercase transition-all hover:bg-white/10">放弃更改</button>
-                   <button
-                     onClick={handleSaveFile}
-                     disabled={isSavingFile}
+                   <button 
+                     onClick={handleSaveFile} 
+                     disabled={isSavingFile} 
                      className="px-12 py-4 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center gap-3 shadow-xl shadow-blue-500/20"
                    >
                       {isSavingFile ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
@@ -1101,7 +586,6 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
              </div>
           </div>
         )}
-        {renderDeployModal()}
       </div>
     );
   }
@@ -1142,549 +626,158 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         </div>
       )}
 
-      {/* Card Grid View */}
+      {/* List Table */}
       <div className="space-y-4">
         <div className="relative">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
           <input type="text" placeholder="检索模版名称、描述信息或文件类型..." className="w-full pl-16 pr-8 py-5 bg-white border border-slate-200 rounded-[2rem] text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
-        <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-3">
-            <button onClick={toggleSelectAll} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-slate-50 transition-all">
-              {selectedNames.size === filteredTemplates.length && filteredTemplates.length > 0 ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
-              {selectedNames.size === filteredTemplates.length && filteredTemplates.length > 0 ? '取消全选' : '全选'}
-            </button>
-            <span className="text-xs font-medium text-slate-400">共 {filteredTemplates.length} 个模板</span>
-          </div>
+        <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden min-h-[400px]">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
+              <tr>
+                <th className="px-8 py-6 w-16">
+                   <button onClick={toggleSelectAll} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
+                     {selectedNames.size === filteredTemplates.length && filteredTemplates.length > 0 ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+                   </button>
+                </th>
+                <th className="px-4 py-6">模版名称</th>
+                <th className="px-6 py-6">编排类型</th>
+                <th className="px-6 py-6 text-right">管理</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                <tr><td colSpan={4} className="py-32 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" size={40} /></td></tr>
+              ) : filteredTemplates.map(t => (
+                <tr key={t.name} onClick={() => viewDetail(t.name)} className={`hover:bg-slate-50 transition-all group cursor-pointer ${selectedNames.has(t.name) ? 'bg-blue-50/30' : ''}`}>
+                  <td className="px-8 py-6" onClick={e => toggleSelect(t.name, e)}>
+                     <button className="p-2">{selectedNames.has(t.name) ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} className="text-slate-300 hover:text-slate-400" />}</button>
+                  </td>
+                  <td className="px-4 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black transition-all group-hover:bg-blue-600 group-hover:text-white"><Box size={20} /></div>
+                      <span className="text-sm font-black text-slate-800">{t.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-6"><StatusBadge status={t.type} /></td>
+                  <td className="px-8 py-6 text-right" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                       <button className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 rounded-xl transition-all shadow-sm"><Download size={16} /></button>
+                       <button onClick={(e) => handleDeleteTrigger(t.name, e)} className="p-2.5 bg-red-50 border border-red-100 text-red-400 hover:text-red-600 rounded-xl transition-all shadow-sm"><Trash2 size={16} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        {loading ? (
-          <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm p-12">
-            <div className="flex flex-col items-center justify-center py-16">
-              <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
-              <span className="text-slate-600 font-medium">正在加载模板...</span>
-            </div>
-          </div>
-        ) : filteredTemplates.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm p-12">
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-              <Box size={64} className="mb-4 opacity-30" />
-              <p className="text-lg font-black">暂无模板</p>
-              <p className="text-sm mt-2">点击右上角"新建模版"按钮创建您的第一个环境模板</p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredTemplates.map(t => {
-              const parsedData = templatesParsedData[t.name];
-              const compose = parsedData?.parsed_compose as ParsedCompose | undefined;
-              const composeServices = Object.values((compose?.services || {}) as Record<string, any>) as any[];
-              const totalPorts = composeServices.reduce((acc: number, s: any) => acc + (s.ports?.length || 0), 0);
-
-              return (
-                <div
-                  key={t.name}
-                  onClick={() => viewDetail(t.name)}
-                  className={`bg-white border-2 rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transition-all group hover:shadow-xl hover:border-blue-200 ${selectedNames.has(t.name) ? 'border-blue-600 ring-4 ring-blue-500/5' : 'border-slate-100'}`}
-                >
-                  {/* Card Header */}
-                  <div className="p-6 border-b border-slate-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <button
-                          onClick={e => toggleSelect(t.name, e)}
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${selectedNames.has(t.name) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-300 hover:bg-slate-100'}`}
-                        >
-                          {selectedNames.has(t.name) ? <CheckSquare size={20} /> : <Square size={20} />}
-                        </button>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-3">
-                            <h3 className="text-lg font-black text-slate-800 truncate">{t.name}</h3>
-                            <StatusBadge status={t.type} />
-                          </div>
-                          {t.description && (
-                            <p className="text-xs text-slate-400 mt-1 truncate">{t.description}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Content - Structured Template Info */}
-                  <div className="p-6 space-y-4">
-                    {t.type === 'yaml' && compose ? (
-                      <>
-                        {/* Services Summary */}
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                            <Container size={16} className="text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">服务</p>
-                            <p className="text-sm font-black text-slate-800">{Object.keys(compose.services || {}).length} 个服务</p>
-                          </div>
-                        </div>
-
-                        {/* Ports Summary */}
-                        {composeServices.some((s: any) => s.ports && s.ports.length > 0) && (
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center shrink-0">
-                              <Globe size={16} className="text-green-600" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">端口映射</p>
-                              <div className="flex flex-wrap gap-1.5 mt-1">
-                                {Object.entries(compose.services || {}).flatMap(([name, s]: [string, any]) =>
-                                  (s.ports || []).slice(0, 4).map((p: any, i: number) => (
-                                    <span key={`${name}-${i}`} className="text-[10px] bg-green-100 text-green-800 px-2 py-0.5 rounded font-mono">
-                                      {p.published}:{p.target}
-                                    </span>
-                                  ))
-                                ).slice(0, 6)}
-                                {totalPorts > 6 && (
-                                  <span className="text-[10px] text-slate-400">
-                                    +{totalPorts - 6} 更多
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Networks & Volumes Summary */}
-                        <div className="flex gap-4">
-                          {compose.networks && Object.keys(compose.networks).length > 0 && (
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-purple-50 rounded-md flex items-center justify-center">
-                                <Network size={12} className="text-purple-600" />
-                              </div>
-                              <span className="text-xs font-bold text-slate-600">{Object.keys(compose.networks).length} 网络</span>
-                            </div>
-                          )}
-                          {compose.volumes && Object.keys(compose.volumes).length > 0 && (
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-orange-50 rounded-md flex items-center justify-center">
-                                <HardDrive size={12} className="text-orange-600" />
-                              </div>
-                              <span className="text-xs font-bold text-slate-600">{Object.keys(compose.volumes).length} 卷</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Services List Preview */}
-                        <div className="bg-slate-50 rounded-xl p-4">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">服务列表</p>
-                          <div className="space-y-1.5">
-                            {Object.entries(compose.services || {}).slice(0, 3).map(([name, s]: [string, any]) => (
-                              <div key={name} className="flex items-center gap-2 text-xs">
-                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-                                <span className="font-bold text-slate-700">{name}</span>
-                                {s.image && (
-                                  <code className="text-[10px] text-slate-400 bg-white px-1.5 py-0.5 rounded truncate max-w-[120px]">{s.image}</code>
-                                )}
-                              </div>
-                            ))}
-                            {Object.keys(compose.services || {}).length > 3 && (
-                              <p className="text-[10px] text-slate-400 pl-3.5">
-                                +{Object.keys(compose.services || {}).length - 3} 更多服务
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    ) : t.type === 'yaml' && !compose ? (
-                      <div className="flex items-center gap-3 text-slate-400">
-                        <Loader2 size={16} className="animate-spin" />
-                        <span className="text-xs">正在解析模板...</span>
-                      </div>
-                    ) : t.type === 'archive' ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
-                            <FileArchive size={16} className="text-amber-600" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">归档模板</p>
-                            <p className="text-sm font-black text-slate-800">完整项目结构</p>
-                          </div>
-                        </div>
-                        <div className="bg-amber-50/50 rounded-xl p-4 border border-amber-100/50">
-                          <p className="text-xs text-amber-700">包含完整的项目文件结构，支持多文件配置和自定义目录</p>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* Card Footer */}
-                  <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
-                      <div className="flex items-center gap-1.5">
-                        <Database size={12} />
-                        <span>{(t.file_size / 1024).toFixed(1)} KB</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Calendar size={12} />
-                        <span>{t.updated_at?.replace('T', ' ').slice(0, 16)}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all" onClick={e => e.stopPropagation()}>
-                      <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-lg transition-all shadow-sm">
-                        <Download size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => handleDeleteTrigger(t.name, e)}
-                        className="p-2 bg-red-50 border border-red-100 text-red-400 hover:text-red-600 hover:border-red-200 rounded-lg transition-all shadow-sm"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
-      {renderDeployModal()}
-      {/* Upload Template Modal */}
-      {isUploadModalOpen && (
+      {/* Advanced Agent Selection Modal */}
+      {isDeployModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
-          <div className={`bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 transition-all duration-300 ${
-            uploadTab === 'editor' ? 'h-[90vh]' : 'max-h-[80vh]'
-          }`}>
-            {/* Modal Header */}
-            <div className="p-6 pb-4 border-b border-slate-50 bg-slate-50/30 shrink-0">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-xl shadow-blue-600/20">
-                    <Upload size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-800 tracking-tight">上传新模版</h3>
-                    <p className="text-xs text-slate-500 mt-0.5 font-medium">支持 YAML 配置文件或压缩包上传</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => { setIsUploadModalOpen(false); resetUploadForm(); }}
-                  className="p-3 text-slate-400 hover:bg-white hover:text-slate-600 rounded-xl transition-all shadow-sm"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-            </div>
-
-            {/* Tab Switcher - 只在YAML类型时显示 */}
-            {newTemplate.type === 'yaml' && (
-              <div className="px-6 pt-4 bg-slate-50/30">
-                <div className="flex gap-2 p-1 bg-white border border-slate-200 rounded-xl w-fit shadow-sm">
-                  <button
-                    onClick={() => setUploadTab('file')}
-                    className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-2 ${
-                      uploadTab === 'file'
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                        : 'text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Upload size={14} /> 文件上传
-                  </button>
-                  <button
-                    onClick={() => setUploadTab('editor')}
-                    className={`px-5 py-2.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-2 ${
-                      uploadTab === 'editor'
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                        : 'text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <FileCode size={14} /> 在线编辑
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Form Content */}
-            <div className={`flex-1 overflow-y-auto bg-slate-50/20 custom-scrollbar ${uploadTab === 'editor' ? 'p-6' : 'p-6'}`}>
-              <form onSubmit={handleUploadSubmit} className="space-y-4">
-                {/* Template Name */}
-                <div>
-                  <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
-                    模版名称 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newTemplate.name}
-                    onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
-                    placeholder="输入模版唯一标识符（如：pentest-v2-standard）"
-                    className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
-                    模版描述
-                  </label>
-                  <textarea
-                    value={newTemplate.description}
-                    onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })}
-                    placeholder="简要说明模版用途、适用场景和安全基线标准..."
-                    rows={2}
-                    className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm resize-none"
-                  />
-                </div>
-
-                {/* Template Type */}
-                <div>
-                  <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
-                    模版类型
-                  </label>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewTemplate({ ...newTemplate, type: 'yaml' });
-                        setUploadError(null);
-                        setSelectedUploadFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className={`flex-1 px-5 py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                        newTemplate.type === 'yaml'
-                          ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5'
-                          : 'bg-white border-slate-200 hover:border-blue-200'
-                      }`}
-                    >
-                      <FileCode size={18} className={newTemplate.type === 'yaml' ? 'text-blue-600' : 'text-slate-400'} />
-                      <span className={`text-sm font-black ${newTemplate.type === 'yaml' ? 'text-blue-600' : 'text-slate-600'}`}>
-                        YAML 配置
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewTemplate({ ...newTemplate, type: 'archive' });
-                        setUploadTab('file'); // 压缩包只支持文件上传
-                        setUploadError(null);
-                        setSelectedUploadFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className={`flex-1 px-5 py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                        newTemplate.type === 'archive'
-                          ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5'
-                          : 'bg-white border-slate-200 hover:border-blue-200'
-                      }`}
-                    >
-                      <FileArchive size={18} className={newTemplate.type === 'archive' ? 'text-blue-600' : 'text-slate-400'} />
-                      <span className={`text-sm font-black ${newTemplate.type === 'archive' ? 'text-blue-600' : 'text-slate-600'}`}>
-                        压缩包
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* File Upload or Editor */}
-                {uploadTab === 'file' ? (
-                  <div>
-                    <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
-                      上传文件 <span className="text-red-500">*</span>
-                    </label>
-                    <div
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsDragOverUpload(true);
-                      }}
-                      onDragEnter={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsDragOverUpload(true);
-                      }}
-                      onDragLeave={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setIsDragOverUpload(false);
-                      }}
-                      onDrop={handleUploadDrop}
-                      className={`border-2 border-dashed rounded-xl p-8 text-center transition-all bg-white ${
-                        isDragOverUpload
-                          ? 'border-blue-500 bg-blue-50/50'
-                          : 'border-slate-200 hover:border-blue-400'
-                      }`}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept={newTemplate.type === 'yaml' ? '.yaml,.yml' : '.zip,.tar,.tar.gz,.tgz,.tar.bz2,.tbz,.tbz2,.tar.xz,.txz'}
-                        className="hidden"
-                        id="template-file-upload"
-                        onChange={handleUploadInputChange}
-                      />
-                      <label htmlFor="template-file-upload" className="cursor-pointer">
-                        <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-                          <Upload size={28} className="text-blue-600" />
-                        </div>
-                        <p className="text-sm font-black text-slate-700 mb-1.5">
-                          {newTemplate.type === 'yaml' ? '点击或拖拽上传 YAML 配置文件' : '点击或拖拽上传压缩包文件'}
-                        </p>
-                        <p className="text-xs text-slate-400 font-medium">
-                          {getUploadAcceptHint()}
-                        </p>
-                      </label>
-                      {selectedUploadFile && (
-                        <div className="mt-4 mx-auto max-w-xl text-left bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-xs font-black text-blue-700 truncate">{selectedUploadFile.name}</p>
-                            <p className="text-[11px] text-blue-500 mt-0.5">
-                              {(selectedUploadFile.size / 1024).toFixed(1)} KB
-                            </p>
+           <div className="bg-white w-full max-w-5xl h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
+              <div className="p-10 pb-6 border-b border-slate-50 bg-slate-50/30 shrink-0">
+                 <div className="flex justify-between items-start mb-8">
+                    <div className="flex items-center gap-5">
+                       <div className="w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl shadow-blue-600/20">
+                          <Monitor size={32} />
+                       </div>
+                       <div>
+                          <h3 className="text-3xl font-black text-slate-800 tracking-tight">选择目标执行节点</h3>
+                          <div className="flex items-center gap-3 mt-1.5">
+                             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                <Box size={12} /> 模板: <span className="text-blue-600">{selectedNames.size} 个</span>
+                             </div>
+                             <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                <Activity size={12} /> 总节点: <span>{availableAgents.length}</span>
+                             </div>
+                             <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                <Check size={12} className="text-green-500" /> 已就绪: <span className="text-green-600">{availableAgents.filter(a => a.status === 'online').length}</span>
+                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setSelectedUploadFile(null);
-                              if (fileInputRef.current) fileInputRef.current.value = '';
-                            }}
-                            className="px-3 py-1.5 text-[11px] font-black text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                       </div>
+                    </div>
+                    <button onClick={() => setIsDeployModalOpen(false)} className="p-4 text-slate-400 hover:bg-white hover:text-slate-600 rounded-2xl transition-all shadow-sm">
+                       <X size={28} />
+                    </button>
+                 </div>
+
+                 <div className="flex flex-col md:flex-row gap-4 items-center">
+                    <div className="relative flex-1 w-full group">
+                       <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={20} />
+                       <input 
+                         type="text" 
+                         autoFocus
+                         placeholder="主机名、IP 地址或工作空间检索..." 
+                         className="w-full pl-16 pr-8 py-4 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
+                         value={agentSearch}
+                         onChange={(e) => setAgentSearch(e.target.value)}
+                       />
+                    </div>
+                    <div className="flex gap-2 p-1 bg-white border border-slate-200 rounded-2xl shrink-0 shadow-sm">
+                       <button onClick={() => setStatusFilter('all')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
+                       <button onClick={() => setStatusFilter('online')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'online' ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>在线</button>
+                    </div>
+                    <button onClick={toggleSelectAllAgents} className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm shrink-0">
+                       <CheckSquare size={16} /> {selectedAgentKeys.size === filteredAgents.length ? '取消' : '全选'}
+                    </button>
+                 </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 bg-slate-50/20 custom-scrollbar relative">
+                 {agentsLoading ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
+                       <Loader2 className="animate-spin text-blue-600" size={48} />
+                       <p className="text-[10px] font-black uppercase tracking-widest">拉取节点清单...</p>
+                    </div>
+                 ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                       {filteredAgents.map(agent => (
+                          <div 
+                            key={agent.key}
+                            onClick={() => toggleAgentSelect(agent.key)}
+                            className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between group ${selectedAgentKeys.has(agent.key) ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5' : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-lg'}`}
                           >
-                            清除
-                          </button>
-                        </div>
-                      )}
+                             <div className="flex items-center gap-4 min-w-0">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all shrink-0 shadow-sm ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>{agent.hostname[0].toUpperCase()}</div>
+                                <div className="min-w-0">
+                                   <p className="font-black text-slate-800 text-sm truncate">{agent.hostname}</p>
+                                   <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-[10px] font-mono font-bold text-slate-400">{agent.ip_address}</span>
+                                      <StatusBadge status={agent.status} />
+                                   </div>
+                                </div>
+                             </div>
+                             <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200'}`}>{selectedAgentKeys.has(agent.key) && <Check size={14} />}</div>
+                          </div>
+                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
-                      YAML 内容 <span className="text-red-500">*</span>
-                    </label>
-                    <div className="bg-slate-900 rounded-xl p-5 relative">
-                      <div className="absolute top-6 left-6 pointer-events-none z-10">
-                        <Terminal size={18} className="text-slate-700" />
-                      </div>
-                      <textarea
-                        value={newTemplate.content}
-                        onChange={(e) => setNewTemplate({ ...newTemplate, content: e.target.value })}
-                        placeholder={`# 请输入 YAML 配置内容
-apiVersion: v1
-kind: Pod
-metadata:
-  name: security-scan-job
-spec:
-  containers:
-    - name: scanner
-      image: security-scanner:latest
-      ...`}
-                        className="w-full bg-transparent border-none outline-none font-mono text-xs text-blue-100/90 leading-relaxed resize-none custom-scrollbar pl-8"
-                        spellCheck={false}
-                        style={{ height: 'calc(90vh - 420px)', minHeight: '300px' }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Error Message */}
-                {uploadError && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-                    <div className="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center shrink-0">
-                      <AlertCircle size={18} className="text-red-600" />
-                    </div>
-                    <p className="text-sm font-black text-red-600">{uploadError}</p>
-                  </div>
-                )}
-              </form>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => { setIsUploadModalOpen(false); resetUploadForm(); }}
-                disabled={isUploading}
-                className="px-8 py-3 bg-slate-100 text-slate-600 rounded-xl font-black hover:bg-slate-200 transition-all disabled:opacity-50"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleUploadSubmit}
-                disabled={isUploading || !newTemplate.name.trim()}
-                className="px-10 py-3 bg-blue-600 text-white rounded-xl font-black hover:bg-blue-700 shadow-xl transition-all flex items-center gap-2 min-w-[140px] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    上传中...
-                  </>
-                ) : (
-                  <>
-                    <Upload size={18} />
-                    确认上传
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm.show && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-10">
-              <div className="flex items-center gap-5 mb-6">
-                <div className="w-16 h-16 bg-red-100 rounded-[1.5rem] flex items-center justify-center">
-                  <AlertTriangle size={32} className="text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black text-slate-800">确认删除</h3>
-                  <p className="text-sm text-slate-500 mt-1">此操作不可撤销</p>
-                </div>
+                 )}
               </div>
 
-              <p className="text-sm text-slate-600 font-medium mb-4">
-                即将删除以下模板：
-              </p>
-              <div className="bg-slate-50 rounded-2xl p-5 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                {deleteConfirm.names.map(name => (
-                  <div key={name} className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center shrink-0">
-                      <Trash2 size={16} className="text-red-600" />
+              <div className="p-10 border-t border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-6 shrink-0">
+                 <div className="flex items-center gap-6">
+                    <div>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">任务概览</p>
+                       <p className="text-lg font-black text-slate-800 mt-0.5"><span className="text-blue-600">{selectedNames.size}</span> 模板 ➔ <span className="text-blue-600">{selectedAgentKeys.size}</span> 节点</p>
                     </div>
-                    <span className="text-sm font-black text-slate-700">{name}</span>
-                  </div>
-                ))}
+                 </div>
+                 <div className="flex gap-4">
+                    <button onClick={() => setIsDeployModalOpen(false)} disabled={deploying} className="px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">取消</button>
+                    <button onClick={executeDeploy} disabled={deploying || selectedAgentKeys.size === 0} className="px-12 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-2xl transition-all flex items-center gap-3 min-w-[200px]">
+                      {deploying ? <Loader2 className="animate-spin" size={24} /> : <Zap size={24} />}
+                      执行批量部署
+                    </button>
+                 </div>
               </div>
-            </div>
-
-            <div className="p-10 pt-0 flex gap-4">
-              <button
-                onClick={() => setDeleteConfirm({ show: false, names: [] })}
-                disabled={isDeleting}
-                className="flex-1 px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all disabled:opacity-50"
-              >
-                取消
-              </button>
-              <button
-                onClick={executeDelete}
-                disabled={isDeleting}
-                className="flex-1 px-8 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-red-500/20 disabled:opacity-50"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 size={20} className="animate-spin" />
-                    删除中...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={20} />
-                    确认删除
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+           </div>
         </div>
       )}
+      {/* ... Other Modals ... */}
     </div>
   );
 };

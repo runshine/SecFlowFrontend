@@ -128,38 +128,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     );
   };
 
-  const renderMainSidebar = () => {
-    // Check if user is admin:
-    // UID=1 is always admin (supports id as number or string), or has admin role
-    const isAdmin = !!(
-      user && (
-        Number(user.id) === 1 ||
-        (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
-      )
-    );
-
-    return (
+  const renderMainSidebar = () => (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">
       <div className="space-y-1">
-        {/* Admin Dashboard - Only visible for admin users, shown first */}
-        {isAdmin && (
-          <SidebarItem
-            id="admin-dashboard"
-            label="管理员控制台"
-            icon={<ShieldAlert size={20} />}
-            healthStatus={true}
-            applyHealth={true}
-          />
-        )}
-
-        <SidebarItem
-          id="dashboard"
-          label="控制台"
-          icon={<LayoutDashboard size={20} />}
-          healthStatus={true}
-          applyHealth={true}
-        />
-
+        <SidebarItem id="dashboard" label="控制台" icon={<LayoutDashboard size={20} />} />
+        
         <SidebarItem 
           id="base-mgmt" 
           label="基础资源管理" 
@@ -240,7 +213,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </nav>
   );
-  };
 
   const renderUserMgmtSidebar = () => (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">

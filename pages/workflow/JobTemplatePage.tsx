@@ -1,15 +1,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Zap,
-  Plus,
-  Trash2,
-  Search,
-  Loader2,
-  RefreshCw,
-  Box,
-  Terminal,
-  Database,
+import { 
+  Zap, 
+  Plus, 
+  Trash2, 
+  Search, 
+  Loader2, 
+  RefreshCw, 
+  Box, 
+  Terminal, 
+  Database, 
   ShieldAlert,
   X,
   Container,
@@ -17,11 +17,7 @@ import {
   Clock,
   Hash,
   ExternalLink,
-  Layers,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  HardDrive
+  Layers
 } from 'lucide-react';
 import { JobTemplate, TemplateScope } from '../../types/types';
 import { api } from '../../api/api';
@@ -39,10 +35,6 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
   const defaultContainer = { 
     name: 'main', 
@@ -94,12 +86,6 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
       t.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [templates, searchTerm]);
-
-  const totalPages = Math.ceil(filteredTemplates.length / pageSize) || 1;
-  const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredTemplates.slice(start, start + pageSize);
-  }, [filteredTemplates, currentPage, pageSize]);
 
   const handleDelete = (id: string) => {
     setDeletingId(id);
@@ -214,178 +200,106 @@ export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
         />
       </div>
 
-      {/* List Content - Card Grid */}
-      <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm p-6">
-        {loading ? (
-          <div className="py-32 text-center">
-            <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
-          </div>
-        ) : paginatedItems.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {paginatedItems.map(t => (
-              <div
-                key={t.id}
-                className="group relative bg-slate-50 hover:bg-white border-2 border-slate-100 hover:border-blue-200 rounded-2xl p-6 transition-all shadow-sm hover:shadow-md cursor-pointer"
-                onClick={() => onNavigateToDetail(t.id)}
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-amber-100 group-hover:bg-amber-500 rounded-xl flex items-center justify-center transition-all shadow-sm">
-                      <Zap className="text-amber-600 group-hover:text-white transition-colors" size={22} />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight truncate group-hover:text-blue-600 transition-colors">
-                        {t.name}
-                      </h4>
-                      <span className="text-[10px] font-mono text-slate-400 font-bold truncate block max-w-[150px]">
-                        {t.id.slice(0, 8)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <p className="text-xs text-slate-500 mb-4 line-clamp-2 min-h-[32px] font-medium">
-                  {t.description || '暂无描述信息'}
-                </p>
-
-                {/* Containers */}
-                <div className="mb-4">
-                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">容器编排</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {t.containers?.slice(0, 3).map((c, idx) => (
-                      <span key={idx} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 text-[9px] font-black uppercase">
-                        {c.name}
-                      </span>
-                    ))}
-                    {t.containers && t.containers.length > 3 && (
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-bold">
-                        +{t.containers.length - 3}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Stats */}
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex-1 bg-white rounded-xl p-3 border border-slate-100">
-                    <div className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">Retry</div>
-                    <div className="text-sm font-black text-slate-700">{t.backoff_limit}</div>
-                  </div>
-                  <div className="flex-1 bg-white rounded-xl p-3 border border-slate-100">
-                    <div className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">TTL</div>
-                    <div className="text-sm font-black text-slate-700">{t.ttl_seconds_after_finished}s</div>
-                  </div>
-                </div>
-
-                {/* Dependencies */}
-                <div className="flex items-center gap-3 mb-4">
-                  {(() => {
-                    const inputEnvCount = t.containers?.reduce((sum, c) => sum + (c.input_env_vars?.length || 0), 0) || 0;
-                    const inputMountCount = t.containers?.reduce((sum, c) => sum + (c.input_volume_mounts?.length || 0), 0) || 0;
-                    return (
-                      <>
-                        <div className="flex-1 bg-emerald-50 rounded-xl p-2.5 border border-emerald-100">
-                          <div className="flex items-center gap-1.5">
-                            <FileText size={12} className="text-emerald-500" />
-                            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">环境依赖</span>
-                          </div>
-                          <div className="text-sm font-black text-emerald-700 mt-1">{inputEnvCount}</div>
+      {/* List Content */}
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">任务组件信息</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">容器编排</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">运行策略</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">注册时间</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-32 text-center">
+                    <Loader2 className="animate-spin mx-auto text-blue-600" size={40} />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">同步仓库数据中...</p>
+                  </td>
+                </tr>
+              ) : filteredTemplates.length > 0 ? filteredTemplates.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm group-hover:bg-amber-600 group-hover:text-white transition-all">
+                        <Zap size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 
+                            className="text-sm font-black text-slate-800 tracking-tight truncate cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={() => onNavigateToDetail(t.id)}
+                          >
+                            {t.name}
+                          </h4>
+                          <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-mono font-bold uppercase tracking-tighter">
+                            {t.id.slice(0, 8)}
+                          </span>
                         </div>
-                        <div className="flex-1 bg-violet-50 rounded-xl p-2.5 border border-violet-100">
-                          <div className="flex items-center gap-1.5">
-                            <HardDrive size={12} className="text-violet-500" />
-                            <span className="text-[8px] font-black text-violet-400 uppercase tracking-widest">挂载依赖</span>
-                          </div>
-                          <div className="text-sm font-black text-violet-700 mt-1">{inputMountCount}</div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                    <Clock size={12} />
-                    <span>{t.created_at?.split('T')[0]}</span>
-                  </div>
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onNavigateToDetail(t.id); }}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      title="查看详情"
-                    >
-                      <ExternalLink size={16} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                      title="删除模板"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="py-40 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-              <Zap size={32} />
-            </div>
-            <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的任务模板资产</p>
-          </div>
-        )}
-
-        {/* Footer Pagination */}
-        <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">每页</span>
-            <select
-              value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 transition-all"
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              条 | 共 {filteredTemplates.length} 条
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              disabled={currentPage === 1 || loading}
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <div className="flex items-center gap-1.5">
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`w-9 h-9 rounded-xl text-[10px] font-black transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white text-slate-400 hover:bg-slate-50 border border-slate-200'}`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-            <button
-              disabled={currentPage === totalPages || loading}
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 disabled:opacity-30 transition-all shadow-sm"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
+                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-1 font-medium italic">
+                          {t.description || '暂无描述信息'}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-wrap gap-1.5 max-w-xs">
+                      {t.containers?.map((c, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-100 text-[9px] font-black uppercase whitespace-nowrap">
+                          {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center justify-center gap-6">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Retry</span>
+                        <span className="text-[11px] font-black text-slate-600">{t.backoff_limit}</span>
+                      </div>
+                      <div className="w-px h-4 bg-slate-100"></div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">TTL</span>
+                        <span className="text-[11px] font-black text-slate-600">{t.ttl_seconds_after_finished}s</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex flex-col items-end">
+                      <span className="text-[11px] font-bold text-slate-500">{t.created_at?.split('T')[0]}</span>
+                      <span className="text-[9px] font-medium text-slate-300">{t.created_at?.split('T')[1]?.slice(0, 5)}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => onNavigateToDetail(t.id)} className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                        <ExternalLink size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(t.id)}
+                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={5} className="py-40 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                      <Zap size={32} />
+                    </div>
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">暂无匹配的任务模板资产</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

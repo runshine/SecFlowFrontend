@@ -14,11 +14,10 @@ import {
   Panel
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw, Clock, BarChart2, Database, AlertCircle, CheckCircle, XCircle, Zap, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Save, Play, Square, RefreshCw, Plus, Trash2, Settings, Terminal, Activity, Loader2, LogOut, RotateCcw } from 'lucide-react';
 import { api } from '../../api/api';
 import { WorkflowInstance, WorkflowNodeInstance, WorkflowStatus } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
-import { XTerminal } from '../../components/XTerminal';
 
 const nodeColor = (status: WorkflowStatus) => {
   switch (status) {
@@ -27,7 +26,6 @@ const nodeColor = (status: WorkflowStatus) => {
     case 'running': return '#3b82f6';
     case 'pending': return '#f59e0b';
     case 'stopped': return '#64748b';
-    case 'ready': return '#10b981';
     default: return '#cbd5e1';
   }
 };
@@ -45,38 +43,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [menu, setMenu] = useState<{ id: string; top: number; left: number; right: number; bottom: number } | null>(null);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [isUninitModalOpen, setIsUninitModalOpen] = useState(false);
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [nodeLogs, setNodeLogs] = useState<string>('');
   const [loadingLogs, setLoadingLogs] = useState(false);
-  const [loadingAccess, setLoadingAccess] = useState(false);
-  const [serviceAccessInfo, setServiceAccessInfo] = useState<any>(null);
   
-  // 新增：节点交互操作状态
-  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-  const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
-  const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
-  const [nodeStatus, setNodeStatus] = useState<any>(null);
-  const [nodeEvents, setNodeEvents] = useState<any[]>([]);
-  const [nodeMetrics, setNodeMetrics] = useState<any>(null);
-  const [loadingStatus, setLoadingStatus] = useState(false);
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const [loadingMetrics, setLoadingMetrics] = useState(false);
-  const [restarting, setRestarting] = useState(false);
-  const [recreating, setRecreating] = useState(false);
-  
-  // 终端相关状态 (使用xterm.js)
-  const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false);
-  const [terminalWs, setTerminalWs] = useState<WebSocket | null>(null);
-  const [terminalConnected, setTerminalConnected] = useState(false);
-  const [terminalPodName, setTerminalPodName] = useState<string>('');
-  const [terminalNodeName, setTerminalNodeName] = useState<string>('');
-  const [terminalPosition, setTerminalPosition] = useState({ x: 100, y: 100 });
-  const [terminalIsMinimized, setTerminalIsMinimized] = useState(false);
-  const [terminalIsMaximized, setTerminalIsMaximized] = useState(false);
-  const [terminalZIndex, setTerminalZIndex] = useState(1000);
-  const [terminalDragOffset, setTerminalDragOffset] = useState({ x: 0, y: 0 });
-  const [isDraggingTerminal, setIsDraggingTerminal] = useState(false);
-
   const [isAddNodeModalOpen, setIsAddNodeModalOpen] = useState(false);
   const [isEditingNode, setIsEditingNode] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -86,15 +55,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [newNodeConfig, setNewNodeConfig] = useState({
     name: '',
     env_vars: [] as { name: string, value: string }[],
-    volume_mounts: [] as { mount_path: string, pvc_name: string, sub_path?: string }[],
-    position: null as { x: number, y: number } | null,
-    create_service: true,
-    service_name: '',
-    service_ports: [] as { name: string, port: number, target_port: number, protocol: string }[],
-    service_type: 'ClusterIP' as 'ClusterIP' | 'NodePort' | 'LoadBalancer',
-    ingress_type: '' as '' | 'nginx',
-    ingress_host: '',
-    timeout_seconds: null as number | null
+    volume_mounts: [] as { mount_path: string, pvc_name: string }[],
+    position: null as { x: number, y: number } | null
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
   const [pvcs, setPvcs] = useState<any[]>([]);
@@ -102,62 +64,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [initialNodes, setInitialNodes] = useState<Node[]>([]);
   const [initialEdges, setInitialEdges] = useState<Edge[]>([]);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-
-  // 独立终端窗口状态
-  interface FloatingTerminal {
-    id: string;
-    nodeId: string;
-    nodeName: string;
-    podName: string;
-    ws: WebSocket | null;
-    connected: boolean;
-    isMinimized: boolean;
-    isMaximized: boolean;
-    position: { x: number; y: number };
-    size: { width: number; height: number };
-    zIndex: number;
-  }
-  const [floatingTerminals, setFloatingTerminals] = useState<FloatingTerminal[]>([]);
-  const [maxZIndex, setMaxZIndex] = useState(1000);
-  const [draggingTerminal, setDraggingTerminal] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-
-  // Toast 状态
-  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
-  const showToast = (message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  // 确认对话框状态
-  const [confirmDialog, setConfirmDialog] = useState<{
-    message: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-  } | null>(null);
-  const [confirmLoading, setConfirmLoading] = useState(false);
-
-  const showConfirm = (message: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setConfirmDialog({
-        message,
-        onConfirm: () => {
-          setConfirmDialog(null);
-          resolve(true);
-        },
-        onCancel: () => {
-          setConfirmDialog(null);
-          resolve(false);
-        },
-      });
-    });
-  };
-
-  const handleConfirmClose = () => {
-    if (confirmDialog) {
-      confirmDialog.onCancel();
-    }
-  };
 
   const loadInstance = async (updateBaseline = false) => {
     try {
@@ -394,9 +300,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       }
       
       await loadInstance(true);
-      showToast("保存成功", "success");
+      alert("保存成功");
     } catch (e: any) {
-      showToast("保存失败: " + e.message, "error");
+      alert("保存失败: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -415,7 +321,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // Initialize config with required inputs
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
       
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -444,7 +350,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       setAddNodeStep('configure');
     } catch (e) {
       console.error(e);
-      showToast("获取模板详情失败", "error");
+      alert("获取模板详情失败");
     } finally {
       setLoading(false);
     }
@@ -452,7 +358,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
 
   const handleCreateNode = async () => {
     if (!selectedTemplate || !newNodeConfig.name) {
-      showToast("请填写完整信息", "warning");
+      alert("请填写完整信息");
       return;
     }
 
@@ -468,24 +374,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       if (missingVolumes.length > 0) {
         errorMsg += "\n存储挂载:\n" + missingVolumes.map(v => ` - ${v.mount_path}`).join('\n');
       }
-      showToast(errorMsg, "error");
+      alert(errorMsg);
       return;
-    }
-
-    if (selectedTemplate.type === 'app' && newNodeConfig.create_service) {
-      if (!newNodeConfig.service_name || !newNodeConfig.service_name.trim()) {
-        showToast("服务名称不能为空", "warning");
-        return;
-      }
-      if (newNodeConfig.service_ports.length === 0) {
-        showToast("请至少添加一个服务端口", "warning");
-        return;
-      }
-      const invalidPorts = newNodeConfig.service_ports.filter(sp => !sp.port || !sp.target_port);
-      if (invalidPorts.length > 0) {
-        showToast("服务端口配置不完整，请检查端口号", "warning");
-        return;
-      }
     }
     
     try {
@@ -497,7 +387,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           env_vars: newNodeConfig.env_vars.filter(e => e.value),
           volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name)
         });
-        showToast("更新成功", "success");
+        alert("更新成功");
       } else {
         const payload = {
           node_type: selectedTemplate.type,
@@ -509,7 +399,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         };
         
         await api.workflow.createNode(instanceId, payload);
-        showToast("创建成功", "success");
+        alert("创建成功");
       }
       
       setIsAddNodeModalOpen(false);
@@ -527,7 +417,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
            errorMsg += ` - [${d.type}] ${d.container}: ${d.message}\n`;
         });
       }
-      showToast(errorMsg, "error");
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -577,9 +467,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       await api.workflow.uninitializeInstance(instanceId);
       setIsUninitModalOpen(false);
       await loadInstance();
-      showToast("反初始化成功", "success");
+      alert("反初始化成功");
     } catch (e: any) {
-      showToast("反初始化失败: " + e.message, "error");
+      alert("反初始化失败: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -610,7 +500,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       
       // 3. Populate config from node details
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -644,7 +534,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       setAddNodeStep('configure');
       setIsAddNodeModalOpen(true);
     } catch (e: any) {
-      showToast("复制节点失败: " + e.message, "error");
+      alert("复制节点失败: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -663,472 +553,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     } finally {
       setLoadingLogs(false);
     }
-  };
-
-  // 新增：获取节点状态
-  const handleViewStatus = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-    
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.k8s_resource_name) {
-      showToast("节点尚未创建K8S资源", "warning");
-      return;
-    }
-    
-    setIsStatusModalOpen(true);
-    setLoadingStatus(true);
-    setNodeStatus(null);
-    
-    try {
-      // 获取Pod列表
-      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
-      if (podsRes.items && podsRes.items.length > 0) {
-        const podName = podsRes.items[0].name;
-        const status = await api.k8s.getPodStatus(instance.project_id, podName);
-        setNodeStatus(status);
-      } else {
-        setNodeStatus({ error: "未找到运行的Pod" });
-      }
-    } catch (e: any) {
-      setNodeStatus({ error: "获取状态失败: " + e.message });
-    } finally {
-      setLoadingStatus(false);
-    }
-  };
-
-  // 新增：获取节点事件
-  const handleViewEvents = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-    
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.k8s_resource_name) {
-      showToast("节点尚未创建K8S资源", "warning");
-      return;
-    }
-    
-    setIsEventsModalOpen(true);
-    setLoadingEvents(true);
-    setNodeEvents([]);
-    
-    try {
-      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
-      if (podsRes.items && podsRes.items.length > 0) {
-        const podName = podsRes.items[0].name;
-        const eventsRes = await api.k8s.getPodEvents(instance.project_id, podName);
-        setNodeEvents(eventsRes.events || []);
-      }
-    } catch (e: any) {
-      console.error("获取事件失败:", e);
-    } finally {
-      setLoadingEvents(false);
-    }
-  };
-
-  // 新增：获取节点资源指标
-  const handleViewMetrics = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-    
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.k8s_resource_name) {
-      showToast("节点尚未创建K8S资源", "warning");
-      return;
-    }
-    
-    setIsMetricsModalOpen(true);
-    setLoadingMetrics(true);
-    setNodeMetrics(null);
-    
-    try {
-      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
-      if (podsRes.items && podsRes.items.length > 0) {
-        const podName = podsRes.items[0].name;
-        const metrics = await api.k8s.getPodMetrics(instance.project_id, podName);
-        setNodeMetrics(metrics);
-      } else {
-        setNodeMetrics({ error: "未找到运行的Pod" });
-      }
-    } catch (e: any) {
-      setNodeMetrics({ error: "获取指标失败: " + e.message });
-    } finally {
-      setLoadingMetrics(false);
-    }
-  };
-
-  // 新增：重启节点（APP类型）
-  const handleRestartNode = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-    
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.k8s_resource_name) {
-      showToast("节点尚未创建K8S资源", "warning");
-      return;
-    }
-
-    if (!(await showConfirm(`确定要重启节点 "${node.data.name}" 吗？`))) return;
-
-    setRestarting(true);
-    try {
-      await api.k8s.restartDeployment(instance.project_id, node.data.k8s_resource_name);
-      showToast("重启命令已发送", "success");
-      loadInstance();
-    } catch (e: any) {
-      showToast("重启失败: " + e.message, "error");
-    } finally {
-      setRestarting(false);
-    }
-  };
-
-  // 新增：重试节点（JOB类型）
-  const handleRetryNode = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-    
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.k8s_resource_name) {
-      showToast("节点尚未创建K8S资源", "warning");
-      return;
-    }
-
-    if (!(await showConfirm(`确定要重试任务 "${node.data.name}" 吗？这将删除并重建Job。`))) return;
-
-    setRecreating(true);
-    try {
-      await api.k8s.recreateJob(instance.project_id, node.data.k8s_resource_name);
-      showToast("重试命令已发送", "success");
-      loadInstance();
-    } catch (e: any) {
-      showToast("重试失败: " + e.message, "error");
-    } finally {
-      setRecreating(false);
-    }
-  };
-
-  // 新增：打开终端 (使用xterm.js)
-  const handleOpenTerminal = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-
-    // 检查是否已有任何终端窗口打开（进入终端或新开终端）
-    const hasOpenTerminal = isTerminalModalOpen || floatingTerminals.length > 0;
-    if (hasOpenTerminal) {
-      // 恢复并聚焦已打开的终端窗口
-      if (isTerminalModalOpen && terminalIsMinimized) {
-        setTerminalIsMinimized(false);
-        const newZIndex = maxZIndex + 1;
-        setMaxZIndex(newZIndex);
-        setTerminalZIndex(newZIndex);
-      } else if (floatingTerminals.length > 0) {
-        // 恢复并聚焦第一个最小化的浮动终端
-        const minimizedTerminal = floatingTerminals.find(t => t.isMinimized);
-        if (minimizedTerminal) {
-          handleRestoreTerminal(minimizedTerminal.id);
-        } else {
-          // 聚焦第一个浮动终端
-          handleFocusTerminal(floatingTerminals[0].id);
-        }
-      }
-      showToast("已有终端窗口打开，请先关闭当前终端后再打开新终端", "warning");
-      return;
-    }
-
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.k8s_resource_name) {
-      showToast("节点尚未创建K8S资源", "warning");
-      return;
-    }
-
-    try {
-      // 获取Pod列表
-      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
-      if (podsRes.items && podsRes.items.length > 0) {
-        const firstPod = podsRes.items[0];
-        const podName = firstPod.name;
-        // 获取第一个容器的名称（K8s exec API 要求必须指定容器）
-        const containerName = firstPod.containers?.[0]?.name;
-        setTerminalPodName(podName);
-        setTerminalNodeName(node.data.name as string);
-        setIsTerminalModalOpen(true);
-        setTerminalConnected(false);
-        // 重置窗口状态
-        setTerminalPosition({ x: 100, y: 100 });
-        setTerminalIsMinimized(false);
-        setTerminalIsMaximized(false);
-        const newZIndex = maxZIndex + 1;
-        setMaxZIndex(newZIndex);
-        setTerminalZIndex(newZIndex);
-
-        // 创建WebSocket连接，传递容器名称
-        const ws = api.k8s.createTerminalConnection(instance.project_id, podName, containerName);
-
-        ws.onopen = () => {
-          setTerminalConnected(true);
-        };
-
-        ws.onerror = () => {
-          setTerminalConnected(false);
-        };
-
-        ws.onclose = () => {
-          setTerminalConnected(false);
-        };
-
-        setTerminalWs(ws);
-      } else {
-        showToast("未找到运行的Pod", "warning");
-      }
-    } catch (e: any) {
-      showToast("获取Pod失败: " + e.message, "error");
-    }
-  };
-
-  // 关闭终端
-  const handleCloseTerminal = () => {
-    if (terminalWs) {
-      terminalWs.close();
-      setTerminalWs(null);
-    }
-    setIsTerminalModalOpen(false);
-    setTerminalConnected(false);
-    setTerminalPodName('');
-    setTerminalNodeName('');
-    setTerminalIsMinimized(false);
-    setTerminalIsMaximized(false);
-  };
-
-  // 终端窗口拖拽
-  const handleTerminalStartDrag = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    if (terminalIsMaximized) return;
-
-    setIsDraggingTerminal(true);
-    setTerminalDragOffset({
-      x: e.clientX - terminalPosition.x,
-      y: e.clientY - terminalPosition.y
-    });
-    // 聚焦窗口
-    const newZIndex = maxZIndex + 1;
-    setMaxZIndex(newZIndex);
-    setTerminalZIndex(newZIndex);
-  };
-
-  // 终端窗口拖拽 useEffect
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDraggingTerminal) return;
-      setTerminalPosition({
-        x: e.clientX - terminalDragOffset.x,
-        y: e.clientY - terminalDragOffset.y
-      });
-    };
-
-    const handleMouseUp = () => {
-      setIsDraggingTerminal(false);
-    };
-
-    if (isDraggingTerminal) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDraggingTerminal, terminalDragOffset]);
-
-  // 新开独立终端窗口
-  const handleOpenNewTerminal = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.k8s_resource_name) {
-      showToast("节点尚未创建K8S资源", "warning");
-      return;
-    }
-
-    try {
-      // 获取Pod列表
-      const podsRes = await api.k8s.getPods(instance.project_id, `app=${node.data.k8s_resource_name}`);
-      if (podsRes.items && podsRes.items.length > 0) {
-        const firstPod = podsRes.items[0];
-        const podName = firstPod.name;
-        const containerName = firstPod.containers?.[0]?.name;
-
-        // 创建WebSocket连接
-        const ws = api.k8s.createTerminalConnection(instance.project_id, podName, containerName);
-
-        const newZIndex = maxZIndex + 1;
-        setMaxZIndex(newZIndex);
-
-        const terminalId = `terminal-${Date.now()}`;
-
-        const newTerminal: FloatingTerminal = {
-          id: terminalId,
-          nodeId: nodeId,
-          nodeName: node.data.name as string,
-          podName: podName,
-          ws: ws,
-          connected: false,
-          isMinimized: false,
-          isMaximized: false,
-          position: { x: 50 + (floatingTerminals.length * 30), y: 50 + (floatingTerminals.length * 30) },
-          size: { width: 900, height: 600 },
-          zIndex: newZIndex
-        };
-
-        ws.onopen = () => {
-          setFloatingTerminals(prev => prev.map(t =>
-            t.id === terminalId ? { ...t, connected: true } : t
-          ));
-        };
-
-        ws.onerror = () => {
-          setFloatingTerminals(prev => prev.map(t =>
-            t.id === terminalId ? { ...t, connected: false } : t
-          ));
-        };
-
-        ws.onclose = () => {
-          setFloatingTerminals(prev => prev.map(t =>
-            t.id === terminalId ? { ...t, connected: false } : t
-          ));
-        };
-
-        setFloatingTerminals(prev => [...prev, newTerminal]);
-      } else {
-        showToast("未找到运行的Pod", "warning");
-      }
-    } catch (e: any) {
-      showToast("获取Pod失败: " + e.message, "error");
-    }
-  };
-
-  // 关闭独立终端窗口
-  const handleCloseFloatingTerminal = (terminalId: string) => {
-    setFloatingTerminals(prev => {
-      const terminal = prev.find(t => t.id === terminalId);
-      if (terminal?.ws) {
-        terminal.ws.close();
-      }
-      return prev.filter(t => t.id !== terminalId);
-    });
-  };
-
-  // 最小化终端窗口
-  const handleMinimizeTerminal = (terminalId: string) => {
-    setFloatingTerminals(prev => prev.map(t =>
-      t.id === terminalId ? { ...t, isMinimized: true } : t
-    ));
-  };
-
-  // 恢复终端窗口
-  const handleRestoreTerminal = (terminalId: string) => {
-    const newZIndex = maxZIndex + 1;
-    setMaxZIndex(newZIndex);
-    setFloatingTerminals(prev => prev.map(t =>
-      t.id === terminalId ? { ...t, isMinimized: false, zIndex: newZIndex } : t
-    ));
-  };
-
-  // 最大化终端窗口
-  const handleMaximizeTerminal = (terminalId: string) => {
-    setFloatingTerminals(prev => prev.map(t =>
-      t.id === terminalId ? { ...t, isMaximized: true } : t
-    ));
-  };
-
-  // 还原最大化终端窗口
-  const handleUnmaximizeTerminal = (terminalId: string) => {
-    setFloatingTerminals(prev => prev.map(t =>
-      t.id === terminalId ? { ...t, isMaximized: false } : t
-    ));
-  };
-
-  // 聚焦终端窗口
-  const handleFocusTerminal = (terminalId: string) => {
-    const newZIndex = maxZIndex + 1;
-    setMaxZIndex(newZIndex);
-    setFloatingTerminals(prev => prev.map(t =>
-      t.id === terminalId ? { ...t, zIndex: newZIndex } : t
-    ));
-  };
-
-  // 拖拽终端窗口
-  const handleStartDrag = (e: React.MouseEvent, terminalId: string) => {
-    if ((e.target as HTMLElement).closest('button')) return; // 不拦截按钮点击
-
-    const terminal = floatingTerminals.find(t => t.id === terminalId);
-    if (!terminal || terminal.isMaximized) return;
-
-    setDraggingTerminal(terminalId);
-    setDragOffset({
-      x: e.clientX - terminal.position.x,
-      y: e.clientY - terminal.position.y
-    });
-    handleFocusTerminal(terminalId);
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!draggingTerminal) return;
-
-      setFloatingTerminals(prev => prev.map(t =>
-        t.id === draggingTerminal
-          ? { ...t, position: { x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y } }
-          : t
-      ));
-    };
-
-    const handleMouseUp = () => {
-      setDraggingTerminal(null);
-    };
-
-    if (draggingTerminal) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [draggingTerminal, dragOffset]);
-
-  // 新增：访问服务
-  const handleAccessService = async (nodeId: string) => {
-    setMenu(null);
-    if (!instance?.project_id) return;
-    
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.data.service_name) {
-      showToast("该节点未创建Service，无法直接访问", "warning");
-      return;
-    }
-    
-    setIsAccessModalOpen(true);
-    setLoadingAccess(true);
-    setServiceAccessInfo(null);
-    
-    try {
-      const accessInfo = await api.k8s.getServiceAccess(instance.project_id, node.data.service_name);
-      setServiceAccessInfo(accessInfo);
-    } catch (e: any) {
-      setServiceAccessInfo({ error: "获取访问信息失败: " + e.message });
-    } finally {
-      setLoadingAccess(false);
-    }
-  };
-
-  // 打开服务代理URL
-  const handleOpenProxyUrl = (port: number, path: string = '/') => {
-    if (!instance?.project_id || !serviceAccessInfo?.name) return;
-    const url = api.k8s.proxyServiceUrl(instance.project_id, serviceAccessInfo.name, port, path);
-    window.open(url, '_blank');
   };
 
   const handleModifyNode = async (nodeId: string) => {
@@ -1157,7 +581,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       // 3. Populate config from node details
       // We merge the template's required inputs with the node's provided values
       const envVars: { name: string, value: string }[] = [];
-      const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
+      const volumeMounts: { mount_path: string, pvc_name: string }[] = [];
 
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
@@ -1188,7 +612,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       setAddNodeStep('configure');
       setIsAddNodeModalOpen(true);
     } catch (e: any) {
-      showToast("获取节点详情失败: " + e.message, "error");
+      alert("获取节点详情失败: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -1256,9 +680,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       setLoading(true);
                       await api.workflow.initializeInstance(instanceId);
                       await loadInstance();
-                      showToast("初始化成功", "success");
+                      alert("初始化成功");
                     } catch (e: any) {
-                      showToast("初始化失败: " + e.message, "error");
+                      alert("初始化失败: " + e.message);
                     } finally {
                       setLoading(false);
                     }
@@ -1274,9 +698,9 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                     setLoading(true);
                     await api.workflow.syncInstanceStatus(instanceId);
                     await loadInstance();
-                    showToast("同步成功", "success");
+                    alert("同步成功");
                   } catch (e: any) {
-                    showToast("同步失败: " + e.message, "error");
+                    alert("同步失败: " + e.message);
                   } finally {
                     setLoading(false);
                   }
@@ -1311,53 +735,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           )}
         </div>
       </div>
-
-      {/* Warning Banner */}
-      {instance?.has_warning && instance?.message && (
-        <div className="mx-6 mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-3">
-          <AlertCircle className="text-yellow-600 shrink-0 mt-0.5" size={20} />
-          <div className="flex-1">
-            <div className="font-bold text-yellow-800 mb-1">工作流状态警告</div>
-            <div className="text-sm text-yellow-700">{instance.message}</div>
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={async () => {
-                  if (await showConfirm('确定要取消初始化并清理资源吗？')) {
-                    try {
-                      setLoading(true);
-                      await api.workflow.uninitializeInstance(instanceId);
-                      await loadInstance();
-                    } catch (e: any) {
-                      showToast('操作失败: ' + e.message, "error");
-                    } finally {
-                      setLoading(false);
-                    }
-                  }
-                }}
-                className="px-3 py-1.5 text-xs font-bold bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-all"
-              >
-                取消初始化
-              </button>
-              <button 
-                onClick={async () => {
-                  try {
-                    setLoading(true);
-                    await api.workflow.initializeInstance(instanceId);
-                    await loadInstance();
-                  } catch (e: any) {
-                    showToast('重新初始化失败: ' + e.message, "error");
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-                className="px-3 py-1.5 text-xs font-bold bg-white border border-yellow-300 text-yellow-700 rounded-lg hover:bg-yellow-50 transition-all"
-              >
-                重新初始化
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
@@ -1431,101 +808,12 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                   </button>
                 </>
               ) : (
-                <>
-                  {/* 状态监控 */}
-                  <button 
-                    onClick={() => handleViewStatus(menu.id)}
-                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
-                  >
-                    <Activity size={14} className="text-green-500" /> 实时状态
-                  </button>
-                  
-                  {/* 日志 */}
-                  <button 
-                    onClick={() => handleViewLogs(menu.id)}
-                    className="w-full px-4 py-2 text-left text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-all"
-                  >
-                    <Terminal size={14} /> 查看日志
-                  </button>
-                  
-                  {/* 进入终端 */}
-                  <button
-                    onClick={() => handleOpenTerminal(menu.id)}
-                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
-                  >
-                    <Zap size={14} className="text-yellow-500" /> 进入终端
-                  </button>
-
-                  {/* 新开终端 */}
-                  <button
-                    onClick={() => handleOpenNewTerminal(menu.id)}
-                    className="w-full px-4 py-2 text-left text-sm font-bold text-emerald-600 hover:bg-emerald-50 flex items-center gap-2 transition-all"
-                  >
-                    <ExternalLink size={14} className="text-emerald-500" /> 新开终端
-                  </button>
-
-                  {/* 事件历史 */}
-                  <button 
-                    onClick={() => handleViewEvents(menu.id)}
-                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
-                  >
-                    <Clock size={14} className="text-orange-500" /> 执行历史
-                  </button>
-                  
-                  {/* 资源指标 */}
-                  <button 
-                    onClick={() => handleViewMetrics(menu.id)}
-                    className="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-all"
-                  >
-                    <BarChart2 size={14} className="text-purple-500" /> 资源监控
-                  </button>
-                  
-                  {/* 分隔线 */}
-                  <div className="border-t border-slate-100 my-1"></div>
-                  
-                  {/* 访问服务 - 仅APP类型节点显示 */}
-                  {(() => {
-                    const node = nodes.find(n => n.id === menu.id);
-                    if (node?.data.node_type === 'app' && node?.data.service_name) {
-                      return (
-                        <button 
-                          onClick={() => handleAccessService(menu.id)}
-                          className="w-full px-4 py-2 text-left text-sm font-bold text-cyan-600 hover:bg-cyan-50 flex items-center gap-2 transition-all"
-                        >
-                          <Database size={14} /> 访问服务
-                        </button>
-                      );
-                    }
-                    return null;
-                  })()}
-                  
-                  {/* 重启/重试 - 根据节点类型显示不同选项 */}
-                  {(() => {
-                    const node = nodes.find(n => n.id === menu.id);
-                    if (node?.data.node_type === 'app') {
-                      return (
-                        <button 
-                          onClick={() => handleRestartNode(menu.id)}
-                          disabled={restarting}
-                          className="w-full px-4 py-2 text-left text-sm font-bold text-orange-600 hover:bg-orange-50 flex items-center gap-2 transition-all disabled:opacity-50"
-                        >
-                          <RefreshCw size={14} className={restarting ? 'animate-spin' : ''} /> 重启服务
-                        </button>
-                      );
-                    } else if (node?.data.node_type === 'job') {
-                      return (
-                        <button 
-                          onClick={() => handleRetryNode(menu.id)}
-                          disabled={recreating}
-                          className="w-full px-4 py-2 text-left text-sm font-bold text-orange-600 hover:bg-orange-50 flex items-center gap-2 transition-all disabled:opacity-50"
-                        >
-                          <RotateCcw size={14} className={recreating ? 'animate-spin' : ''} /> 重试任务
-                        </button>
-                      );
-                    }
-                    return null;
-                  })()}
-                </>
+                <button 
+                  onClick={() => handleViewLogs(menu.id)}
+                  className="w-full px-4 py-2 text-left text-sm font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-all"
+                >
+                  <Terminal size={14} /> 查看日志
+                </button>
               )}
             </div>
           )}
@@ -1892,181 +1180,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       </div>
                     </div>
                   )}
-
-                  {selectedTemplate?.type === 'app' && (
-                    <div className="space-y-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">服务配置</label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input 
-                            type="checkbox"
-                            checked={newNodeConfig.create_service}
-                            onChange={e => setNewNodeConfig({...newNodeConfig, create_service: e.target.checked})}
-                            className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="text-xs font-bold text-indigo-700">创建 K8S Service</span>
-                        </label>
-                      </div>
-                      
-                      {newNodeConfig.create_service && (
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <label className="text-[9px] font-black text-slate-500 uppercase">服务名称</label>
-                              <input 
-                                type="text"
-                                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
-                                value={newNodeConfig.service_name}
-                                onChange={e => setNewNodeConfig({...newNodeConfig, service_name: e.target.value})}
-                                placeholder="my-service"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[9px] font-black text-slate-500 uppercase">服务类型</label>
-                              <select 
-                                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
-                                value={newNodeConfig.service_type}
-                                onChange={e => setNewNodeConfig({...newNodeConfig, service_type: e.target.value as any})}
-                              >
-                                <option value="ClusterIP">ClusterIP</option>
-                                <option value="NodePort">NodePort</option>
-                                <option value="LoadBalancer">LoadBalancer</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[9px] font-black text-slate-500 uppercase">服务端口</label>
-                              <button 
-                                type="button"
-                                onClick={() => setNewNodeConfig({
-                                  ...newNodeConfig, 
-                                  service_ports: [...newNodeConfig.service_ports, { name: `port-${newNodeConfig.service_ports.length + 1}`, port: 80, target_port: 80, protocol: 'TCP' }]
-                                })}
-                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
-                              >
-                                + 添加端口
-                              </button>
-                            </div>
-                            <div className="space-y-2">
-                              {newNodeConfig.service_ports.map((sp, i) => (
-                                <div key={i} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-indigo-100">
-                                  <input 
-                                    type="text"
-                                    className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
-                                    value={sp.name}
-                                    onChange={e => {
-                                      const n = [...newNodeConfig.service_ports];
-                                      n[i].name = e.target.value;
-                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
-                                    }}
-                                    placeholder="名称"
-                                  />
-                                  <input 
-                                    type="number"
-                                    className="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
-                                    value={sp.port}
-                                    onChange={e => {
-                                      const n = [...newNodeConfig.service_ports];
-                                      n[i].port = parseInt(e.target.value) || 0;
-                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
-                                    }}
-                                    placeholder="端口"
-                                  />
-                                  <span className="text-slate-400">→</span>
-                                  <input 
-                                    type="number"
-                                    className="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
-                                    value={sp.target_port}
-                                    onChange={e => {
-                                      const n = [...newNodeConfig.service_ports];
-                                      n[i].target_port = parseInt(e.target.value) || 0;
-                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
-                                    }}
-                                    placeholder="目标端口"
-                                  />
-                                  <select 
-                                    className="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono"
-                                    value={sp.protocol}
-                                    onChange={e => {
-                                      const n = [...newNodeConfig.service_ports];
-                                      n[i].protocol = e.target.value;
-                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
-                                    }}
-                                  >
-                                    <option value="TCP">TCP</option>
-                                    <option value="UDP">UDP</option>
-                                  </select>
-                                  <button 
-                                    type="button"
-                                    onClick={() => {
-                                      const n = newNodeConfig.service_ports.filter((_, idx) => idx !== i);
-                                      setNewNodeConfig({...newNodeConfig, service_ports: n});
-                                    }}
-                                    className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Ingress 配置 */}
-                          <div className="space-y-2 pt-2 border-t border-indigo-100">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[9px] font-black text-slate-500 uppercase">Ingress 配置</label>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Ingress 类型</label>
-                                <select
-                                  className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
-                                  value={newNodeConfig.ingress_type}
-                                  onChange={e => setNewNodeConfig({...newNodeConfig, ingress_type: e.target.value as '' | 'nginx'})}
-                                >
-                                  <option value="">不创建 Ingress</option>
-                                  <option value="nginx">Nginx Ingress</option>
-                                </select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-slate-400 uppercase">域名</label>
-                                <input
-                                  type="text"
-                                  className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
-                                  value={newNodeConfig.ingress_host}
-                                  onChange={e => setNewNodeConfig({...newNodeConfig, ingress_host: e.target.value})}
-                                  placeholder="example.com"
-                                  disabled={!newNodeConfig.ingress_type}
-                                />
-                              </div>
-                            </div>
-                            {newNodeConfig.ingress_type && (
-                              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                  <span className="text-[9px] font-black text-emerald-700 uppercase">Ingress IP</span>
-                                </div>
-                                <div className="mt-1 text-sm font-mono font-bold text-emerald-800">172.31.30.101</div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">超时时间 (秒)</label>
-                    <input 
-                      type="number"
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition-all font-bold text-sm"
-                      value={newNodeConfig.timeout_seconds || ''}
-                      onChange={e => setNewNodeConfig({...newNodeConfig, timeout_seconds: e.target.value ? parseInt(e.target.value) : null})}
-                      placeholder="可选，单位：秒"
-                    />
-                  </div>
                 </div>
               )}
             </div>
@@ -2143,438 +1256,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           </div>
         </div>
       )}
-
-      {/* Status Modal */}
-      {isStatusModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-50 rounded-lg">
-                  <Activity size={20} className="text-green-600" />
-                </div>
-                <h3 className="text-xl font-black text-slate-800">实时状态</h3>
-              </div>
-              <button 
-                onClick={() => setIsStatusModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
-              >
-                <Plus size={24} className="rotate-45" />
-              </button>
-            </div>
-            
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
-              {loadingStatus ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <Loader2 className="animate-spin text-blue-500" size={32} />
-                  <div className="text-slate-500 font-bold">获取状态中...</div>
-                </div>
-              ) : nodeStatus?.error ? (
-                <div className="text-center py-8 text-red-500">{nodeStatus.error}</div>
-              ) : nodeStatus ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Phase</div>
-                      <div className="text-lg font-bold text-slate-800">{nodeStatus.phase}</div>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Pod IP</div>
-                      <div className="text-lg font-bold text-slate-800 font-mono">{nodeStatus.pod_ip || '-'}</div>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Host IP</div>
-                      <div className="text-lg font-bold text-slate-800 font-mono">{nodeStatus.host_ip || '-'}</div>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Node</div>
-                      <div className="text-lg font-bold text-slate-800 truncate">{nodeStatus.node_name || '-'}</div>
-                    </div>
-                  </div>
-                  
-                  {nodeStatus.container_statuses?.length > 0 && (
-                    <div>
-                      <div className="text-xs font-black text-slate-400 uppercase mb-2">容器状态</div>
-                      <div className="space-y-2">
-                        {nodeStatus.container_statuses.map((cs: any, i: number) => (
-                          <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-slate-800">{cs.name}</span>
-                              <span className={`text-xs font-bold px-2 py-1 rounded ${cs.ready ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                {cs.ready ? 'Ready' : 'Not Ready'}
-                              </span>
-                            </div>
-                            <div className="text-xs text-slate-500 mt-1">{cs.state}</div>
-                            <div className="text-xs text-slate-400 mt-1">重启次数: {cs.restart_count}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {nodeStatus.conditions?.length > 0 && (
-                    <div>
-                      <div className="text-xs font-black text-slate-400 uppercase mb-2">条件</div>
-                      <div className="space-y-1">
-                        {nodeStatus.conditions.map((c: any, i: number) => (
-                          <div key={i} className="flex items-center gap-2 text-sm">
-                            {c.status === 'True' ? <CheckCircle size={14} className="text-green-500" /> : <XCircle size={14} className="text-red-500" />}
-                            <span className="font-bold text-slate-700">{c.type}</span>
-                            {c.reason && <span className="text-slate-400">({c.reason})</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-            
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button onClick={() => setIsStatusModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Events Modal */}
-      {isEventsModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-50 rounded-lg">
-                  <Clock size={20} className="text-orange-600" />
-                </div>
-                <h3 className="text-xl font-black text-slate-800">执行历史</h3>
-              </div>
-              <button onClick={() => setIsEventsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
-                <Plus size={24} className="rotate-45" />
-              </button>
-            </div>
-            
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
-              {loadingEvents ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <Loader2 className="animate-spin text-blue-500" size={32} />
-                  <div className="text-slate-500 font-bold">获取事件中...</div>
-                </div>
-              ) : nodeEvents.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">暂无事件记录</div>
-              ) : (
-                <div className="space-y-3">
-                  {nodeEvents.map((event, i) => (
-                    <div key={i} className={`p-4 rounded-xl border ${event.type === 'Warning' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        {event.type === 'Warning' ? <AlertCircle size={14} className="text-red-500" /> : <CheckCircle size={14} className="text-green-500" />}
-                        <span className="font-bold text-slate-800">{event.reason}</span>
-                        {event.count > 1 && <span className="text-xs bg-slate-200 px-2 py-0.5 rounded-full">x{event.count}</span>}
-                      </div>
-                      <div className="text-sm text-slate-600">{event.message}</div>
-                      {event.last_timestamp && (
-                        <div className="text-xs text-slate-400 mt-2">{new Date(event.last_timestamp).toLocaleString()}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button onClick={() => setIsEventsModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Metrics Modal */}
-      {isMetricsModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-50 rounded-lg">
-                  <BarChart2 size={20} className="text-purple-600" />
-                </div>
-                <h3 className="text-xl font-black text-slate-800">资源监控</h3>
-              </div>
-              <button onClick={() => setIsMetricsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all">
-                <Plus size={24} className="rotate-45" />
-              </button>
-            </div>
-            
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
-              {loadingMetrics ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <Loader2 className="animate-spin text-blue-500" size={32} />
-                  <div className="text-slate-500 font-bold">获取指标中...</div>
-                </div>
-              ) : nodeMetrics?.error ? (
-                <div className="text-center py-8 text-red-500">{nodeMetrics.error}</div>
-              ) : nodeMetrics ? (
-                <div className="space-y-4">
-                  <div className="text-xs text-slate-400 mb-2">需要安装 Metrics Server 才能获取资源指标</div>
-                  {nodeMetrics.containers?.map((c: any, i: number) => (
-                    <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="font-bold text-slate-800 mb-3">{c.name}</div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-[10px] font-black text-slate-400 uppercase">CPU</div>
-                          <div className="text-lg font-bold text-blue-600 font-mono">{c.cpu}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-black text-slate-400 uppercase">Memory</div>
-                          <div className="text-lg font-bold text-purple-600 font-mono">{c.memory}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button onClick={() => setIsMetricsModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Terminal Modal - 使用xterm.js 浮动窗口 */}
-      {isTerminalModalOpen && !terminalIsMinimized && (
-        <div
-          className="fixed bg-slate-900 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-700"
-          style={{
-            left: terminalIsMaximized ? 0 : terminalPosition.x,
-            top: terminalIsMaximized ? 0 : terminalPosition.y,
-            width: terminalIsMaximized ? '100vw' : 900,
-            height: terminalIsMaximized ? '100vh' : 600,
-            zIndex: terminalZIndex,
-          }}
-        >
-          {/* 终端标题栏 */}
-          <div
-            className={`flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700 ${terminalIsMaximized ? '' : 'cursor-move'}`}
-            onMouseDown={handleTerminalStartDrag}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${terminalConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span className="text-slate-300 font-mono text-sm">{terminalNodeName} - {terminalPodName}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                terminalConnected
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-red-500/20 text-red-400'
-              }`}>
-                {terminalConnected ? '已连接' : '未连接'}
-              </span>
-              {/* 窗口控制按钮 - macOS 风格 */}
-              <div className="flex items-center gap-2 ml-3">
-                {/* 关闭按钮 - 红色 */}
-                <button
-                  onClick={handleCloseTerminal}
-                  className="w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all group"
-                  title="关闭"
-                >
-                  <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 3l6 6M9 3l-6 6" />
-                  </svg>
-                </button>
-                {/* 最小化按钮 - 黄色 */}
-                <button
-                  onClick={() => setTerminalIsMinimized(true)}
-                  className="w-3.5 h-3.5 rounded-full bg-yellow-500 hover:bg-yellow-600 flex items-center justify-center transition-all group"
-                  title="最小化"
-                >
-                  <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M2 6h8" />
-                  </svg>
-                </button>
-                {/* 最大化/还原按钮 - 绿色 */}
-                <button
-                  onClick={() => setTerminalIsMaximized(!terminalIsMaximized)}
-                  className="w-3.5 h-3.5 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center transition-all group"
-                  title={terminalIsMaximized ? "还原" : "最大化"}
-                >
-                  {terminalIsMaximized ? (
-                    <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="2" y="4" width="4" height="4" />
-                      <rect x="4" y="2" width="4" height="4" fill="none" />
-                    </svg>
-                  ) : (
-                    <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="2" y="2" width="8" height="8" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-          {/* 终端内容 */}
-          <div className="flex-1 overflow-hidden">
-            <XTerminal
-              ws={terminalWs}
-              connected={terminalConnected}
-              podName={terminalPodName}
-              onClose={handleCloseTerminal}
-              showHeader={false}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 终端最小化任务栏 */}
-      {isTerminalModalOpen && terminalIsMinimized && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-2xl border border-slate-700 z-[9999] flex items-center gap-2">
-          <span className="text-xs text-slate-400 font-medium mr-2">终端窗口:</span>
-          <button
-            onClick={() => {
-              setTerminalIsMinimized(false);
-              const newZIndex = maxZIndex + 1;
-              setMaxZIndex(newZIndex);
-              setTerminalZIndex(newZIndex);
-            }}
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 text-sm font-medium transition-all"
-          >
-            <Terminal size={14} className={terminalConnected ? 'text-green-400' : 'text-red-400'} />
-            <span className="max-w-[120px] truncate">{terminalNodeName}</span>
-          </button>
-        </div>
-      )}
-
-      {/* Access Service Modal */}
-      {isAccessModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-cyan-50 rounded-lg">
-                  <Database size={20} className="text-cyan-600" />
-                </div>
-                <h3 className="text-xl font-black text-slate-800">访问服务</h3>
-              </div>
-              <button 
-                onClick={() => setIsAccessModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
-              >
-                <Plus size={24} className="rotate-45" />
-              </button>
-            </div>
-            
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
-              {loadingAccess ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <Loader2 className="animate-spin text-blue-500" size={32} />
-                  <div className="text-slate-500 font-bold">获取访问信息中...</div>
-                </div>
-              ) : serviceAccessInfo?.error ? (
-                <div className="text-center py-8 text-red-500">{serviceAccessInfo.error}</div>
-              ) : serviceAccessInfo ? (
-                <div className="space-y-6">
-                  {/* 服务基本信息 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Service名称</div>
-                      <div className="text-lg font-bold text-slate-800">{serviceAccessInfo.name}</div>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Service类型</div>
-                      <div className="text-lg font-bold text-slate-800">{serviceAccessInfo.type}</div>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Cluster IP</div>
-                      <div className="text-lg font-bold text-slate-800 font-mono">{serviceAccessInfo.cluster_ip || '-'}</div>
-                    </div>
-                    <div className="p-4 bg-slate-50 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase">Namespace</div>
-                      <div className="text-lg font-bold text-slate-800">{serviceAccessInfo.namespace}</div>
-                    </div>
-                  </div>
-                  
-                  {/* 端口信息 */}
-                  {serviceAccessInfo.ports?.length > 0 && (
-                    <div>
-                      <div className="text-xs font-black text-slate-400 uppercase mb-3">端口配置</div>
-                      <div className="space-y-2">
-                        {serviceAccessInfo.ports.map((port: any, i: number) => (
-                          <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-slate-800">{port.name || `port-${i}`}</span>
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">{port.protocol}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-sm">
-                              <div>
-                                <span className="text-slate-400">Port:</span>
-                                <span className="font-mono font-bold text-slate-700 ml-1">{port.port}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Target:</span>
-                                <span className="font-mono font-bold text-slate-700 ml-1">{port.target_port}</span>
-                              </div>
-                              {port.node_port && (
-                                <div>
-                                  <span className="text-slate-400">NodePort:</span>
-                                  <span className="font-mono font-bold text-cyan-600 ml-1">{port.node_port}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* 访问方式 */}
-                  {serviceAccessInfo.access_urls?.length > 0 && (
-                    <div>
-                      <div className="text-xs font-black text-slate-400 uppercase mb-3">访问方式</div>
-                      <div className="space-y-3">
-                        {serviceAccessInfo.access_urls.map((access: any, i: number) => (
-                          <div key={i} className="p-4 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl border border-cyan-100">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                                access.type === 'NodePort' ? 'bg-orange-100 text-orange-700' :
-                                access.type === 'LoadBalancer' ? 'bg-green-100 text-green-700' :
-                                'bg-slate-100 text-slate-700'
-                              }`}>{access.type}</span>
-                              <span className="text-sm text-slate-500">{access.port_name}</span>
-                            </div>
-                            <div className="font-mono text-sm text-slate-700 break-all">{access.url}</div>
-                            {access.type === 'ClusterIP' && (
-                              <button
-                                onClick={() => handleOpenProxyUrl(access.port, '/')}
-                                className="mt-3 w-full py-2 bg-cyan-600 text-white rounded-lg font-bold hover:bg-cyan-700 transition-all text-sm"
-                              >
-                                通过代理访问
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* 代理访问说明 */}
-                  <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-100">
-                    <div className="text-xs font-black text-yellow-700 mb-2">访问说明</div>
-                    <ul className="text-xs text-yellow-700 space-y-1 list-disc list-inside">
-                      <li><strong>ClusterIP</strong>: 仅集群内部可访问，可通过代理访问</li>
-                      <li><strong>NodePort</strong>: 通过节点IP和NodePort访问，需确保防火墙开放</li>
-                      <li><strong>LoadBalancer</strong>: 通过外部负载均衡器IP访问</li>
-                    </ul>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button onClick={() => setIsAccessModalOpen(false)} className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Unsaved Changes Modal */}
       {showUnsavedChangesModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]">
@@ -2598,7 +1279,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
               >
                 不保存退出
               </button>
-              <button
+              <button 
                 onClick={async () => {
                   await handleSave();
                   setIsEditMode(false);
@@ -2607,201 +1288,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-bold transition-all"
               >
                 保存并退出
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 浮动终端窗口 */}
-      {floatingTerminals.filter(t => !t.isMinimized).map(terminal => (
-        <div
-          key={terminal.id}
-          className="fixed bg-slate-900 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-700"
-          style={{
-            left: terminal.isMaximized ? 0 : terminal.position.x,
-            top: terminal.isMaximized ? 0 : terminal.position.y,
-            width: terminal.isMaximized ? '100vw' : terminal.size.width,
-            height: terminal.isMaximized ? '100vh' : terminal.size.height,
-            zIndex: terminal.zIndex,
-          }}
-          onClick={() => handleFocusTerminal(terminal.id)}
-        >
-          {/* 终端标题栏 */}
-          <div
-            className={`flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700 ${terminal.isMaximized ? '' : 'cursor-move'}`}
-            onMouseDown={(e) => handleStartDrag(e, terminal.id)}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${terminal.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span className="text-slate-300 font-mono text-sm">{terminal.nodeName} - {terminal.podName}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                terminal.connected
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-red-500/20 text-red-400'
-              }`}>
-                {terminal.connected ? '已连接' : '未连接'}
-              </span>
-              {/* 窗口控制按钮 - macOS 风格 */}
-              <div className="flex items-center gap-2 ml-3">
-                {/* 关闭按钮 - 红色 */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCloseFloatingTerminal(terminal.id);
-                  }}
-                  className="w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all group"
-                  title="关闭"
-                >
-                  <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 3l6 6M9 3l-6 6" />
-                  </svg>
-                </button>
-                {/* 最小化按钮 - 黄色 */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleMinimizeTerminal(terminal.id);
-                  }}
-                  className="w-3.5 h-3.5 rounded-full bg-yellow-500 hover:bg-yellow-600 flex items-center justify-center transition-all group"
-                  title="最小化"
-                >
-                  <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M2 6h8" />
-                  </svg>
-                </button>
-                {/* 最大化/还原按钮 - 绿色 */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (terminal.isMaximized) {
-                      handleUnmaximizeTerminal(terminal.id);
-                    } else {
-                      handleMaximizeTerminal(terminal.id);
-                    }
-                  }}
-                  className="w-3.5 h-3.5 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center transition-all group"
-                  title={terminal.isMaximized ? "还原" : "最大化"}
-                >
-                  {terminal.isMaximized ? (
-                    <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="2" y="4" width="4" height="4" />
-                      <rect x="4" y="2" width="4" height="4" fill="none" />
-                    </svg>
-                  ) : (
-                    <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="2" y="2" width="8" height="8" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-          {/* 终端内容 */}
-          <div className="flex-1 overflow-hidden">
-            <XTerminal
-              ws={terminal.ws}
-              connected={terminal.connected}
-              podName={terminal.podName}
-              onClose={() => handleCloseFloatingTerminal(terminal.id)}
-              showHeader={false}
-            />
-          </div>
-        </div>
-      ))}
-
-      {/* 底部任务栏 - 显示最小化的终端 */}
-      {floatingTerminals.filter(t => t.isMinimized).length > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-2xl border border-slate-700 z-[9999] flex items-center gap-2">
-          <span className="text-xs text-slate-400 font-medium mr-2">终端窗口:</span>
-          {floatingTerminals.filter(t => t.isMinimized).map(terminal => (
-            <button
-              key={terminal.id}
-              onClick={() => handleRestoreTerminal(terminal.id)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 text-sm font-medium transition-all"
-            >
-              <Terminal size={14} className={terminal.connected ? 'text-green-400' : 'text-red-400'} />
-              <span className="max-w-[120px] truncate">{terminal.nodeName}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Toast 通知 */}
-      {toast && (
-        <div
-          className="fixed top-4 left-1/2 z-[99999]"
-          style={{
-            transform: 'translateX(-50%)',
-            animation: 'slideIn 0.3s ease-out'
-          }}
-        >
-          <style>{`
-            @keyframes slideIn {
-              from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(-20px);
-              }
-              to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-              }
-            }
-          `}</style>
-          <div className={`px-6 py-3 rounded-xl shadow-2xl border font-bold text-sm flex items-center gap-2 ${
-            toast.type === 'success' ? 'bg-green-600 text-white border-green-500' :
-            toast.type === 'error' ? 'bg-red-600 text-white border-red-500' :
-            toast.type === 'warning' ? 'bg-yellow-500 text-yellow-900 border-yellow-400' :
-            'bg-slate-800 text-white border-slate-700'
-          }`}>
-            {toast.type === 'success' && <CheckCircle size={18} />}
-            {toast.type === 'error' && <XCircle size={18} />}
-            {toast.type === 'warning' && <AlertCircle size={18} />}
-            {toast.type === 'info' && <Activity size={18} />}
-            {toast.message}
-          </div>
-        </div>
-      )}
-
-      {/* 确认对话框 */}
-      {confirmDialog && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99998] flex items-center justify-center p-4">
-          <style>{`
-            @keyframes zoomIn {
-              from {
-                opacity: 0;
-                transform: scale(0.95);
-              }
-              to {
-                opacity: 1;
-                transform: scale(1);
-              }
-            }
-          `}</style>
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
-            style={{ animation: 'zoomIn 0.2s ease-out' }}
-          >
-            <div className="p-6 text-center">
-              <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle size={28} />
-              </div>
-              <p className="text-slate-700 font-bold text-base">{confirmDialog.message}</p>
-            </div>
-            <div className="flex border-t border-slate-100">
-              <button
-                onClick={confirmDialog.onCancel}
-                className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-50 transition-all"
-              >
-                取消
-              </button>
-              <button
-                onClick={confirmDialog.onConfirm}
-                className="flex-1 py-3 text-orange-600 font-bold hover:bg-orange-50 transition-all border-l border-slate-100"
-              >
-                确定
               </button>
             </div>
           </div>

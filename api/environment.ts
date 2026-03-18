@@ -207,6 +207,23 @@ export const environmentApi = {
   // Proxies
   getAgentServices: async (key: string): Promise<{ services: AgentService[] }> => 
     handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services`, { headers: getHeaders() })),
+  startAgentService: async (key: string, serviceName: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}/start`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({})
+    })),
+  stopAgentService: async (key: string, serviceName: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}/stop`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({})
+    })),
+  deleteAgentService: async (key: string, serviceName: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    })),
   getAgentHealth: async (key: string): Promise<any> => 
     handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/health`, { headers: getHeaders() })),
   getDaemonAgentInfo: async (key: string): Promise<any> =>

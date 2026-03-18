@@ -635,6 +635,8 @@ export interface AgentService {
   id: string;
   name: string;
   image: string;
+  template_id?: number | null;
+  template_name?: string;
   status: string;
   ports: Record<string, string>;
   agent_key?: string;

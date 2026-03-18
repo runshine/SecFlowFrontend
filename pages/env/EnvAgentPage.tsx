@@ -18,11 +18,33 @@ import {
   CheckSquare,
   X,
   Sparkles,
-  Command
+  Command,
+  Clock
 } from 'lucide-react';
 import { Agent, EnvTemplate } from '../../types/types';
 import { api } from '../../api/api';
 import { AgentDetailPage } from './AgentDetailPage';
+
+interface SyncHistoryItem {
+  sync_id: string;
+  scope: string;
+  status: string;
+  stale_only: boolean;
+  total: number;
+  ok_count: number;
+  fail_count: number;
+  message: string;
+  created_at: string;
+  agent_key?: string;
+  details?: Array<{
+    ok?: boolean;
+    agent_key?: string;
+    seen?: number;
+    upserted?: number;
+    error?: string;
+    status_code?: number;
+  }>;
+}
 
 // Specialized Live Indicator Component
 const LiveIndicator: React.FC<{ status: string }> = ({ status }) => {
@@ -63,6 +85,11 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [isCleaning, setIsCleaning] = useState(false);
   const [forceSyncing, setForceSyncing] = useState(false);
+  const [syncScope, setSyncScope] = useState<'project' | 'stale' | 'agent'>('stale');
+  const [targetAgentKey, setTargetAgentKey] = useState('');
+  const [lastSyncMessage, setLastSyncMessage] = useState('');
+  const [syncHistory, setSyncHistory] = useState<SyncHistoryItem[]>([]);
+  const [selectedHistory, setSelectedHistory] = useState<SyncHistoryItem | null>(null);
 
   // Integration Modals State
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
@@ -85,6 +112,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   useEffect(() => {
     if (projectId) {
       loadData();
+      void loadSyncHistory();
     }
   }, [projectId]);
 
@@ -129,6 +157,16 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
+  const loadSyncHistory = async () => {
+    if (!projectId) return;
+    try {
+      const data = await api.environment.getGlobalServiceSyncHistory({ project_id: projectId, per_page: 10 });
+      setSyncHistory(data?.items || []);
+    } catch (err) {
+      console.error('Failed to load sync history', err);
+    }
+  };
+
   const handleCleanup = async () => {
     if (!confirm("确认清理当前项目下掉线超过 5 分钟的 Agent？")) return;
     setIsCleaning(true);
@@ -147,19 +185,27 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     if (forceSyncing) return;
 
     const selectedKeys = Array.from(selectedAgentKeys.values()) as string[];
-    const mode = selectedKeys.length > 0 ? 'selected' : 'stale';
-    const confirmText = mode === 'selected'
-      ? `确认强制同步已选择的 ${selectedKeys.length} 个 Agent 服务状态？`
-      : '未选择 Agent，将同步当前项目下异常/过期 Agent 的服务状态。确认继续？';
+    const confirmText = syncScope === 'project'
+      ? '确认强制同步当前项目全部在线 Agent 的服务状态？'
+      : syncScope === 'stale'
+        ? '确认强制同步当前项目异常/过期 Agent 的服务状态？'
+        : selectedKeys.length > 0
+          ? `确认强制同步已选择的 ${selectedKeys.length} 个 Agent 服务状态？`
+          : `确认强制同步 Agent ${targetAgentKey || '(未填写)'} 的服务状态？`;
 
-    if (!confirm(confirmText)) return;
+    if (syncScope === 'agent' && selectedKeys.length === 0 && !targetAgentKey.trim()) {
+      alert('单Agent模式下，请选择节点或填写 Agent Key');
+      return;
+    }
+    if (!window.confirm(confirmText)) return;
 
     setForceSyncing(true);
     try {
-      if (mode === 'selected') {
+      if (syncScope === 'agent') {
+        const targets = selectedKeys.length > 0 ? selectedKeys : [targetAgentKey.trim()];
         let ok = 0;
         let fail = 0;
-        for (const key of selectedKeys) {
+        for (const key of targets) {
           try {
             const res = await api.environment.syncGlobalServices({ agent_key: key });
             if (res?.status === 'ok' || res?.result?.ok) ok += 1;
@@ -168,15 +214,23 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             fail += 1;
           }
         }
-        alert(`强制同步完成：成功 ${ok}，失败 ${fail}`);
+        setLastSyncMessage(`单Agent同步完成：成功 ${ok}，失败 ${fail}`);
+      } else if (syncScope === 'project') {
+        const result = await api.environment.syncGlobalServices({ project_id: projectId, stale_only: false });
+        if (result?.total !== undefined) {
+          setLastSyncMessage(`项目全量同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
+        } else {
+          setLastSyncMessage(result?.message || '已触发项目全量同步');
+        }
       } else {
         const result = await api.environment.syncGlobalServices({ project_id: projectId, stale_only: true });
         if (result?.total !== undefined) {
-          alert(`异常节点同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
+          setLastSyncMessage(`异常节点同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
         } else {
-          alert(result?.message || '已触发强制同步');
+          setLastSyncMessage(result?.message || '已触发异常节点同步');
         }
       }
+      await loadSyncHistory();
     } catch (err: any) {
       alert(`强制同步失败: ${err?.message || 'unknown error'}`);
     } finally {
@@ -457,7 +511,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             onClick={handleForceSyncServices}
             disabled={!projectId || forceSyncing}
             className="bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
-            title={selectedAgentKeys.size > 0 ? '强制同步选中Agent服务状态' : '同步当前项目异常/过期Agent服务状态'}
+            title="强制同步服务状态"
           >
             {forceSyncing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
             强制同步服务
@@ -472,6 +526,61 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           >
             <Plus size={20} /> 接入新节点
           </button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-3">
+          <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider">强制同步模式</div>
+          <select
+            value={syncScope}
+            onChange={(e) => setSyncScope(e.target.value as 'project' | 'stale' | 'agent')}
+            className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 bg-white"
+          >
+            <option value="stale">仅异常/过期Agent</option>
+            <option value="project">当前项目全部在线Agent</option>
+            <option value="agent">单个Agent或选中Agent</option>
+          </select>
+          {syncScope === 'agent' && (
+            <input
+              type="text"
+              value={targetAgentKey}
+              onChange={(e) => setTargetAgentKey(e.target.value)}
+              placeholder="输入完整 agent_key（可选）"
+              className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 ring-blue-500/10"
+            />
+          )}
+          {lastSyncMessage && (
+            <div className="text-xs font-bold text-slate-500">{lastSyncMessage}</div>
+          )}
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <Clock size={14} /> 最近同步记录
+            </div>
+            <button onClick={loadSyncHistory} className="text-xs font-bold text-blue-600 hover:text-blue-700">刷新</button>
+          </div>
+          <div className="space-y-2">
+            {syncHistory.length === 0 ? (
+              <div className="text-xs text-slate-400">暂无同步记录</div>
+            ) : syncHistory.map(item => (
+              <button
+                key={item.sync_id}
+                onClick={() => setSelectedHistory(item)}
+                className="w-full text-left border border-slate-100 rounded-xl px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-1 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
+              >
+                <div className="text-xs text-slate-600">
+                  <span className="font-black uppercase mr-2">{item.scope}</span>
+                  <span>{item.message || '-'}</span>
+                </div>
+                <div className="text-[11px] font-mono text-slate-500">
+                  total={item.total} ok={item.ok_count} fail={item.fail_count} · {item.created_at}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -643,6 +752,59 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           </table>
         </div>
       </div>
+
+      {selectedHistory && (
+        <div className="fixed inset-0 z-[220] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setSelectedHistory(null)}>
+          <div className="w-full max-w-6xl h-[78vh] bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">同步记录详情</p>
+                <p className="text-sm font-black text-slate-800 mt-1">
+                  {selectedHistory.scope.toUpperCase()} · {selectedHistory.sync_id}
+                </p>
+              </div>
+              <button onClick={() => setSelectedHistory(null)} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700">关闭</button>
+            </div>
+            <div className="px-6 py-3 border-b border-slate-100 text-xs text-slate-600 flex flex-wrap gap-4">
+              <span>status={selectedHistory.status}</span>
+              <span>total={selectedHistory.total}</span>
+              <span>ok={selectedHistory.ok_count}</span>
+              <span>fail={selectedHistory.fail_count}</span>
+              <span>time={selectedHistory.created_at}</span>
+            </div>
+            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+              {Array.isArray(selectedHistory.details) && selectedHistory.details.length > 0 ? (
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border border-slate-100 text-[10px] uppercase text-slate-400 font-black tracking-wider">
+                    <tr>
+                      <th className="px-3 py-2">Agent</th>
+                      <th className="px-3 py-2">Result</th>
+                      <th className="px-3 py-2">Seen</th>
+                      <th className="px-3 py-2">Upserted</th>
+                      <th className="px-3 py-2">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 border border-slate-100 border-t-0 text-xs">
+                    {selectedHistory.details.map((d: any, idx: number) => (
+                      <tr key={`${d.agent_key || 'na'}-${idx}`}>
+                        <td className="px-3 py-2 font-mono text-slate-700">{d.agent_key || '-'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`font-black ${d.ok ? 'text-green-600' : 'text-red-600'}`}>{d.ok ? 'OK' : 'FAILED'}</span>
+                        </td>
+                        <td className="px-3 py-2">{d.seen ?? '-'}</td>
+                        <td className="px-3 py-2">{d.upserted ?? '-'}</td>
+                        <td className="px-3 py-2 text-slate-500">{d.error || (d.status_code ? `status_code=${d.status_code}` : '-')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-sm text-slate-400 py-10 text-center">该记录没有明细数据</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Batch Deploy Modal */}
       {isBatchDeployModalOpen && (

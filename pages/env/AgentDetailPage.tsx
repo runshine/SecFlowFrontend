@@ -434,6 +434,10 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
               </div>
               <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                <Hash size={14} /> 节点唯一ID: <span className="text-slate-700 font-black font-mono">{agent.key}</span>
+              </div>
+              <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
                 <Clock size={14} /> 运行时间: <span className="text-slate-600 font-black">{formatted?.uptime || 'N/A'}</span>
               </div>
             </div>
@@ -1147,6 +1151,10 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
                 <div className="flex justify-between items-center text-xs font-bold text-slate-400">
                    <span className="uppercase tracking-widest">启动时间</span>
                    <span className="text-white font-black">{sys?.boot_time?.split('T')[0]}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                   <span className="uppercase tracking-widest">节点唯一ID</span>
+                   <span className="text-white font-black font-mono">{agent.key}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs font-bold text-slate-400">
                    <span className="uppercase tracking-widest">最后活跃</span>

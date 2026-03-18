@@ -150,6 +150,10 @@ export const workflowApi = {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${id}`, { method: 'DELETE', headers: getHeaders() });
     return handleResponse(response);
   },
+  triggerInstance: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/workflow/trigger/${id}`, { method: 'POST', headers: getHeaders() });
+    return handleResponse(response);
+  },
 
   // --- App Workflow Instances (单应用工作流) ---
   listAppWorkflows: async (params: { project_id?: string; status?: string } = {}): Promise<{ items: AppWorkflow[]; total: number }> => {
@@ -259,6 +263,20 @@ export const workflowApi = {
   getNodeLogs: async (instanceId: string, nodeId: string, params: { tail_lines?: number; container?: string; previous?: boolean; timestamp?: boolean } = {}): Promise<{ logs: string }> => {
     const query = new URLSearchParams(params as any).toString();
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes/${nodeId}/logs?${query}`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
+  // --- Ingress Controllers ---
+  getIngressControllers: async (): Promise<{ total: number; items: Array<{
+    name: string;
+    namespace: string;
+    type: string;
+    external_ip: string | null;
+    cluster_ip: string;
+    ports: Array<{ name: string; port: number; protocol: string; node_port: number }>;
+    ingress_class: string;
+  }> }> => {
+    const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/ingress-controllers`, { headers: getHeaders() });
     return handleResponse(response);
   }
 };

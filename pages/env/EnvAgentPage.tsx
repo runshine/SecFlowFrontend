@@ -1,36 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Monitor, 
-  RefreshCw, 
-  Loader2, 
-  Trash2, 
-  Search, 
-  Activity, 
-  Clock, 
+import {
+  Monitor,
+  RefreshCw,
+  Loader2,
+  Trash2,
+  Search,
+  Activity,
   ChevronRight,
   Server,
-  Cpu,
-  Database,
-  Grid,
   AlertCircle,
   Zap,
-  CheckCircle2,
-  XCircle,
-  BarChart3,
   Globe,
   Plus,
   Terminal,
   Copy,
   Check,
+  CheckSquare,
   X,
   Sparkles,
-  Command,
-  Info,
-  ChevronDown
+  Command
 } from 'lucide-react';
-import { Agent, AgentStats } from '../../types/types';
+import { Agent, EnvTemplate } from '../../types/types';
 import { api } from '../../api/api';
-import { StatusBadge } from '../../components/StatusBadge';
 import { AgentDetailPage } from './AgentDetailPage';
 
 // Specialized Live Indicator Component
@@ -66,11 +57,12 @@ const LiveIndicator: React.FC<{ status: string }> = ({ status }) => {
 export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [stats, setStats] = useState<AgentStats | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgentKey, setSelectedAgentKey] = useState<string | null>(null);
+  const [selectedAgentKeys, setSelectedAgentKeys] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [isCleaning, setIsCleaning] = useState(false);
+  const [forceSyncing, setForceSyncing] = useState(false);
 
   // Integration Modals State
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
@@ -81,6 +73,14 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   const [externalIps, setExternalIps] = useState<string[]>([]);
   const [selectedIp, setSelectedIp] = useState<string>('');
   const [ipsLoading, setIpsLoading] = useState(false);
+
+  // Batch deploy states
+  const [isBatchDeployModalOpen, setIsBatchDeployModalOpen] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [deployingBatch, setDeployingBatch] = useState(false);
+  const [templates, setTemplates] = useState<EnvTemplate[]>([]);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [selectedTemplateNames, setSelectedTemplateNames] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (projectId) {
@@ -98,12 +98,14 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     if (!projectId) return;
     setLoading(true);
     try {
-      const [agentsData, statsData] = await Promise.all([
-        api.environment.getAgents(projectId, { per_page: 2000 }), 
-        api.environment.getAgentStats(projectId)
-      ]);
-      setAgents(agentsData.agents || []);
-      setStats(statsData);
+      const agentsData = await api.environment.getAgents(projectId, { per_page: 2000 });
+      const nextAgents = agentsData.agents || [];
+      setAgents(nextAgents);
+      setSelectedAgentKeys(prev => {
+        const available = new Set(nextAgents.map(a => a.key));
+        const prevKeys = Array.from(prev.values()) as string[];
+        return new Set(prevKeys.filter(k => available.has(k)));
+      });
     } catch (err) {
       console.error("Failed to load agents", err);
     } finally {
@@ -140,16 +142,90 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
+  const handleForceSyncServices = async () => {
+    if (!projectId) return;
+    if (forceSyncing) return;
+
+    const selectedKeys = Array.from(selectedAgentKeys.values()) as string[];
+    const mode = selectedKeys.length > 0 ? 'selected' : 'stale';
+    const confirmText = mode === 'selected'
+      ? `确认强制同步已选择的 ${selectedKeys.length} 个 Agent 服务状态？`
+      : '未选择 Agent，将同步当前项目下异常/过期 Agent 的服务状态。确认继续？';
+
+    if (!confirm(confirmText)) return;
+
+    setForceSyncing(true);
+    try {
+      if (mode === 'selected') {
+        let ok = 0;
+        let fail = 0;
+        for (const key of selectedKeys) {
+          try {
+            const res = await api.environment.syncGlobalServices({ agent_key: key });
+            if (res?.status === 'ok' || res?.result?.ok) ok += 1;
+            else fail += 1;
+          } catch {
+            fail += 1;
+          }
+        }
+        alert(`强制同步完成：成功 ${ok}，失败 ${fail}`);
+      } else {
+        const result = await api.environment.syncGlobalServices({ project_id: projectId, stale_only: true });
+        if (result?.total !== undefined) {
+          alert(`异常节点同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
+        } else {
+          alert(result?.message || '已触发强制同步');
+        }
+      }
+    } catch (err: any) {
+      alert(`强制同步失败: ${err?.message || 'unknown error'}`);
+    } finally {
+      setForceSyncing(false);
+    }
+  };
+
   const getIntegrationCommand = () => {
     const ip = selectedIp || '192.168.12.90';
     return `wget http://${ip}/script/bootstrap.sh -O bootstrap.sh && chmod +x bootstrap.sh && ./bootstrap.sh -w ${projectId} -u ${ip}:80 -t /sothothv2`;
   };
 
-  const handleCopyCommand = () => {
+  const handleCopyCommand = async () => {
     const cmd = getIntegrationCommand();
-    navigator.clipboard.writeText(cmd);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(cmd);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      } catch (err) {
+        console.error('Clipboard API failed:', err);
+      }
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = cmd;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        alert('复制失败，请手动复制命令');
+      }
+    } catch (err) {
+      console.error('execCommand copy failed:', err);
+      alert('复制失败，请手动复制命令');
+    } finally {
+      document.body.removeChild(textArea);
+    }
   };
 
   const handleAgentClick = (key: string) => {
@@ -157,15 +233,146 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     setViewMode('detail');
   };
 
-  const filteredAgents = agents.filter(a => 
-    a.hostname.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const toggleAgentSelect = (key: string) => {
+    setSelectedAgentKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const filteredAgents = agents.filter(a =>
+    a.hostname.toLowerCase().includes(searchTerm.toLowerCase()) ||
     a.ip_address.includes(searchTerm)
   );
 
-  // Get exact counts from the API stats summary if available
-  const totalCount = stats?.summary.total_agents ?? agents.length;
-  const onlineCount = stats?.summary.status_distribution.online ?? agents.filter(a => a.status === 'online').length;
-  const unhealthyCount = (stats?.summary.status_distribution.offline ?? 0) + (stats?.summary.status_distribution.error ?? 0);
+  const toggleSelectAllFilteredAgents = () => {
+    if (filteredAgents.length === 0) return;
+    setSelectedAgentKeys(prev => {
+      const next = new Set(prev);
+      const allSelected = filteredAgents.every(a => next.has(a.key));
+      if (allSelected) {
+        filteredAgents.forEach(a => next.delete(a.key));
+      } else {
+        filteredAgents.forEach(a => next.add(a.key));
+      }
+      return next;
+    });
+  };
+
+  const loadTemplates = async () => {
+    setTemplatesLoading(true);
+    try {
+      let page = 1;
+      let total = 0;
+      let all: EnvTemplate[] = [];
+      while (true) {
+        const res = await api.environment.getTemplates(page);
+        const pageData = res.templates || [];
+        total = res.total || 0;
+        all = all.concat(pageData);
+        if (pageData.length === 0) break;
+        if (total > 0 && all.length >= total) break;
+        page += 1;
+      }
+      setTemplates(all);
+    } catch (err) {
+      console.error('Failed to load templates', err);
+      alert('获取模板列表失败');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const openBatchDeployModal = async () => {
+    if (!projectId) {
+      alert('请先选择项目');
+      return;
+    }
+    if (selectedAgentKeys.size === 0) {
+      alert('请先选择至少一个 Agent');
+      return;
+    }
+    setTemplateSearch('');
+    setSelectedTemplateNames(new Set());
+    setIsBatchDeployModalOpen(true);
+    await loadTemplates();
+  };
+
+  const filteredTemplates = useMemo(() => {
+    const keyword = templateSearch.trim().toLowerCase();
+    if (!keyword) return templates;
+    return templates.filter(t =>
+      t.name.toLowerCase().includes(keyword) ||
+      (t.description || '').toLowerCase().includes(keyword)
+    );
+  }, [templates, templateSearch]);
+
+  const toggleTemplateSelect = (name: string) => {
+    setSelectedTemplateNames(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFilteredTemplates = () => {
+    if (filteredTemplates.length === 0) return;
+    setSelectedTemplateNames(prev => {
+      const next = new Set(prev);
+      const allSelected = filteredTemplates.every(t => next.has(t.name));
+      if (allSelected) {
+        filteredTemplates.forEach(t => next.delete(t.name));
+      } else {
+        filteredTemplates.forEach(t => next.add(t.name));
+      }
+      return next;
+    });
+  };
+
+  const buildServiceName = (templateName: string, agentKey: string) => {
+    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 48);
+    const stamp = Date.now().toString(36).slice(-6);
+    return `${normalized}-${agentKey.slice(0, 6)}-${stamp}`;
+  };
+
+  const executeBatchDeploy = async () => {
+    if (!projectId || selectedAgentKeys.size === 0 || selectedTemplateNames.size === 0) return;
+    setDeployingBatch(true);
+    try {
+      const agentKeys = Array.from(selectedAgentKeys.values()) as string[];
+      const templateNames = Array.from(selectedTemplateNames.values()) as string[];
+      let successCount = 0;
+      let failedCount = 0;
+
+      for (const templateName of templateNames) {
+        for (const agentKey of agentKeys) {
+          try {
+            await api.environment.deploy({
+              service_name: buildServiceName(templateName, agentKey),
+              agent_key: agentKey,
+              template_name: templateName,
+              project_id: projectId
+            });
+            successCount += 1;
+          } catch {
+            failedCount += 1;
+          }
+        }
+      }
+
+      alert(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}`);
+      setIsBatchDeployModalOpen(false);
+      setSelectedTemplateNames(new Set());
+    } catch (err) {
+      console.error('Batch deploy failed', err);
+      alert('批量部署失败');
+    } finally {
+      setDeployingBatch(false);
+    }
+  };
 
   if (viewMode === 'detail' && selectedAgentKey) {
     return <AgentDetailPage agentKey={selectedAgentKey} projectId={projectId} onBack={() => setViewMode('list')} />;
@@ -206,6 +413,22 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             {isCleaning ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
             清理无效节点
           </button>
+          <button
+            onClick={openBatchDeployModal}
+            disabled={!projectId || selectedAgentKeys.size === 0}
+            className="bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
+          >
+            <Zap size={18} /> 批量部署服务
+          </button>
+          <button
+            onClick={handleForceSyncServices}
+            disabled={!projectId || forceSyncing}
+            className="bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+            title={selectedAgentKeys.size > 0 ? '强制同步选中Agent服务状态' : '同步当前项目异常/过期Agent服务状态'}
+          >
+            {forceSyncing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+            强制同步服务
+          </button>
           <button 
             onClick={() => {
               setIntegrationType(null);
@@ -216,104 +439,6 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           >
             <Plus size={20} /> 接入新节点
           </button>
-        </div>
-      </div>
-
-      {/* Health Overview & Matrix */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-        <div className="xl:col-span-1 space-y-6">
-           <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
-             <div className="absolute right-[-10px] top-[-10px] w-40 h-40 bg-green-500 opacity-5 blur-[40px]" />
-             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">项目在线率 (Live Ratio)</p>
-             <div className="flex items-end gap-3 mt-4">
-                <h3 className="text-6xl font-black text-white">{totalCount > 0 ? Math.round((onlineCount/totalCount)*100) : 0}%</h3>
-                <div className="pb-2">
-                   <p className="text-xs font-black text-green-400 flex items-center gap-1 uppercase tracking-tighter">
-                     <Zap size={12} fill="currentColor" /> {onlineCount} Ready
-                   </p>
-                </div>
-             </div>
-             <div className="mt-8 pt-6 border-t border-white/5 flex justify-between items-center">
-                <div className="space-y-1">
-                   <p className="text-[10px] font-black text-slate-500 uppercase">当前总量</p>
-                   <p className="text-xl font-black">{totalCount}</p>
-                </div>
-                <div className="w-10 h-10 bg-white/5 rounded-2xl flex items-center justify-center">
-                   <CheckCircle2 className="text-green-500" size={20} />
-                </div>
-             </div>
-           </div>
-
-           <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm flex items-center justify-between group hover:border-red-200 transition-colors">
-              <div>
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">离线/异常</p>
-                <h3 className="text-4xl font-black mt-2 text-slate-800">{unhealthyCount}</h3>
-                <div className="flex items-center gap-1.5 text-red-500 text-[10px] font-black mt-2 uppercase">
-                  <AlertCircle size={12} /> Health Warning
-                </div>
-              </div>
-              <div className="w-16 h-16 bg-red-50 rounded-3xl flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
-                <XCircle size={32} />
-              </div>
-           </div>
-        </div>
-
-        {/* Status Grid Matrix */}
-        <div className="xl:col-span-3 bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm flex flex-col">
-           <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-[1.25rem] flex items-center justify-center shadow-inner">
-                    <Grid size={24} />
-                 </div>
-                 <div>
-                    <h4 className="text-lg font-black text-slate-800 tracking-tight">集群健康矩阵 (Node Matrix)</h4>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">实时刷新全量 Agent 活跃位图</p>
-                 </div>
-              </div>
-              <div className="flex items-center gap-6">
-                 <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Online</span>
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded bg-slate-300" />
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Offline</span>
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Error</span>
-                 </div>
-              </div>
-           </div>
-           
-           <div className="flex-1 overflow-y-auto max-h-[220px] custom-scrollbar pr-4">
-              <div className="flex flex-wrap gap-2">
-                {agents.map((a) => (
-                  <div 
-                    key={a.key}
-                    onClick={() => handleAgentClick(a.key)}
-                    title={`${a.hostname} (${a.ip_address}): ${a.status}`}
-                    className={`w-4 h-4 rounded-sm cursor-pointer transition-all hover:scale-125 hover:z-10 shadow-sm ${
-                      a.status === 'online' ? 'bg-green-500' : 
-                      a.status === 'error' ? 'bg-red-500' : 'bg-slate-200'
-                    }`}
-                  />
-                ))}
-                {agents.length === 0 && (
-                  <div className="w-full h-32 flex flex-col items-center justify-center text-slate-300 gap-2">
-                    <Info size={24} />
-                    <p className="italic text-sm">No agents connected to project workspace</p>
-                  </div>
-                )}
-              </div>
-           </div>
-           <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <BarChart3 size={14} className="text-blue-500" />
-                显示加载 {agents.length} 个本地感知节点
-              </div>
-              <p className="text-[10px] font-bold text-slate-300 italic uppercase">UTC: {new Date().toISOString().slice(0, 19).replace('T', ' ')}</p>
-           </div>
         </div>
       </div>
 
@@ -329,11 +454,24 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        <div className="flex items-center justify-between px-2">
+          <p className="text-xs font-bold text-slate-500">
+            已选择 <span className="text-blue-600 font-black">{selectedAgentKeys.size}</span> / {agents.length} 个节点
+          </p>
+          <button
+            onClick={toggleSelectAllFilteredAgents}
+            disabled={!projectId || filteredAgents.length === 0}
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 disabled:opacity-50"
+          >
+            {filteredAgents.length > 0 && filteredAgents.every(a => selectedAgentKeys.has(a.key)) ? '取消全选筛选项' : '全选筛选项'}
+          </button>
+        </div>
 
         <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden min-h-[500px]">
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <th className="px-6 py-6 w-[72px] text-center">选择</th>
                 <th className="px-8 py-6">节点标识 (Hostname / OS)</th>
                 <th className="px-6 py-6">网络配置 (IP)</th>
                 <th className="px-6 py-6">实时资源载荷 (CPU/Mem)</th>
@@ -344,7 +482,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             <tbody className="divide-y divide-slate-50">
               {!projectId ? (
                 <tr>
-                  <td colSpan={5} className="py-40 text-center">
+                  <td colSpan={6} className="py-40 text-center">
                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest italic">请先在顶部菜单选择项目</p>
                   </td>
                 </tr>
@@ -352,6 +490,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                 const isOnline = agent.status === 'online';
                 const sys = agent.system_info;
                 const formatted = sys?.formatted;
+                const daemon = agent.daemon_info;
                 
                 return (
                   <tr 
@@ -359,6 +498,22 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                     onClick={() => handleAgentClick(agent.key)}
                     className={`hover:bg-slate-50 transition-all group cursor-pointer border-l-4 ${isOnline ? 'border-transparent hover:border-green-500' : 'border-transparent hover:border-red-500 bg-slate-50/30'}`}
                   >
+                    <td className="px-6 py-6 text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAgentSelect(agent.key);
+                        }}
+                        className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-all ${
+                          selectedAgentKeys.has(agent.key)
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'border-slate-300 text-transparent hover:border-blue-400'
+                        }`}
+                        aria-label={`select-${agent.key}`}
+                      >
+                        <Check size={14} />
+                      </button>
+                    </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-5">
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-sm ${isOnline ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
@@ -370,6 +525,12 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                              <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
                                {sys?.os_name} {sys?.architecture} ({sys?.os_release})
+                             </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                             <div className={`w-1.5 h-1.5 rounded-full ${daemon?.status === 'running' ? 'bg-green-400' : 'bg-slate-300'}`} />
+                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                               AGENT {daemon?.version || 'N/A'} / {daemon?.platform || 'N/A'}
                              </span>
                           </div>
                         </div>
@@ -423,7 +584,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
               })}
               {!loading && projectId && filteredAgents.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-40 text-center">
+                  <td colSpan={6} className="py-40 text-center">
                     <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
                       <Monitor size={40} />
                     </div>
@@ -435,6 +596,110 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           </table>
         </div>
       </div>
+
+      {/* Batch Deploy Modal */}
+      {isBatchDeployModalOpen && (
+        <div className="fixed inset-0 z-[119] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
+          <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[88vh]">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight">批量部署环境模板服务</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
+                  已选 Agent: {selectedAgentKeys.size}，请选择要部署的模板
+                </p>
+              </div>
+              <button onClick={() => setIsBatchDeployModalOpen(false)} className="p-3 bg-slate-50 text-slate-400 hover:text-slate-800 rounded-2xl transition-all">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-5 overflow-y-auto">
+              <div className="flex items-center justify-between gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                  <input
+                    type="text"
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    placeholder="检索模板名称或描述..."
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 ring-blue-500/10"
+                  />
+                </div>
+                <button
+                  onClick={toggleSelectAllFilteredTemplates}
+                  disabled={filteredTemplates.length === 0}
+                  className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <CheckSquare size={15} />
+                  {filteredTemplates.length > 0 && filteredTemplates.every(t => selectedTemplateNames.has(t.name)) ? '取消全选' : '全选筛选模板'}
+                </button>
+              </div>
+
+              {templatesLoading ? (
+                <div className="py-24 text-center">
+                  <Loader2 className="animate-spin mx-auto text-blue-600" size={28} />
+                  <p className="mt-3 text-xs font-bold text-slate-400">正在加载模板...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredTemplates.map(template => (
+                    <button
+                      key={template.name}
+                      onClick={() => toggleTemplateSelect(template.name)}
+                      className={`p-5 rounded-2xl border-2 transition-all text-left ${
+                        selectedTemplateNames.has(template.name)
+                          ? 'bg-blue-50 border-blue-600'
+                          : 'bg-white border-slate-100 hover:border-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-slate-800">{template.name}</p>
+                          <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{template.description || '无描述'}</p>
+                        </div>
+                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center ${
+                          selectedTemplateNames.has(template.name)
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'border-slate-200 text-transparent'
+                        }`}>
+                          <Check size={14} />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  {!templatesLoading && filteredTemplates.length === 0 && (
+                    <div className="col-span-2 py-16 text-center text-slate-400 text-sm font-bold">无匹配模板</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-500">
+                本次将提交 <span className="text-blue-600 font-black">{selectedTemplateNames.size}</span> 个模板 ×
+                <span className="text-blue-600 font-black"> {selectedAgentKeys.size}</span> 个 Agent 的部署任务
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsBatchDeployModalOpen(false)}
+                  disabled={deployingBatch}
+                  className="px-6 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-black hover:bg-slate-50 disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={executeBatchDeploy}
+                  disabled={deployingBatch || selectedTemplateNames.size === 0 || selectedAgentKeys.size === 0}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-xl font-black hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {deployingBatch ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} />}
+                  提交批量部署
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Integration Choice Modal */}
       {isIntegrationModalOpen && (

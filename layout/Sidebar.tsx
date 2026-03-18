@@ -218,6 +218,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           applyHealth={true}
           children={[
             { id: 'workflow-apps', label: '应用模板', icon: <Layers size={14} /> },
+            { id: 'workflow-app-instances', label: '应用实例', icon: <Box size={14} /> },
             { id: 'workflow-jobs', label: '任务模板', icon: <Zap size={14} /> },
             { id: 'workflow-instances', label: '工作流实例', icon: <Activity size={14} /> }
           ]}
@@ -258,6 +259,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<ShieldAlert size={20} />}
             children={[
               { id: 'user-mgmt-users', label: '用户账号管理', icon: <Users size={14} /> },
+              { id: 'user-mgmt-roles', label: '角色定义管理', icon: <UserCheck size={14} /> },
+              { id: 'user-mgmt-perms', label: '功能权限分配', icon: <Settings size={14} /> },
               { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> },
               { id: 'user-mgmt-machine', label: '机机凭证管理', icon: <Cpu size={14} /> }
             ]}

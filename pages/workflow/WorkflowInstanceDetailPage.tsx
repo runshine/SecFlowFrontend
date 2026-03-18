@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
+import { 
+  ReactFlow, 
+  MiniMap, 
+  Controls, 
+  Background, 
+  useNodesState, 
+  useEdgesState, 
   addEdge,
   Connection,
   Edge,
@@ -45,8 +45,11 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   const [menu, setMenu] = useState<{ id: string; top: number; left: number; right: number; bottom: number } | null>(null);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [isUninitModalOpen, setIsUninitModalOpen] = useState(false);
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [nodeLogs, setNodeLogs] = useState<string>('');
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [loadingAccess, setLoadingAccess] = useState(false);
+  const [serviceAccessInfo, setServiceAccessInfo] = useState<any>(null);
   
   // 新增：节点交互操作状态
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -95,11 +98,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
   const [pvcs, setPvcs] = useState<any[]>([]);
-  
-  // 访问服务相关状态
-  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
-  const [serviceAccessInfo, setServiceAccessInfo] = useState<any>(null);
-  const [loadingAccess, setLoadingAccess] = useState(false);
   
   const [initialNodes, setInitialNodes] = useState<Node[]>([]);
   const [initialEdges, setInitialEdges] = useState<Edge[]>([]);
@@ -419,7 +417,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       const envVars: { name: string, value: string }[] = [];
       const volumeMounts: { mount_path: string, pvc_name: string, sub_path?: string }[] = [];
       
-      const servicePorts: { name: string, port: number, target_port: number, protocol: string }[] = [];
       details.containers.forEach((c: any) => {
         if (c.input_env_vars) {
           c.input_env_vars.forEach((iv: any) => {
@@ -435,32 +432,13 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             }
           });
         }
-        if (c.ports) {
-          c.ports.forEach((p: any) => {
-            if (!servicePorts.find(sp => sp.port === p.container_port)) {
-              servicePorts.push({
-                name: p.name || `port-${p.container_port}`,
-                port: p.container_port,
-                target_port: p.container_port,
-                protocol: p.protocol || 'TCP'
-              });
-            }
-          });
-        }
       });
-      
-      const autoServiceName = template.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
       
       setNewNodeConfig({
         name: template.name,
         env_vars: envVars,
         volume_mounts: volumeMounts,
-        position: null,
-        create_service: template.type === 'app',
-        service_name: template.type === 'app' ? autoServiceName : '',
-        service_ports: template.type === 'app' ? servicePorts : [],
-        service_type: 'ClusterIP',
-        timeout_seconds: null
+        position: null
       });
       
       setAddNodeStep('configure');
@@ -521,7 +499,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         });
         showToast("更新成功", "success");
       } else {
-        const payload: any = {
+        const payload = {
           node_type: selectedTemplate.type,
           template_id: selectedTemplate.id,
           name: newNodeConfig.name,
@@ -529,19 +507,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
           env_vars: newNodeConfig.env_vars.filter(e => e.value),
           volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name)
         };
-        
-        if (selectedTemplate.type === 'app') {
-          payload.create_service = newNodeConfig.create_service;
-          if (newNodeConfig.create_service) {
-            payload.service_name = newNodeConfig.service_name;
-            payload.service_ports = newNodeConfig.service_ports;
-            payload.service_type = newNodeConfig.service_type;
-          }
-        }
-        
-        if (newNodeConfig.timeout_seconds) {
-          payload.timeout_seconds = newNodeConfig.timeout_seconds;
-        }
         
         await api.workflow.createNode(instanceId, payload);
         showToast("创建成功", "success");
@@ -673,12 +638,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         position: { 
           x: (nodeDetails.position?.x || 0) + 50, 
           y: (nodeDetails.position?.y || 0) + 50 
-        },
-        create_service: nodeDetails.create_service ?? true,
-        service_name: nodeDetails.service_name || '',
-        service_ports: nodeDetails.service_ports || [],
-        service_type: nodeDetails.service_type || 'ClusterIP',
-        timeout_seconds: nodeDetails.timeout_seconds || null
+        }
       });
       
       setAddNodeStep('configure');
@@ -1222,12 +1182,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         name: nodeDetails.name,
         env_vars: envVars,
         volume_mounts: volumeMounts,
-        position: null,
-        create_service: nodeDetails.create_service ?? true,
-        service_name: nodeDetails.service_name || '',
-        service_ports: nodeDetails.service_ports || [],
-        service_type: nodeDetails.service_type || 'ClusterIP',
-        timeout_seconds: nodeDetails.timeout_seconds || null
+        position: null
       });
       
       setAddNodeStep('configure');
@@ -1270,11 +1225,6 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-black text-slate-800 tracking-tight">{instance?.name}</h2>
               {instance?.status && <StatusBadge status={instance.status} />}
-              {instance?.has_warning && (
-                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full flex items-center gap-1">
-                  <AlertCircle size={12} /> 警告
-                </span>
-              )}
             </div>
             <p className="text-xs font-mono text-slate-400 mt-1">ID: {instance?.id}</p>
           </div>

@@ -18,19 +18,46 @@ import {
   Layout,
   AlertCircle
 } from 'lucide-react';
-import { AgentService, Agent } from '../../types/types';
+import { AgentService } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
+
+interface SyncHistoryItem {
+  sync_id: string;
+  scope: string;
+  status: string;
+  stale_only: boolean;
+  total: number;
+  ok_count: number;
+  fail_count: number;
+  message: string;
+  created_at: string;
+  agent_key?: string;
+  details?: Array<{
+    ok?: boolean;
+    agent_key?: string;
+    seen?: number;
+    upserted?: number;
+    error?: string;
+    status_code?: number;
+  }>;
+}
 
 export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const [loading, setLoading] = useState(true);
   const [allServices, setAllServices] = useState<AgentService[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncScope, setSyncScope] = useState<'project' | 'stale' | 'agent'>('stale');
+  const [targetAgentKey, setTargetAgentKey] = useState('');
+  const [lastSyncMessage, setLastSyncMessage] = useState('');
+  const [syncHistory, setSyncHistory] = useState<SyncHistoryItem[]>([]);
+  const [selectedHistory, setSelectedHistory] = useState<SyncHistoryItem | null>(null);
 
   useEffect(() => {
     if (projectId) {
       loadAllServices();
+      loadSyncHistory();
     }
   }, [projectId]);
 
@@ -38,22 +65,8 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     if (!projectId) return;
     setLoading(true);
     try {
-      const agentsData = await api.environment.getAgents(projectId);
-      setAgents(agentsData.agents || []);
-      
-      const servicePromises = (agentsData.agents || [])
-        .filter(a => a.status === 'online')
-        .map(async a => {
-          try {
-            const data = await api.environment.getAgentServices(a.key);
-            return data.services.map(s => ({ ...s, agent_key: a.key, agent_hostname: a.hostname }));
-          } catch (e) {
-            return [];
-          }
-        });
-
-      const results = await Promise.all(servicePromises);
-      setAllServices(results.flat() as any);
+      const data = await api.environment.getGlobalServices(projectId, { per_page: 1000 });
+      setAllServices(data?.items || []);
     } catch (err) {
       console.error("Failed to load global services", err);
     } finally {
@@ -72,10 +85,52 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
-  const filteredServices = allServices.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const handleQuickScan = async () => {
+    if (!projectId) return;
+    const payload: { project_id?: string; agent_key?: string; stale_only?: boolean } = {};
+    if (syncScope === 'agent') {
+      if (!targetAgentKey.trim()) {
+        alert('请输入要同步的 Agent Key');
+        return;
+      }
+      payload.agent_key = targetAgentKey.trim();
+    } else {
+      payload.project_id = projectId;
+      payload.stale_only = syncScope === 'stale';
+    }
+
+    setSyncing(true);
+    try {
+      const result = await api.environment.syncGlobalServices(payload);
+      await loadAllServices();
+      await loadSyncHistory();
+      if (result?.total !== undefined) {
+        setLastSyncMessage(`同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
+      } else {
+        setLastSyncMessage(result?.message || '同步任务已触发');
+      }
+    } catch (err) {
+      console.error('Quick scan failed', err);
+      alert('快速扫描失败');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const filteredServices = allServices.filter(s =>
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.image.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const loadSyncHistory = async () => {
+    if (!projectId) return;
+    try {
+      const data = await api.environment.getGlobalServiceSyncHistory({ project_id: projectId, per_page: 10 });
+      setSyncHistory(data?.items || []);
+    } catch (err) {
+      console.error('Failed to load sync history', err);
+    }
+  };
 
   if (loading && projectId) {
     return (
@@ -144,9 +199,67 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                 <span className="text-sm font-black text-green-500 uppercase tracking-tighter">Verified</span>
              </div>
            </div>
-           <button disabled={!projectId} className="px-6 py-3 bg-white/10 rounded-xl text-xs font-black hover:bg-white/20 transition-all disabled:opacity-50">
+           <button
+             onClick={handleQuickScan}
+             disabled={!projectId || syncing}
+             className="px-6 py-3 bg-white/10 rounded-xl text-xs font-black hover:bg-white/20 transition-all disabled:opacity-50 flex items-center gap-2"
+           >
+             {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
              快速扫描
            </button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-3">
+          <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider">强制同步模式</div>
+          <select
+            value={syncScope}
+            onChange={(e) => setSyncScope(e.target.value as 'project' | 'stale' | 'agent')}
+            className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 bg-white"
+          >
+            <option value="stale">仅异常/过期Agent</option>
+            <option value="project">当前项目全部在线Agent</option>
+            <option value="agent">单个Agent</option>
+          </select>
+          {syncScope === 'agent' && (
+            <input
+              type="text"
+              value={targetAgentKey}
+              onChange={(e) => setTargetAgentKey(e.target.value)}
+              placeholder="输入完整 agent_key"
+              className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 ring-blue-500/10"
+            />
+          )}
+          {lastSyncMessage && (
+            <div className="text-xs font-bold text-slate-500">{lastSyncMessage}</div>
+          )}
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider">最近同步记录</div>
+            <button onClick={loadSyncHistory} className="text-xs font-bold text-blue-600 hover:text-blue-700">刷新</button>
+          </div>
+          <div className="space-y-2">
+            {syncHistory.length === 0 ? (
+              <div className="text-xs text-slate-400">暂无同步记录</div>
+            ) : syncHistory.map(item => (
+              <button
+                key={item.sync_id}
+                onClick={() => setSelectedHistory(item)}
+                className="w-full text-left border border-slate-100 rounded-xl px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-1 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
+              >
+                <div className="text-xs text-slate-600">
+                  <span className="font-black uppercase mr-2">{item.scope}</span>
+                  <span>{item.message || '-'}</span>
+                </div>
+                <div className="text-[11px] font-mono text-slate-500">
+                  total={item.total} ok={item.ok_count} fail={item.fail_count} · {item.created_at}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -241,6 +354,59 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
           </table>
         </div>
       </div>
+
+      {selectedHistory && (
+        <div className="fixed inset-0 z-[220] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setSelectedHistory(null)}>
+          <div className="w-full max-w-6xl h-[78vh] bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">同步记录详情</p>
+                <p className="text-sm font-black text-slate-800 mt-1">
+                  {selectedHistory.scope.toUpperCase()} · {selectedHistory.sync_id}
+                </p>
+              </div>
+              <button onClick={() => setSelectedHistory(null)} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700">关闭</button>
+            </div>
+            <div className="px-6 py-3 border-b border-slate-100 text-xs text-slate-600 flex flex-wrap gap-4">
+              <span>status={selectedHistory.status}</span>
+              <span>total={selectedHistory.total}</span>
+              <span>ok={selectedHistory.ok_count}</span>
+              <span>fail={selectedHistory.fail_count}</span>
+              <span>time={selectedHistory.created_at}</span>
+            </div>
+            <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+              {Array.isArray((selectedHistory as any).details) && (selectedHistory as any).details.length > 0 ? (
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border border-slate-100 text-[10px] uppercase text-slate-400 font-black tracking-wider">
+                    <tr>
+                      <th className="px-3 py-2">Agent</th>
+                      <th className="px-3 py-2">Result</th>
+                      <th className="px-3 py-2">Seen</th>
+                      <th className="px-3 py-2">Upserted</th>
+                      <th className="px-3 py-2">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 border border-slate-100 border-t-0 text-xs">
+                    {(selectedHistory as any).details.map((d: any, idx: number) => (
+                      <tr key={`${d.agent_key || 'na'}-${idx}`}>
+                        <td className="px-3 py-2 font-mono text-slate-700">{d.agent_key || '-'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`font-black ${d.ok ? 'text-green-600' : 'text-red-600'}`}>{d.ok ? 'OK' : 'FAILED'}</span>
+                        </td>
+                        <td className="px-3 py-2">{d.seen ?? '-'}</td>
+                        <td className="px-3 py-2">{d.upserted ?? '-'}</td>
+                        <td className="px-3 py-2 text-slate-500">{d.error || (d.status_code ? `status_code=${d.status_code}` : '-')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-sm text-slate-400 py-10 text-center">该记录没有明细数据</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -18,7 +18,7 @@ export const projectsApi = {
     return handleResponse(response);
   },
   
-  create: async (project: { name: string; description?: string; k8s_namespace?: string }): Promise<SecurityProject> => {
+  create: async (project: { name: string; description?: string; k8s_namespace?: string; is_public?: boolean }): Promise<SecurityProject> => {
     const response = await fetch(`${API_BASE}/api/project`, {
       method: 'POST',
       headers: getHeaders(),
@@ -27,7 +27,7 @@ export const projectsApi = {
     return handleResponse(response);
   },
   
-  update: async (id: string, project: { name?: string; description?: string; k8s_namespace?: string }): Promise<SecurityProject> => {
+  update: async (id: string, project: { name?: string; description?: string; k8s_namespace?: string; is_public?: boolean }): Promise<SecurityProject> => {
     const response = await fetch(`${API_BASE}/api/project/${id}`, {
       method: 'PUT',
       headers: getHeaders(),

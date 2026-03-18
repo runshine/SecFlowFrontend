@@ -207,7 +207,58 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           </table>
         </div>
       </div>
-      {/* ... Log Overlay ... */}
+      {selectedTask && (
+        <div
+          className="fixed inset-0 z-[220] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => setSelectedTask(null)}
+        >
+          <div
+            className="w-full max-w-5xl h-[78vh] bg-slate-950 border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-8 py-6 border-b border-slate-800 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">任务执行细节</p>
+                <p className="text-sm font-black text-white truncate mt-1">
+                  {selectedTask.service_name || 'Unknown'} · {selectedTask.id}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedTask(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                title="关闭"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 space-y-3 custom-scrollbar">
+              {logLoading ? (
+                <div className="h-full flex items-center justify-center">
+                  <Loader2 className="animate-spin text-blue-500" />
+                </div>
+              ) : logs.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
+                  <CheckCircle2 size={22} />
+                  <p className="text-xs font-bold">暂无执行日志</p>
+                </div>
+              ) : (
+                logs.map((log, index) => (
+                  <div key={`${log.timestamp}-${index}`} className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+                    <div className="flex items-center justify-between gap-4 mb-2">
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${log.level === 'ERROR' ? 'text-red-400' : log.level === 'WARNING' || log.level === 'WARN' ? 'text-amber-400' : 'text-blue-400'}`}>
+                        {log.level}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500">{log.timestamp || '-'}</span>
+                    </div>
+                    <pre className="text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words font-mono">{log.message}</pre>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

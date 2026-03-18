@@ -35,7 +35,7 @@ export const AppInstanceDetailPage: React.FC<{
     setIsOperating(true);
     if (force) setIsOperatingForce(true);
     try {
-      await api.workflow.initializeAppWorkflow(instanceId, force);
+      await api.workflow.initializeAppWorkflow(instanceId);
       await loadInstance();
     } catch (error: any) {
       alert(`初始化失败: ${error.message}`);
@@ -83,7 +83,7 @@ export const AppInstanceDetailPage: React.FC<{
 
   const loadLogs = async () => {
     try {
-      const data = await api.workflow.getAppWorkflowLogs(instanceId, { tail_lines: 100 });
+      const data = await api.workflow.getAppWorkflowLogs(instanceId);
       setLogs(data.logs || '暂无日志');
     } catch (error: any) {
       setLogs(`加载日志失败: ${error.message}`);

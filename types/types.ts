@@ -167,8 +167,6 @@ export interface WorkflowInstance {
   last_run_at?: string;
   nodes: WorkflowNodeInstance[];
   edges?: WorkflowEdge[];
-  has_warning?: boolean;
-  message?: string;
   created_by?: string;
   started_at?: string;
   finished_at?: string;
@@ -235,6 +233,9 @@ export interface AppWorkflow {
   env_vars?: Array<{ name: string; value: string }>;
   volume_mounts?: VolumeMount[];
   resources?: ResourceRequirements;
+  ingress_type?: string;
+  ingress_host?: string;
+  ingress_ip?: string;
   created_by?: string;
   created_at: string;
   updated_at?: string;
@@ -252,6 +253,16 @@ export interface AppWorkflowLogs {
   logs: string;
   container?: string;
   previous: boolean;
+}
+
+export interface IngressController {
+  name: string;
+  namespace: string;
+  type: string;
+  external_ip: string;
+  cluster_ip: string;
+  ports: Array<{ name: string; port: number; protocol: string }>;
+  ingress_class: string;
 }
 
 // --- End Workflow Types ---
@@ -295,6 +306,44 @@ export interface MachineToken {
   expires_at: string | null;
 }
 
+export interface Department {
+  id: number;
+  name: string;
+  description?: string;
+  parent_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentMember {
+  id: number;
+  user_id: number;
+  username: string;
+  department_id: number;
+  department_name: string;
+  role: 'leader' | 'vice_leader' | 'member';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: number | string;  // 支持项目空间的字符串ID
+  name: string;
+  description?: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+  departments?: Department[];
+  project_space_id?: string;  // 项目空间的字符串ID
+  org_id?: number;  // 组织架构系统的整数ID
+  sync_error?: string;  // 同步错误信息
+  owner_id?: string;
+  owner_name?: string;
+  owner_department_id?: number;
+  owner_department_name?: string;
+  roles?: any[];
+}
+
 export interface SecurityProject {
   id: string;
   name: string;
@@ -302,6 +351,7 @@ export interface SecurityProject {
   owner_id?: string;
   owner_name?: string;
   status?: string;
+  is_public?: boolean;
   created_at?: string;
   updated_at?: string;
   k8s_namespace?: string;
@@ -364,10 +414,58 @@ export interface Agent {
   status: 'online' | 'offline' | 'error' | 'timeout' | 'unknown';
   ip_address: string;
   system_info?: any;
+  daemon_info?: DaemonAgentInfo;
   project_id?: string;
   last_seen?: string;
   pod_id?: string;
   services?: any[];
+}
+
+// Docker Compose 解析相关类型定义
+
+// 解析后的端口配置
+export interface ComposePort {
+  published: string;
+  target: string;
+  protocol: string;
+}
+
+// 解析后的卷挂载
+export interface ComposeVolume {
+  source: string;
+  target: string;
+  type: 'bind' | 'volume' | 'tmpfs';
+  read_only?: boolean;
+  mode?: string;
+}
+
+// 解析后的服务定义
+export interface ComposeService {
+  image?: string;
+  ports?: ComposePort[];
+  environment?: Record<string, string>;
+  volumes?: ComposeVolume[];
+  networks?: string[];
+  depends_on?: string[];
+  restart?: string;
+  container_name?: string;
+  build?: {
+    context?: string;
+    dockerfile?: string;
+  };
+  labels?: Record<string, string>;
+  healthcheck?: any;
+  deploy?: any;
+}
+
+// 解析后的完整 docker-compose 结构
+export interface ParsedCompose {
+  version?: string;
+  services: Record<string, ComposeService>;
+  networks?: Record<string, any>;
+  volumes?: Record<string, any>;
+  configs?: Record<string, any>;
+  secrets?: Record<string, any>;
 }
 
 export interface EnvTemplate {
@@ -376,6 +474,25 @@ export interface EnvTemplate {
   description: string;
   file_size: number;
   updated_at: string;
+
+  // 新增字段
+  metadata?: {
+    parsed_compose?: ParsedCompose;
+    parsed_at?: string;
+    parse_error?: string | null;
+    parse_status?: 'success' | 'error' | 'stale';
+    content_hash?: string;
+  };
+}
+
+// 解析数据响应类型
+export interface ParsedComposeResponse {
+  template_name: string;
+  parsed_compose: ParsedCompose | null;
+  parse_status: 'success' | 'error' | 'stale';
+  parsed_at?: string;
+  parse_error?: string | null;
+  is_stale?: boolean;
 }
 
 export interface AsyncTask {
@@ -531,12 +648,151 @@ export interface DeployScriptListResponse {
 }
 
 export type ViewType =
-  | 'dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
+  | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
-  | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system'
+  | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'
   | 'sys-settings' | 'change-password'
-  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online';
+  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online' | 'user-mgmt-machine'
+  | 'org-mgmt-departments' | 'org-mgmt-members' | 'org-mgmt-projects';
+
+// Admin Dashboard Statistics Types
+export interface AdminDashboardStats {
+  users: {
+    total: number;
+    active: number;
+    online: number;
+  };
+  roles: {
+    total: number;
+  };
+  projects: {
+    total: number;
+  };
+  agents: {
+    total: number;
+    online: number;
+    statusDistribution: Record<string, number>;
+  };
+  resources: {
+    totalPvcs: number;
+    totalStorageGi: number;
+    statusCounts: Record<string, number>;
+  };
+  workflows: {
+    totalInstances: number;
+    statusDistribution: Record<string, number>;
+    templates: {
+      appTemplates: number;
+      jobTemplates: number;
+    };
+  };
+  services: {
+    name: string;
+    status: 'healthy' | 'unhealthy' | 'unknown';
+  }[];
+  lastUpdated: string;
+}
+
+// Daemon Service Types (守护进程服务)
+export interface DaemonService {
+  name: string;
+  description: string;
+  is_running: boolean;
+  pid: number | null;
+  start_time: string | null;
+  uptime_seconds: number;
+  fail_count: number;
+  last_check: string;
+  monitor_mode: 'self' | 'systemd' | 'supervisor';
+}
+
+export interface DaemonServicesResponse {
+  code: number;
+  message: string;
+  data: {
+    services: DaemonService[];
+    total: number;
+    running_count: number;
+  };
+}
+
+export interface DaemonServiceLogs {
+  code: number;
+  message: string;
+  data: {
+    service_name: string;
+    log_type: string;
+    lines: string[];
+    total_lines: number;
+  };
+}
+
+export interface DaemonAgentServiceBrief {
+  name: string;
+  is_running: boolean;
+  pid: number;
+  uptime_seconds: number;
+  fail_count: number;
+  monitor_mode: string;
+}
+
+export interface DaemonAgentInfo {
+  version?: string;
+  go_version?: string;
+  platform?: string;
+  uuid?: string;
+  project_id?: string;
+  workspace?: string;
+  server?: string;
+  uptime_seconds?: number;
+  start_time?: string;
+  status?: string;
+  services_total?: number;
+  services_running?: number;
+  services_stopped?: number;
+  services_error?: number;
+  services?: DaemonAgentServiceBrief[];
+}
+
+export interface AgentTtydConnectionInfo {
+  agent_key: string;
+  agent_ip: string;
+  agent_status: string;
+  ttyd_port: number;
+  reachable: boolean;
+  probe_error?: string | null;
+  http_url: string;
+  ws_url: string;
+  open_path: string;
+}
+
+export interface AgentIngressRouteInfo {
+  route_id: string;
+  project_id: string;
+  namespace: string;
+  agent_key: string;
+  target_port: number;
+  external_ips: string[];
+  host: string;
+  path: string;
+  ingress_type: string;
+  path_type: string;
+  service_port: number;
+  ingress_name: string;
+  service_name: string;
+  tls_enabled: boolean;
+  tls_secret_name?: string | null;
+  websocket_enabled: boolean;
+  status: string;
+  access_url?: string | null;
+  owner_service?: string | null;
+  created_by?: string | null;
+  metadata?: Record<string, any>;
+  created_at?: string | null;
+  updated_at?: string | null;
+  deleted_at?: string | null;
+}

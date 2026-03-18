@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
-import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics } from './types/types';
+import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics, AdminDashboardStats } from './types/types';
 
 // 声明全局构建时间变量
 declare const __BUILD_TIME__: string;
@@ -54,6 +54,12 @@ import { PermMgmtPage } from './pages/user/PermMgmtPage';
 import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
 import { MachineTokenPage } from './pages/user/MachineTokenPage';
 
+// Admin Dashboard
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
+import { DepartmentPage } from './pages/org/DepartmentPage';
+import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
+import { ProjectPage } from './pages/org/ProjectPage';
+
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -69,7 +75,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'workflow-root']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'org-mgmt-root', 'workflow-root']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
@@ -82,6 +88,8 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
   const [pvcStats, setPvcStats] = useState<PVCStatistics | null>(null);
+  const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
+  const [adminStatsLoading, setAdminStatsLoading] = useState(false);
 
   // Health Status
   const [resourceServiceHealthy, setResourceServiceHealthy] = useState<boolean | null>(null);
@@ -175,6 +183,37 @@ const App: React.FC = () => {
     }
   };
 
+  // Check if user is admin:
+  // 1) UID=1 must always be treated as admin (supports id as number or string)
+  // 2) or has admin role
+  const isAdmin = !!(
+    user && (
+      Number(user.id) === 1 ||
+      (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
+    )
+  );
+
+  // Fetch admin dashboard statistics
+  const fetchAdminStats = async () => {
+    if (!user || !isAdmin) return;
+    setAdminStatsLoading(true);
+    try {
+      const stats = await api.admin.getStatistics();
+      setAdminStats(stats);
+    } catch (e) {
+      console.error('Failed to fetch admin statistics', e);
+    } finally {
+      setAdminStatsLoading(false);
+    }
+  };
+
+  // Fetch admin stats when viewing admin dashboard
+  useEffect(() => {
+    if (token && currentView === 'admin-dashboard' && isAdmin) {
+      fetchAdminStats();
+    }
+  }, [token, currentView, user]);
+
   useEffect(() => {
     if (selectedProjectId) {
       localStorage.setItem('last_project_id', selectedProjectId);
@@ -267,6 +306,14 @@ const App: React.FC = () => {
           setCurrentView={setCurrentView}
         />
       );
+      case 'admin-dashboard': return (
+        <AdminDashboardPage
+          adminStats={adminStats}
+          loading={adminStatsLoading}
+          onRefresh={fetchAdminStats}
+          setCurrentView={setCurrentView}
+        />
+      );
       case 'project-mgmt': return (
         <ProjectMgmtPage 
           projects={projects} 
@@ -310,7 +357,7 @@ const App: React.FC = () => {
       case 'pentest-orch': return <WorkflowPlaceholder title="测试编排" icon={<Workflow />} />;
       case 'pentest-exec-code': return <ExecutionCodeAuditPage projectId={selectedProjectId} />;
       case 'pentest-exec-work': return <ExecutionWorkPlatformPage projectId={selectedProjectId} />;
-      case 'pentest-exec-secmate': return <SecMateNGPage />;
+      case 'pentest-exec-secmate': return <SecMateNGPage projectId={selectedProjectId} />;
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
 
@@ -322,6 +369,11 @@ const App: React.FC = () => {
       case 'user-mgmt-perms': return <PermMgmtPage />;
       case 'user-mgmt-online': return <OnlineSessionPage />;
       case 'user-mgmt-machine': return <MachineTokenPage />;
+
+      // Organization Pages
+      case 'org-mgmt-departments': return <DepartmentPage />;
+      case 'org-mgmt-members': return <DepartmentMemberPage />;
+      case 'org-mgmt-projects': return <ProjectPage />;
 
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
     }
@@ -366,9 +418,6 @@ const App: React.FC = () => {
 
         <p className="mt-8 text-center text-[10px] text-slate-600 font-medium leading-relaxed">
           &copy; 2025 SecFlow 极速安全测试平台 <br/> 受信任的二进制分发与自动化渗透环境
-        </p>
-        <p className="mt-2 text-center text-[9px] text-slate-700 font-medium">
-          版本: {__BUILD_TIME__}
         </p>
       </div>
     </div>

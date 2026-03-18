@@ -1,16 +1,16 @@
 
 import React from 'react';
-import {
-  Shield,
-  LayoutDashboard,
-  Box,
-  Briefcase,
-  FileBox,
-  Database,
-  ShieldCheck,
-  Target,
-  LogOut,
-  PanelLeftClose,
+import { 
+  Shield, 
+  LayoutDashboard, 
+  Box, 
+  Briefcase, 
+  FileBox, 
+  Database, 
+  ShieldCheck, 
+  Target, 
+  LogOut, 
+  PanelLeftClose, 
   PanelLeftOpen,
   ChevronRight,
   Monitor,
@@ -40,7 +40,9 @@ import {
   Key,
   Layers,
   Activity,
-  GitBranch
+  GitBranch,
+  Building2,
+  FolderOpen
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
 
@@ -71,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   codeAuditHealth = null,
   workflowHealth = null
 }) => {
-  const isUserMgmtMode = currentView.startsWith('user-mgmt-');
+  const isUserMgmtMode = currentView.startsWith('user-mgmt-') || currentView.startsWith('org-mgmt-');
 
   const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false }: any) => {
     const isExpanded = expandedMenus.has(id);
@@ -126,11 +128,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
     );
   };
 
-  const renderMainSidebar = () => (
+  const renderMainSidebar = () => {
+    // Check if user is admin:
+    // UID=1 is always admin (supports id as number or string), or has admin role
+    const isAdmin = !!(
+      user && (
+        Number(user.id) === 1 ||
+        (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
+      )
+    );
+
+    return (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">
       <div className="space-y-1">
-        <SidebarItem id="dashboard" label="控制台" icon={<LayoutDashboard size={20} />} />
-        
+        {/* Admin Dashboard - Only visible for admin users, shown first */}
+        {isAdmin && (
+          <SidebarItem
+            id="admin-dashboard"
+            label="管理员控制台"
+            icon={<ShieldAlert size={20} />}
+            healthStatus={true}
+            applyHealth={true}
+          />
+        )}
+
+        <SidebarItem
+          id="dashboard"
+          label="控制台"
+          icon={<LayoutDashboard size={20} />}
+          healthStatus={true}
+          applyHealth={true}
+        />
+
         <SidebarItem 
           id="base-mgmt" 
           label="基础资源管理" 
@@ -181,10 +210,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ]} 
         />
 
-        <SidebarItem
-          id="workflow-root"
-          label="安全测试工作流"
-          icon={<Workflow size={20} />}
+        <SidebarItem 
+          id="workflow-root" 
+          label="安全测试工作流" 
+          icon={<Workflow size={20} />} 
           healthStatus={workflowHealth}
           applyHealth={true}
           children={[
@@ -212,6 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </nav>
   );
+  };
 
   const renderUserMgmtSidebar = () => (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">
@@ -223,16 +253,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
              <ArrowLeftCircle size={16} /> 返回业务大盘
           </button>
           
-          <SidebarItem 
-            id="user-mgmt-root" 
-            label="用户权限中心" 
-            icon={<ShieldAlert size={20} />} 
+          <SidebarItem
+            id="user-mgmt-root"
+            label="用户权限中心"
+            icon={<ShieldAlert size={20} />}
             children={[
               { id: 'user-mgmt-users', label: '用户账号管理', icon: <Users size={14} /> },
               { id: 'user-mgmt-roles', label: '角色定义管理', icon: <UserCheck size={14} /> },
               { id: 'user-mgmt-perms', label: '功能权限分配', icon: <Settings size={14} /> },
               { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> },
               { id: 'user-mgmt-machine', label: '机机凭证管理', icon: <Cpu size={14} /> }
+            ]}
+          />
+          
+          <SidebarItem 
+            id="org-mgmt-root" 
+            label="组织架构管理" 
+            icon={<Building2 size={20} />} 
+            children={[
+              { id: 'org-mgmt-departments', label: '部门结构管理', icon: <Building2 size={14} /> },
+              { id: 'org-mgmt-members', label: '部门成员管理', icon: <Users size={14} /> },
+              { id: 'org-mgmt-projects', label: '项目权限管理', icon: <FolderOpen size={14} /> }
             ]} 
           />
        </div>

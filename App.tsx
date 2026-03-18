@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
-import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics } from './types/types';
+import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, PVCStatistics, AdminDashboardStats } from './types/types';
 
 // 声明全局构建时间变量
 declare const __BUILD_TIME__: string;
@@ -54,6 +54,9 @@ import { PermMgmtPage } from './pages/user/PermMgmtPage';
 import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
 import { MachineTokenPage } from './pages/user/MachineTokenPage';
 
+// Admin Dashboard
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
+
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -82,6 +85,8 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
   const [pvcStats, setPvcStats] = useState<PVCStatistics | null>(null);
+  const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
+  const [adminStatsLoading, setAdminStatsLoading] = useState(false);
 
   // Health Status
   const [resourceServiceHealthy, setResourceServiceHealthy] = useState<boolean | null>(null);
@@ -175,6 +180,30 @@ const App: React.FC = () => {
     }
   };
 
+  // Check if user is admin (UID=1 or has admin role)
+  const isAdmin = user && (user.id === 1 || user.role.includes('admin') || user.role.includes('管理员'));
+
+  // Fetch admin dashboard statistics
+  const fetchAdminStats = async () => {
+    if (!user || !isAdmin) return;
+    setAdminStatsLoading(true);
+    try {
+      const stats = await api.admin.getStatistics();
+      setAdminStats(stats);
+    } catch (e) {
+      console.error('Failed to fetch admin statistics', e);
+    } finally {
+      setAdminStatsLoading(false);
+    }
+  };
+
+  // Fetch admin stats when viewing admin dashboard
+  useEffect(() => {
+    if (token && currentView === 'admin-dashboard' && isAdmin) {
+      fetchAdminStats();
+    }
+  }, [token, currentView, user]);
+
   useEffect(() => {
     if (selectedProjectId) {
       localStorage.setItem('last_project_id', selectedProjectId);
@@ -264,6 +293,14 @@ const App: React.FC = () => {
           templates={templates}
           servicesCount={dashboardServicesCount}
           pvcStats={pvcStats}
+          setCurrentView={setCurrentView}
+        />
+      );
+      case 'admin-dashboard': return (
+        <AdminDashboardPage
+          adminStats={adminStats}
+          loading={adminStatsLoading}
+          onRefresh={fetchAdminStats}
           setCurrentView={setCurrentView}
         />
       );

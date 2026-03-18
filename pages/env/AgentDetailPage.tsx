@@ -1,16 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
-import { 
-  ChevronLeft, 
-  RefreshCw, 
-  Loader2, 
-  Server, 
-  Info, 
-  Cpu, 
-  ShieldCheck, 
-  Activity, 
-  Box, 
-  History, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ChevronLeft,
+  RefreshCw,
+  Loader2,
+  Server,
+  Info,
+  Cpu,
+  ShieldCheck,
+  Activity,
+  Box,
+  History,
   Terminal,
   Clock,
   ExternalLink,
@@ -28,9 +28,14 @@ import {
   Hash,
   ChevronRight,
   Zap,
-  Trash2
+  Trash2,
+  FileText,
+  Search,
+  Check,
+  CheckSquare,
+  X
 } from 'lucide-react';
-import { Agent, AgentService, AsyncTask } from '../../types/types';
+import { Agent, AgentService, AsyncTask, DaemonAgentInfo, DaemonService, EnvTemplate } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
@@ -45,7 +50,25 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   const [agent, setAgent] = useState<Agent | null>(null);
   const [services, setServices] = useState<AgentService[]>([]);
   const [tasks, setTasks] = useState<AsyncTask[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'processes' | 'network' | 'disks' | 'services'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'processes' | 'network' | 'disks' | 'services' | 'daemon-services'>('overview');
+
+  // Daemon Services State
+  const [daemonServices, setDaemonServices] = useState<DaemonService[]>([]);
+  const [daemonLoading, setDaemonLoading] = useState(false);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logsContent, setLogsContent] = useState<string[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [selectedService, setSelectedService] = useState<DaemonService | null>(null);
+  const [daemonAgentInfo, setDaemonAgentInfo] = useState<DaemonAgentInfo | null>(null);
+  const [daemonAgentHealth, setDaemonAgentHealth] = useState<any>(null);
+
+  // Batch deploy templates for current agent
+  const [isBatchDeployModalOpen, setIsBatchDeployModalOpen] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [deployingBatch, setDeployingBatch] = useState(false);
+  const [templates, setTemplates] = useState<EnvTemplate[]>([]);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [selectedTemplateNames, setSelectedTemplateNames] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (agentKey && projectId) {
@@ -65,6 +88,21 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       setAgent(agentData);
       setServices(servicesData?.services || []);
       setTasks(tasksData?.task || []);
+
+      let daemonInfo = agentData?.daemon_info || null;
+      try {
+        const daemonInfoResp = await api.environment.getDaemonAgentInfo(agentKey);
+        if (daemonInfoResp?.data) daemonInfo = daemonInfoResp.data;
+      } catch (e) {
+        console.warn('Failed to load daemon agent info', e);
+      }
+      setDaemonAgentInfo(daemonInfo);
+      try {
+        const daemonHealthResp = await api.environment.getDaemonAgentHealth(agentKey);
+        setDaemonAgentHealth(daemonHealthResp || null);
+      } catch (e) {
+        console.warn('Failed to load daemon agent health', e);
+      }
     } catch (err) {
       console.error("Failed to load agent detail", err);
     } finally {
@@ -80,6 +118,194 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       alert("健康检查失败");
     }
   };
+
+  // Daemon Services Functions
+  const loadDaemonServices = async () => {
+    if (!agentKey) return;
+    setDaemonLoading(true);
+    try {
+      const response = await api.environment.getDaemonServices(agentKey);
+      setDaemonServices(response?.data?.services || []);
+    } catch (err) {
+      console.error("Failed to load daemon services", err);
+      setDaemonServices([]);
+    } finally {
+      setDaemonLoading(false);
+    }
+  };
+
+  const loadDaemonAgentInfo = async () => {
+    if (!agentKey) return;
+    try {
+      const [infoResp, healthResp] = await Promise.all([
+        api.environment.getDaemonAgentInfo(agentKey),
+        api.environment.getDaemonAgentHealth(agentKey)
+      ]);
+      setDaemonAgentInfo(infoResp?.data || null);
+      setDaemonAgentHealth(healthResp || null);
+    } catch (err) {
+      console.error("Failed to load daemon agent info", err);
+    }
+  };
+
+  const handleDaemonServiceAction = async (serviceName: string, action: 'start' | 'stop' | 'restart') => {
+    try {
+      let result;
+      if (action === 'start') {
+        result = await api.environment.startDaemonService(agentKey, serviceName);
+      } else if (action === 'stop') {
+        result = await api.environment.stopDaemonService(agentKey, serviceName);
+      } else {
+        result = await api.environment.restartDaemonService(agentKey, serviceName);
+      }
+
+      if (result?.code === 0) {
+        await loadDaemonServices();
+      } else {
+        alert(`操作失败: ${result?.message || '未知错误'}`);
+      }
+    } catch (err) {
+      console.error(`Failed to ${action} daemon service`, err);
+      alert(`操作失败: ${err}`);
+    }
+  };
+
+  const handleViewLogs = async (serviceName: string) => {
+    const service = daemonServices.find(s => s.name === serviceName);
+    setSelectedService(service || null);
+    setShowLogsModal(true);
+    setLogsLoading(true);
+    try {
+      const response = await api.environment.getDaemonServiceLogs(agentKey, serviceName, 'stdout', 200);
+      setLogsContent(response?.data?.lines || []);
+    } catch (err) {
+      console.error("Failed to load service logs", err);
+      setLogsContent(['加载日志失败']);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const loadTemplates = async () => {
+    setTemplatesLoading(true);
+    try {
+      const pageSize = 200;
+      let page = 1;
+      let total = 0;
+      let all: EnvTemplate[] = [];
+      do {
+        const res = await api.environment.getTemplates(page, pageSize);
+        const pageData = res.templates || [];
+        total = res.total || 0;
+        all = all.concat(pageData);
+        page += 1;
+      } while (all.length < total);
+      setTemplates(all);
+    } catch (err) {
+      console.error('Failed to load templates', err);
+      alert('获取模板列表失败');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const openBatchDeployModal = async () => {
+    if (!projectId || !agentKey) return;
+    setTemplateSearch('');
+    setSelectedTemplateNames(new Set());
+    setIsBatchDeployModalOpen(true);
+    await loadTemplates();
+  };
+
+  const filteredTemplates = useMemo(() => {
+    const keyword = templateSearch.trim().toLowerCase();
+    if (!keyword) return templates;
+    return templates.filter(t =>
+      t.name.toLowerCase().includes(keyword) ||
+      (t.description || '').toLowerCase().includes(keyword)
+    );
+  }, [templates, templateSearch]);
+
+  const toggleTemplateSelect = (name: string) => {
+    setSelectedTemplateNames(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFilteredTemplates = () => {
+    if (filteredTemplates.length === 0) return;
+    setSelectedTemplateNames(prev => {
+      const next = new Set(prev);
+      const allSelected = filteredTemplates.every(t => next.has(t.name));
+      if (allSelected) {
+        filteredTemplates.forEach(t => next.delete(t.name));
+      } else {
+        filteredTemplates.forEach(t => next.add(t.name));
+      }
+      return next;
+    });
+  };
+
+  const buildServiceName = (templateName: string) => {
+    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 48);
+    const stamp = Date.now().toString(36).slice(-6);
+    return `${normalized}-${agentKey.slice(0, 6)}-${stamp}`;
+  };
+
+  const executeBatchDeploy = async () => {
+    if (!projectId || !agentKey || selectedTemplateNames.size === 0) return;
+    setDeployingBatch(true);
+    try {
+      const templateNames = Array.from(selectedTemplateNames.values()) as string[];
+      const deployments = templateNames.map(templateName => ({
+        service_name: buildServiceName(templateName),
+        agent_key: agentKey,
+        template_name: templateName,
+      }));
+      const result = await api.environment.deployBatch({
+        project_id: projectId,
+        deployments,
+      });
+      alert(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}`);
+      setIsBatchDeployModalOpen(false);
+      setSelectedTemplateNames(new Set());
+      loadAllData();
+    } catch (err) {
+      console.error('Batch deploy failed', err);
+      alert('批量部署失败');
+    } finally {
+      setDeployingBatch(false);
+    }
+  };
+
+  const formatUptime = (seconds: number): string => {
+    if (!seconds) return 'N/A';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  };
+
+  const formatIsoTime = (value?: string) => {
+    if (!value) return 'N/A';
+    const dt = new Date(value);
+    if (isNaN(dt.getTime())) return value;
+    return dt.toLocaleString();
+  };
+
+  // Load daemon services when tab changes
+  useEffect(() => {
+    if (activeTab === 'daemon-services' && agentKey) {
+      loadDaemonServices();
+      loadDaemonAgentInfo();
+    }
+  }, [activeTab, agentKey]);
 
   if (loading) {
     return (
@@ -100,6 +326,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
 
   const sys = agent.system_info;
   const formatted = sys?.formatted;
+  const daemonInfo = daemonAgentInfo || agent.daemon_info;
 
   return (
     <div className="p-10 space-y-8 animate-in slide-in-from-right duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
@@ -129,6 +356,12 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
           <button onClick={loadAllData} className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm">
             <RefreshCw size={20} />
           </button>
+          <button
+            onClick={openBatchDeployModal}
+            className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-500/20"
+          >
+            <Zap size={18} /> 批量部署模板
+          </button>
           <button 
             onClick={handleDeepHealthCheck}
             className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10"
@@ -144,7 +377,8 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
           { id: 'processes', label: '进程监控', icon: <Terminal size={16} /> },
           { id: 'network', label: '网卡配置', icon: <Network size={16} /> },
           { id: 'disks', label: '存储挂载', icon: <HardDrive size={16} /> },
-          { id: 'services', label: '节点服务', icon: <Layers size={16} /> }
+          { id: 'services', label: '节点服务', icon: <Layers size={16} /> },
+          { id: 'daemon-services', label: '基本服务', icon: <Zap size={16} /> }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -436,6 +670,232 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
                </table>
             </div>
           )}
+
+          {activeTab === 'daemon-services' && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Agent 离线提示 */}
+              {agent.status !== 'online' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-[2rem] p-6 flex items-center gap-4">
+                  <ShieldAlert className="text-amber-600" size={24} />
+                  <div>
+                    <h4 className="font-black text-amber-800">节点离线</h4>
+                    <p className="text-xs text-amber-600">无法获取守护进程服务状态，请检查节点连接</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Info size={16} className="text-blue-500" /> Agent 运行信息
+                  </h4>
+                  <span className="text-[10px] font-black text-slate-400 uppercase">
+                    状态: <span className="text-slate-700">{daemonInfo?.status || 'N/A'}</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Version</p>
+                    <p className="text-sm font-black text-slate-800">{daemonInfo?.version || 'N/A'}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Go/Platform</p>
+                    <p className="text-sm font-black text-slate-800">{daemonInfo?.go_version || 'N/A'} / {daemonInfo?.platform || 'N/A'}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">UUID / Project</p>
+                    <p className="text-xs font-mono font-black text-slate-700 break-all">{daemonInfo?.uuid || 'N/A'} / {daemonInfo?.project_id || 'N/A'}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">Workspace / Server</p>
+                    <p className="text-xs font-mono font-black text-slate-700 break-all">{daemonInfo?.workspace || 'N/A'} / {daemonInfo?.server || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">总服务</p>
+                    <p className="text-lg font-black text-slate-800">{daemonInfo?.services_total ?? 0}</p>
+                  </div>
+                  <div className="bg-green-50 rounded-xl p-3 border border-green-100">
+                    <p className="text-[9px] font-black text-green-400 uppercase">运行中</p>
+                    <p className="text-lg font-black text-green-600">{daemonInfo?.services_running ?? 0}</p>
+                  </div>
+                  <div className="bg-red-50 rounded-xl p-3 border border-red-100">
+                    <p className="text-[9px] font-black text-red-400 uppercase">已停止</p>
+                    <p className="text-lg font-black text-red-600">{daemonInfo?.services_stopped ?? 0}</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+                    <p className="text-[9px] font-black text-amber-400 uppercase">异常服务</p>
+                    <p className="text-lg font-black text-amber-600">{daemonInfo?.services_error ?? 0}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Agent Uptime</p>
+                    <p className="text-lg font-black text-slate-800">{formatUptime(daemonInfo?.uptime_seconds || 0)}</p>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-500 font-bold">
+                  启动时间: <span className="font-black text-slate-700">{formatIsoTime(daemonInfo?.start_time)}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 font-bold mt-1">
+                  健康检查: <span className="font-black text-slate-700">{daemonAgentHealth?.status || 'N/A'}</span>
+                  <span className="ml-3 text-slate-400">{formatIsoTime(daemonAgentHealth?.timestamp)}</span>
+                </div>
+
+                {daemonInfo?.services && daemonInfo.services.length > 0 && (
+                  <div className="mt-6 border border-slate-100 rounded-2xl overflow-hidden">
+                    <div className="bg-slate-50 px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">守护服务简表（来自 /api/v1/agent/info）</div>
+                    <div className="divide-y divide-slate-50">
+                      {daemonInfo.services.map(svc => (
+                        <div key={svc.name} className="px-4 py-3 flex items-center justify-between text-xs">
+                          <span className="font-black text-slate-800">{svc.name}</span>
+                          <span className="text-slate-500 font-bold">
+                            {svc.is_running ? 'RUNNING' : 'STOPPED'} / PID {svc.pid || 'N/A'} / UPTIME {formatUptime(svc.uptime_seconds || 0)} / FAIL {svc.fail_count} / MODE {svc.monitor_mode || 'N/A'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 服务列表 */}
+              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Zap size={16} className="text-blue-500" /> 守护进程服务
+                  </h4>
+                  <button
+                    onClick={async () => {
+                      await Promise.all([loadDaemonServices(), loadDaemonAgentInfo()]);
+                    }}
+                    disabled={daemonLoading || agent.status !== 'online'}
+                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} className={daemonLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {daemonLoading ? (
+                  <div className="py-20 flex flex-col items-center justify-center">
+                    <Loader2 className="animate-spin text-blue-600 mb-4" size={32} />
+                    <p className="text-xs text-slate-400">正在加载服务状态...</p>
+                  </div>
+                ) : daemonServices.length === 0 ? (
+                  <div className="py-20 text-center">
+                    <Server className="text-slate-200 mx-auto mb-4" size={48} />
+                    <p className="text-xs text-slate-300 italic">未发现守护进程服务</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-50">
+                    {daemonServices.map(service => (
+                      <div key={service.name} className="p-6 hover:bg-slate-50/50 transition-all">
+                        <div className="flex items-start justify-between gap-4">
+                          {/* 服务信息 */}
+                          <div className="flex items-start gap-4 flex-1">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                              service.is_running ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              <Zap size={22} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 mb-1">
+                                <h5 className="text-sm font-black text-slate-800">{service.name}</h5>
+                                <StatusBadge status={service.is_running ? 'online' : 'offline'} />
+                              </div>
+                              <p className="text-xs text-slate-500 mb-3">{service.description}</p>
+
+                              {/* 服务指标 */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="text-xs">
+                                  <span className="text-slate-400 font-bold">PID:</span>
+                                  <span className="text-slate-700 font-black ml-1">{service.pid || 'N/A'}</span>
+                                </div>
+                                <div className="text-xs">
+                                  <span className="text-slate-400 font-bold">运行时间:</span>
+                                  <span className="text-slate-700 font-black ml-1">
+                                    {formatUptime(service.uptime_seconds)}
+                                  </span>
+                                </div>
+                                <div className="text-xs">
+                                  <span className="text-slate-400 font-bold">失败次数:</span>
+                                  <span className={`font-black ml-1 ${service.fail_count > 0 ? 'text-red-600' : 'text-slate-700'}`}>
+                                    {service.fail_count}
+                                  </span>
+                                </div>
+                                <div className="text-xs">
+                                  <span className="text-slate-400 font-bold">监控模式:</span>
+                                  <span className="text-slate-700 font-black ml-1">{service.monitor_mode}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 控制按钮 */}
+                          <div className="flex gap-2 flex-shrink-0">
+                            {service.is_running ? (
+                              <>
+                                <button
+                                  onClick={() => handleDaemonServiceAction(service.name, 'restart')}
+                                  className="px-4 py-2 bg-amber-50 text-amber-600 rounded-xl text-xs font-bold hover:bg-amber-100 transition-all flex items-center gap-1"
+                                >
+                                  <RefreshCw size={14} /> 重启
+                                </button>
+                                <button
+                                  onClick={() => handleDaemonServiceAction(service.name, 'stop')}
+                                  className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all flex items-center gap-1"
+                                >
+                                  <Activity size={14} /> 停止
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleDaemonServiceAction(service.name, 'start')}
+                                className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all flex items-center gap-1"
+                              >
+                                <Activity size={14} /> 启动
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleViewLogs(service.name)}
+                              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+                              title="查看日志"
+                            >
+                              <FileText size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 统计摘要 */}
+              {daemonServices.length > 0 && (
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">服务总数</p>
+                    <p className="text-2xl font-black text-slate-800">{daemonServices.length}</p>
+                  </div>
+                  <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+                    <p className="text-[9px] font-black text-green-400 uppercase">运行中</p>
+                    <p className="text-2xl font-black text-green-600">
+                      {daemonServices.filter(s => s.is_running).length}
+                    </p>
+                  </div>
+                  <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
+                    <p className="text-[9px] font-black text-red-400 uppercase">已停止</p>
+                    <p className="text-2xl font-black text-red-600">
+                      {daemonServices.filter(s => !s.is_running).length}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-8">
@@ -471,6 +931,14 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
                    <span className="uppercase tracking-widest">最后活跃</span>
                    <span className="text-white font-black">{agent.last_seen?.split('.')[0].replace('T', ' ')}</span>
                 </div>
+                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                   <span className="uppercase tracking-widest">Agent版本</span>
+                   <span className="text-white font-black">{daemonInfo?.version || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                   <span className="uppercase tracking-widest">Agent平台</span>
+                   <span className="text-white font-black">{daemonInfo?.platform || 'N/A'}</span>
+                </div>
              </div>
           </div>
 
@@ -503,6 +971,139 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
           </div>
         </div>
       </div>
+
+      {isBatchDeployModalOpen && (
+        <div className="fixed inset-0 z-[119] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
+          <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[86vh]">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight">批量部署模板到当前 Agent</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
+                  目标节点: {agent.hostname} ({agent.ip_address})
+                </p>
+              </div>
+              <button onClick={() => setIsBatchDeployModalOpen(false)} className="p-3 bg-slate-50 text-slate-400 hover:text-slate-800 rounded-2xl transition-all">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-5 overflow-y-auto">
+              <div className="flex items-center justify-between gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                  <input
+                    type="text"
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    placeholder="检索模板名称或描述..."
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 ring-blue-500/10"
+                  />
+                </div>
+                <button
+                  onClick={toggleSelectAllFilteredTemplates}
+                  disabled={filteredTemplates.length === 0}
+                  className="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <CheckSquare size={15} />
+                  {filteredTemplates.length > 0 && filteredTemplates.every(t => selectedTemplateNames.has(t.name)) ? '取消全选' : '全选筛选模板'}
+                </button>
+              </div>
+
+              {templatesLoading ? (
+                <div className="py-24 text-center">
+                  <Loader2 className="animate-spin mx-auto text-blue-600" size={28} />
+                  <p className="mt-3 text-xs font-bold text-slate-400">正在加载模板...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredTemplates.map(template => (
+                    <button
+                      key={template.name}
+                      onClick={() => toggleTemplateSelect(template.name)}
+                      className={`p-5 rounded-2xl border-2 transition-all text-left ${
+                        selectedTemplateNames.has(template.name)
+                          ? 'bg-blue-50 border-blue-600'
+                          : 'bg-white border-slate-100 hover:border-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-slate-800">{template.name}</p>
+                          <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{template.description || '无描述'}</p>
+                        </div>
+                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center ${
+                          selectedTemplateNames.has(template.name)
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'border-slate-200 text-transparent'
+                        }`}>
+                          <Check size={14} />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  {!templatesLoading && filteredTemplates.length === 0 && (
+                    <div className="col-span-2 py-16 text-center text-slate-400 text-sm font-bold">无匹配模板</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-500">
+                将提交 <span className="text-blue-600 font-black">{selectedTemplateNames.size}</span> 个部署任务到当前节点
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsBatchDeployModalOpen(false)}
+                  disabled={deployingBatch}
+                  className="px-6 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-black hover:bg-slate-50 disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={executeBatchDeploy}
+                  disabled={deployingBatch || selectedTemplateNames.size === 0}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-xl font-black hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {deployingBatch ? <Loader2 className="animate-spin" size={16} /> : <Zap size={16} />}
+                  提交批量部署
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 日志查看 Modal */}
+      {showLogsModal && selectedService && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-8" onClick={() => setShowLogsModal(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-black text-slate-800">服务日志 - {selectedService.name}</h4>
+                <p className="text-xs text-slate-400 mt-1">{selectedService.description}</p>
+              </div>
+              <button
+                onClick={() => setShowLogsModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-6 bg-slate-900">
+              {logsLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="animate-spin text-blue-400" size={32} />
+                </div>
+              ) : (
+                <pre className="text-xs font-mono text-green-400 whitespace-pre-wrap">
+                  {logsContent.join('\n') || '暂无日志'}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

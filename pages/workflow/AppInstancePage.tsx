@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Loader2, Trash2, Play, Square, RefreshCw, Power, AlertCircle, Box, ChevronLeft, ChevronRight, ArrowLeft, Container, Layers } from 'lucide-react';
 import { api } from '../../api/api';
-import { AppWorkflow, AppTemplate, AppWorkflowStatus } from '../../types/types';
+import { AppWorkflow, AppTemplate, AppWorkflowStatus, IngressController } from '../../types/types';
 
 export const AppInstancePage: React.FC<{
   projectId: string,
@@ -44,6 +44,13 @@ export const AppInstancePage: React.FC<{
   // PVC 列表（用于卷挂载选择）
   const [pvcList, setPvcList] = useState<Array<{ pvc_name: string; resource_name?: string }>>([]);
 
+  // Ingress 配置状态
+  const [enableIngress, setEnableIngress] = useState(false);
+  const [ingressControllers, setIngressControllers] = useState<IngressController[]>([]);
+  const [selectedIngressController, setSelectedIngressController] = useState<string>('nginx');
+  const [ingressHost, setIngressHost] = useState('');
+  const [ingressIP, setIngressIP] = useState('');
+
   // 加载数据
   useEffect(() => {
     if (projectId) {
@@ -75,6 +82,28 @@ export const AppInstancePage: React.FC<{
       console.error('Failed to load templates:', error);
     }
   };
+
+  // Load Ingress Controllers when entering fill-form step
+  useEffect(() => {
+    if (createStep === 'fill-form') {
+      const fetchIngressControllers = async () => {
+        try {
+          const res = await api.workflow.getIngressControllers();
+          const controllers = res.controllers || [];
+          setIngressControllers(controllers);
+
+          // Auto-select first controller and set its IP
+          if (controllers.length > 0) {
+            setSelectedIngressController(controllers[0].ingress_class);
+            setIngressIP(controllers[0].external_ip || '');
+          }
+        } catch (error) {
+          console.error('Failed to fetch Ingress Controllers:', error);
+        }
+      };
+      fetchIngressControllers();
+    }
+  }, [createStep]);
 
   // 搜索过滤
   const filteredInstances = useMemo(() => {
@@ -225,7 +254,10 @@ export const AppInstancePage: React.FC<{
         ...formData,
         project_id: projectId,
         env_vars: envVars.length > 0 ? envVars : undefined,
-        volume_mounts: volumeMounts.length > 0 ? volumeMounts : undefined
+        volume_mounts: volumeMounts.length > 0 ? volumeMounts : undefined,
+        ingress_type: enableIngress ? selectedIngressController : undefined,
+        ingress_host: enableIngress ? ingressHost : undefined,
+        ingress_ip: enableIngress ? ingressIP : undefined
       });
 
       setIsModalOpen(false);
@@ -773,6 +805,89 @@ export const AppInstancePage: React.FC<{
                           </span>
                         ))}
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Ingress 配置 */}
+              {selectedTemplate && selectedTemplate.create_service !== false && (
+                <div className="bg-green-50 rounded-2xl p-4 border-2 border-green-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs font-black text-green-600 uppercase">Ingress 配置</div>
+                      <span className="text-xs text-green-500">配置外部访问 (可选)</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enableIngress}
+                        onChange={(e) => setEnableIngress(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                    </label>
+                  </div>
+
+                  {enableIngress && (
+                    <div className="space-y-3">
+                      {/* Ingress Controller 选择 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">
+                          Ingress Controller
+                        </label>
+                        <select
+                          value={selectedIngressController}
+                          onChange={(e) => {
+                            setSelectedIngressController(e.target.value);
+                            const controller = ingressControllers.find(c => c.ingress_class === e.target.value);
+                            if (controller) {
+                              setIngressIP(controller.external_ip || '');
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-green-500"
+                          disabled={ingressControllers.length === 0}
+                        >
+                          {ingressControllers.length === 0 ? (
+                            <option value="">加载中...</option>
+                          ) : (
+                            ingressControllers.map(controller => (
+                              <option key={controller.name} value={controller.ingress_class}>
+                                {controller.ingress_class} ({controller.external_ip || controller.cluster_ip})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      {/* 主机名配置 */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">
+                          主机名 <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={ingressHost}
+                          onChange={(e) => setIngressHost(e.target.value)}
+                          placeholder="myapp.secflow.sothothv2.com"
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-green-500"
+                        />
+                        <p className="text-xs text-slate-400 mt-1">
+                          请输入完整的域名，用于外部访问此服务
+                        </p>
+                      </div>
+
+                      {/* 外部访问地址展示 */}
+                      {ingressIP && ingressHost && (
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">
+                            外部访问地址
+                          </label>
+                          <div className="px-3 py-2 bg-white border border-green-300 rounded-xl text-sm text-green-700 font-mono">
+                            http://{ingressHost} → {ingressIP}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

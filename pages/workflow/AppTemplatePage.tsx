@@ -1,15 +1,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Box, 
-  Plus, 
-  Trash2, 
-  Search, 
-  Loader2, 
-  RefreshCw, 
-  Layers, 
-  Monitor, 
-  ChevronLeft, 
+import {
+  Box,
+  Plus,
+  Trash2,
+  Search,
+  Loader2,
+  RefreshCw,
+  Layers,
+  Monitor,
+  ChevronLeft,
   ChevronRight,
   Clock,
   ExternalLink,
@@ -19,7 +19,9 @@ import {
   Zap,
   Globe,
   Settings,
-  AlertCircle
+  AlertCircle,
+  FileText,
+  HardDrive
 } from 'lucide-react';
 import { AppTemplate, TemplateScope } from '../../types/types';
 import { api } from '../../api/api';
@@ -282,6 +284,32 @@ export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: 
                     <div className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">Service</div>
                     <div className="text-sm font-black text-slate-700 truncate">{t.service_type || 'ClusterIP'}</div>
                   </div>
+                </div>
+
+                {/* Dependencies */}
+                <div className="flex items-center gap-3 mb-4">
+                  {(() => {
+                    const inputEnvCount = t.containers?.reduce((sum, c) => sum + (c.input_env_vars?.length || 0), 0) || 0;
+                    const inputMountCount = t.containers?.reduce((sum, c) => sum + (c.input_volume_mounts?.length || 0), 0) || 0;
+                    return (
+                      <>
+                        <div className="flex-1 bg-emerald-50 rounded-xl p-2.5 border border-emerald-100">
+                          <div className="flex items-center gap-1.5">
+                            <FileText size={12} className="text-emerald-500" />
+                            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">环境依赖</span>
+                          </div>
+                          <div className="text-sm font-black text-emerald-700 mt-1">{inputEnvCount}</div>
+                        </div>
+                        <div className="flex-1 bg-violet-50 rounded-xl p-2.5 border border-violet-100">
+                          <div className="flex items-center gap-1.5">
+                            <HardDrive size={12} className="text-violet-500" />
+                            <span className="text-[8px] font-black text-violet-400 uppercase tracking-widest">挂载依赖</span>
+                          </div>
+                          <div className="text-sm font-black text-violet-700 mt-1">{inputMountCount}</div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Footer */}

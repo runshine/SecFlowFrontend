@@ -1,6 +1,6 @@
 
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, WorkflowStatus, AppWorkflow, AppWorkflowLogs } from '../types/types';
+import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, WorkflowStatus, AppWorkflow, AppWorkflowLogs, IngressController } from '../types/types';
 
 export const workflowApi = {
   /**
@@ -259,6 +259,14 @@ export const workflowApi = {
   getNodeLogs: async (instanceId: string, nodeId: string, params: { tail_lines?: number; container?: string; previous?: boolean; timestamp?: boolean } = {}): Promise<{ logs: string }> => {
     const query = new URLSearchParams(params as any).toString();
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes/${nodeId}/logs?${query}`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
+  // --- Ingress Controllers ---
+  getIngressControllers: async (): Promise<{ controllers: IngressController[] }> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/ingress-controllers`, {
+      headers: getHeaders()
+    });
     return handleResponse(response);
   }
 };

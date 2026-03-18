@@ -469,11 +469,22 @@ export interface ParsedCompose {
 }
 
 export interface EnvTemplate {
+  id: number;
   name: string;
   type: string;
   description: string;
   file_size: number;
   updated_at: string;
+  visibility?: 'shared' | 'private';
+  owner_id?: string;
+  owner_name?: string;
+  permissions?: {
+    can_view?: boolean;
+    can_manage?: boolean;
+    can_copy?: boolean;
+    can_delete?: boolean;
+    can_update?: boolean;
+  };
 
   // 新增字段
   metadata?: {

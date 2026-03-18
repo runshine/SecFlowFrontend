@@ -65,7 +65,7 @@ interface TreeNode {
 export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<EnvTemplate[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
   const [templateDetail, setTemplateDetail] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,7 +109,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     name: '',
     description: '',
     type: 'yaml' as 'yaml' | 'archive',
-    content: ''
+    content: '',
+    visibility: 'shared' as 'shared' | 'private'
   });
 
   // Parsed Compose States
@@ -139,7 +140,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       for (const template of data.templates) {
         if (template.type === 'yaml' || template.type === 'archive') {
           try {
-            const parsed = await api.environment.getParsedCompose(template.name);
+            const parsed = await api.environment.getParsedCompose(template.id);
             parsedData[template.name] = parsed;
           } catch (error) {
             console.error(`Failed to parse template ${template.name}:`, error);
@@ -154,10 +155,14 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
-  const fetchParsedCompose = async (templateName: string) => {
+  const canManageTemplate = (template: any): boolean => template?.permissions?.can_manage !== false;
+
+  const canCopyTemplate = (template: any): boolean => template?.permissions?.can_copy !== false;
+
+  const fetchParsedCompose = async (templateId: number) => {
     setParseLoading(true);
     try {
-      const data = await api.environment.getParsedCompose(templateName);
+      const data = await api.environment.getParsedCompose(templateId);
       setParsedCompose(data);
     } catch (error) {
       console.error('Failed to fetch parsed compose:', error);
@@ -168,7 +173,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   // 加载 yaml 文件内容
-  const fetchYamlFileContent = async (templateName: string) => {
+  const fetchYamlFileContent = async (templateId: number) => {
     setYamlFileLoading(true);
     try {
       // 尝试获取 docker-compose.yaml 或 docker-compose.yml
@@ -178,7 +183,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
       for (const file of possibleFiles) {
         try {
-          const data = await api.environment.getTemplateFileContent(templateName, file);
+          const data = await api.environment.getTemplateFileContent(templateId, file);
           if (data.content) {
             content = data.content;
             foundFile = file;
@@ -191,13 +196,13 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
       // 如果上述文件都不存在，尝试从 directory_files 中查找第一个 yaml 文件
       if (!content) {
-        const detail = await api.environment.getTemplateDetail(templateName);
+        const detail = await api.environment.getTemplateDetail(templateId);
         if (detail.directory_files && detail.directory_files.length > 0) {
           const yamlFile = detail.directory_files.find((f: any) =>
             f.path.endsWith('.yaml') || f.path.endsWith('.yml')
           );
           if (yamlFile) {
-            const data = await api.environment.getTemplateFileContent(templateName, yamlFile.path);
+            const data = await api.environment.getTemplateFileContent(templateId, yamlFile.path);
             content = data.content;
             foundFile = yamlFile.path;
           }
@@ -213,19 +218,19 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
-  const viewDetail = async (name: string) => {
-    setSelectedTemplate(name);
+  const viewDetail = async (templateId: number) => {
+    setSelectedTemplate(templateId);
     setLoading(true);
     try {
-      const detail = await api.environment.getTemplateDetail(name);
+      const detail = await api.environment.getTemplateDetail(templateId);
       setTemplateDetail(detail);
       setViewMode('detail');
       setExpandedFolders(new Set(['root']));
 
       // 如果是 yaml 类型模板，获取解析数据和文件内容
       if (detail.type === 'yaml') {
-        fetchParsedCompose(name);
-        fetchYamlFileContent(name);
+        fetchParsedCompose(templateId);
+        fetchYamlFileContent(templateId);
       } else {
         setParsedCompose(null);
         setYamlFileContent('');
@@ -273,11 +278,12 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   // Selection Logic
-  const toggleSelect = (name: string, e: React.MouseEvent) => {
+  const toggleSelect = (templateId: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    const key = String(templateId);
     const next = new Set(selectedNames);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     setSelectedNames(next);
   };
 
@@ -285,23 +291,32 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     if (selectedNames.size === filteredTemplates.length) {
       setSelectedNames(new Set());
     } else {
-      setSelectedNames(new Set(filteredTemplates.map(t => t.name)));
+      setSelectedNames(new Set(filteredTemplates.map(t => String(t.id))));
     }
   };
 
   const handleBatchDelete = async () => {
     if (selectedNames.size === 0) return;
-    setDeleteConfirm({ show: true, names: Array.from(selectedNames) });
+    const selectedTemplates = templates.filter((t) => selectedNames.has(String(t.id)));
+    const deletable = selectedTemplates.filter(canManageTemplate).map((t) => String(t.id));
+    if (deletable.length === 0) {
+      alert("当前选中的模板均无删除权限");
+      return;
+    }
+    if (deletable.length !== selectedTemplates.length) {
+      alert("部分模板无删除权限，已自动跳过，仅删除可管理模板");
+    }
+    setDeleteConfirm({ show: true, names: deletable });
   };
 
   const executeDelete = async () => {
     if (deleteConfirm.names.length === 0) return;
     setIsDeleting(true);
     try {
-      await api.environment.batchDeleteTemplates(deleteConfirm.names);
+      await api.environment.batchDeleteTemplates(deleteConfirm.names.map((id) => Number(id)));
       setDeleteConfirm({ show: false, names: [] });
       setSelectedNames(new Set());
-      if (selectedTemplate && deleteConfirm.names.includes(selectedTemplate)) {
+      if (selectedTemplate !== null && deleteConfirm.names.includes(String(selectedTemplate))) {
         setViewMode('list');
         setSelectedTemplate(null);
       }
@@ -368,11 +383,16 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       // 根据部署来源决定部署哪些模板
       const templatesToDeploy = (deploySource === 'detail'
         ? [selectedTemplate]
-        : Array.from(selectedNames) as string[]).filter((name): name is string => !!name);
+        : Array.from(selectedNames).map((id) => Number(id)))
+        .filter((id): id is number => typeof id === 'number' && !Number.isNaN(id));
+      const templateNameMap = new Map<number, string>();
+      templates.forEach((t) => templateNameMap.set(t.id, t.name));
       const agentsToDeploy = Array.from(selectedAgentKeys) as string[];
 
       let successCount = 0;
-      for (const tName of templatesToDeploy) {
+      for (const tId of templatesToDeploy) {
+        const tName = templateNameMap.get(tId);
+        if (!tName) continue;
         for (const aKey of agentsToDeploy) {
            await api.environment.deploy({
             service_name: buildServiceName(tName || 'service', aKey),
@@ -431,7 +451,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     if (!selectedTemplate) return;
     setLoading(true);
     try {
-      const res = await api.environment.getTemplateFileContent(selectedTemplate as string, path);
+      const res = await api.environment.getTemplateFileContent(selectedTemplate, path);
       setEditingFile({ path, content: res.content });
       setIsEditorOpen(true);
     } catch (err) {
@@ -460,7 +480,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   const handleDownloadAll = async () => {
     if (!selectedTemplate) return;
     try {
-      const response = await fetch(`${API_BASE}/api/agent/templates/${selectedTemplate}/download?as_zip=true&include_all=true`, {
+      const response = await fetch(`${API_BASE}/api/agent/templates/id/${selectedTemplate}/download?as_zip=true&include_all=true`, {
         headers: getHeaders()
       });
       if (!response.ok) throw new Error('下载失败');
@@ -468,7 +488,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${selectedTemplate}.zip`;
+      a.download = `${templateDetail?.name || selectedTemplate}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -482,7 +502,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   const handleDownloadFile = async (filePath: string) => {
     if (!selectedTemplate) return;
     try {
-      const response = await fetch(`${API_BASE}/api/agent/templates/${selectedTemplate}/files/content?path=${encodeURIComponent(filePath)}`, {
+      const response = await fetch(`${API_BASE}/api/agent/templates/id/${selectedTemplate}/files/content?path=${encodeURIComponent(filePath)}`, {
         headers: getHeaders()
       });
       if (!response.ok) throw new Error('下载失败');
@@ -555,7 +575,53 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   const handleDeleteTrigger = (name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setDeleteConfirm({ show: true, names: [name] });
+    const templateId = Number(name);
+    const template = templates.find((t) => t.id === templateId) || templateDetail;
+    if (!canManageTemplate(template)) {
+      alert("仅模板拥有者可删除");
+      return;
+    }
+    setDeleteConfirm({ show: true, names: [String(templateId)] });
+  };
+
+  const handleCopyTemplate = async (sourceTemplateId: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const source = templates.find((t) => t.id === sourceTemplateId) || templateDetail;
+    if (!canCopyTemplate(source)) {
+      alert("无权限复制该模板");
+      return;
+    }
+    const sourceName = source?.name || `template-${sourceTemplateId}`;
+    const defaultName = `${sourceName}-copy-${Date.now().toString(36).slice(-4)}`;
+    const targetName = window.prompt("请输入新模板名称", defaultName)?.trim();
+    if (!targetName) return;
+    const visibility = window.confirm("是否将复制模板设置为共享模板？\n点击“取消”将创建为私有模板。")
+      ? 'shared'
+      : 'private';
+    try {
+      await api.environment.copyTemplate(sourceTemplateId, { target_name: targetName, visibility });
+      alert(`复制成功：${targetName}`);
+      await loadTemplates();
+    } catch (err: any) {
+      alert(err?.message || "复制模板失败");
+    }
+  };
+
+  const handleRenameTemplate = async (template: any) => {
+    if (!template?.id) return;
+    if (!canManageTemplate(template)) {
+      alert("仅模板拥有者可修改模板名称");
+      return;
+    }
+    const nextName = window.prompt("请输入新的模板名称", template.name)?.trim();
+    if (!nextName || nextName === template.name) return;
+    try {
+      await api.environment.updateTemplateBasic(template.id, { name: nextName });
+      await loadTemplates();
+      await viewDetail(template.id);
+    } catch (err: any) {
+      alert(err?.message || "修改模板名称失败");
+    }
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
@@ -568,6 +634,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       formData.append('name', newTemplate.name);
       formData.append('description', newTemplate.description);
       formData.append('type', newTemplate.type);
+      formData.append('visibility', newTemplate.visibility);
 
       if (uploadTab === 'file') {
         const file = selectedUploadFile || fileInputRef.current?.files?.[0];
@@ -591,7 +658,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   const resetUploadForm = () => {
-    setNewTemplate({ name: '', description: '', type: 'yaml', content: '' });
+    setNewTemplate({ name: '', description: '', type: 'yaml', content: '', visibility: 'shared' });
     setUploadError(null);
     setSelectedUploadFile(null);
     setIsDragOverUpload(false);
@@ -661,7 +728,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                            <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                               <Box size={12} /> 模板: <span className="text-blue-600">
                                 {deploySource === 'detail'
-                                  ? `1 个 (${selectedTemplate})`
+                                  ? `1 个 (${templateDetail?.name || selectedTemplate})`
                                   : `${selectedNames.size} 个`}
                               </span>
                            </div>
@@ -758,6 +825,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   const RenderTreeNode: React.FC<{ node: TreeNode; depth: number }> = ({ node, depth }) => {
     const isExpanded = expandedFolders.has(node.path || 'root');
     const isFile = node.type === 'file';
+    const canManageCurrentTemplate = canManageTemplate(templateDetail);
     
     const getIcon = () => {
       if (!isFile) return isExpanded ? <FolderOpen size={16} className="text-amber-400" /> : <Folder size={16} className="text-amber-400" />;
@@ -791,7 +859,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           
           {isFile && (
             <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-              {isEditable(node.path) && (
+              {canManageCurrentTemplate && isEditable(node.path) && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleEditFile(node.path); }}
                   className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all"
@@ -807,16 +875,18 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
               >
                 <Download size={14} />
               </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDeleteFile(node.path); }}
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title="删除文件"
-              >
-                <Trash2 size={14} />
-              </button>
+              {canManageCurrentTemplate && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteFile(node.path); }}
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  title="删除文件"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           )}
-          {!isFile && node.path && node.path !== 'root' && (
+          {!isFile && node.path && node.path !== 'root' && canManageCurrentTemplate && (
             <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteDirectory(node.path); }}
@@ -842,6 +912,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   if (viewMode === 'detail' && templateDetail) {
+    const canManageCurrentTemplate = canManageTemplate(templateDetail);
+    const canCopyCurrentTemplate = canCopyTemplate(templateDetail);
     return (
       <div className="p-10 space-y-8 animate-in slide-in-from-right duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
         {/* Detail Header with Top Right Actions */}
@@ -857,6 +929,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
               <div className="flex items-center gap-4">
                 <h2 className="text-4xl font-black text-slate-800 tracking-tight">{templateDetail.name}</h2>
                 <StatusBadge status={templateDetail.type} />
+                <StatusBadge status={templateDetail.visibility === 'private' ? 'private' : 'shared'} />
               </div>
               <div className="flex items-center gap-6 mt-3">
                  <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
@@ -866,11 +939,35 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                  <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
                    <Calendar size={14} /> {templateDetail.updated_at?.replace('T', ' ')}
                  </div>
+                 {templateDetail.owner_name && (
+                   <>
+                     <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />
+                     <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
+                       OWNER: {templateDetail.owner_name}
+                     </div>
+                   </>
+                 )}
               </div>
             </div>
           </div>
 
           <div className="flex gap-4 self-end md:self-center">
+            {canCopyCurrentTemplate && (
+              <button
+                onClick={() => handleCopyTemplate(templateDetail.id)}
+                className="px-8 py-4 bg-white border border-slate-200 text-slate-700 rounded-[1.5rem] font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm active:scale-95"
+              >
+                <Layers size={20} className="text-indigo-600" /> 复制模板
+              </button>
+            )}
+            {canManageCurrentTemplate && (
+              <button
+                onClick={() => handleRenameTemplate(templateDetail)}
+                className="px-8 py-4 bg-white border border-slate-200 text-slate-700 rounded-[1.5rem] font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm active:scale-95"
+              >
+                <Edit3 size={20} className="text-emerald-600" /> 修改名称
+              </button>
+            )}
             <button
               onClick={openDetailDeployModal}
               className="px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black hover:bg-blue-700 transition-all flex items-center gap-3 shadow-xl shadow-blue-500/20 active:scale-95"
@@ -884,7 +981,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
               <Download size={20} className="text-blue-600" /> 下载全量包
             </button>
             <button
-              onClick={() => handleDeleteTrigger(templateDetail.name)}
+              onClick={() => handleDeleteTrigger(String(templateDetail.id))}
+              disabled={!canManageCurrentTemplate}
               className="px-8 py-4 bg-red-600 text-white rounded-[1.5rem] font-black hover:bg-red-700 transition-all flex items-center gap-3 shadow-xl shadow-red-500/20 active:scale-95"
             >
               <Trash2 size={20} /> 销毁模板
@@ -967,7 +1065,14 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                     <Download size={18} />
                   </button>
                   <button
-                    onClick={() => yamlFileContent && setEditingFile({ path: 'docker-compose.yaml', content: yamlFileContent })}
+                    onClick={() => {
+                      if (!canManageCurrentTemplate) return;
+                      if (yamlFileContent) {
+                        setEditingFile({ path: 'docker-compose.yaml', content: yamlFileContent });
+                        setIsEditorOpen(true);
+                      }
+                    }}
+                    disabled={!canManageCurrentTemplate}
                     className="p-3 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all shadow-sm"
                     title="编辑文件"
                   >
@@ -1179,30 +1284,36 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
               const compose = parsedData?.parsed_compose as ParsedCompose | undefined;
               const composeServices = Object.values((compose?.services || {}) as Record<string, any>) as any[];
               const totalPorts = composeServices.reduce((acc: number, s: any) => acc + (s.ports?.length || 0), 0);
+              const canManageCard = canManageTemplate(t);
+              const canCopyCard = canCopyTemplate(t);
 
               return (
                 <div
                   key={t.name}
-                  onClick={() => viewDetail(t.name)}
-                  className={`bg-white border-2 rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transition-all group hover:shadow-xl hover:border-blue-200 ${selectedNames.has(t.name) ? 'border-blue-600 ring-4 ring-blue-500/5' : 'border-slate-100'}`}
+                  onClick={() => viewDetail(t.id)}
+                  className={`bg-white border-2 rounded-[2rem] shadow-sm overflow-hidden cursor-pointer transition-all group hover:shadow-xl hover:border-blue-200 ${selectedNames.has(String(t.id)) ? 'border-blue-600 ring-4 ring-blue-500/5' : 'border-slate-100'}`}
                 >
                   {/* Card Header */}
                   <div className="p-6 border-b border-slate-50">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-4 flex-1 min-w-0">
                         <button
-                          onClick={e => toggleSelect(t.name, e)}
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${selectedNames.has(t.name) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-300 hover:bg-slate-100'}`}
+                          onClick={e => toggleSelect(t.id, e)}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${selectedNames.has(String(t.id)) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-300 hover:bg-slate-100'}`}
                         >
-                          {selectedNames.has(t.name) ? <CheckSquare size={20} /> : <Square size={20} />}
+                          {selectedNames.has(String(t.id)) ? <CheckSquare size={20} /> : <Square size={20} />}
                         </button>
                         <div className="min-w-0">
                           <div className="flex items-center gap-3">
                             <h3 className="text-lg font-black text-slate-800 truncate">{t.name}</h3>
                             <StatusBadge status={t.type} />
+                            <StatusBadge status={t.visibility === 'private' ? 'private' : 'shared'} />
                           </div>
                           {t.description && (
                             <p className="text-xs text-slate-400 mt-1 truncate">{t.description}</p>
+                          )}
+                          {t.owner_name && (
+                            <p className="text-[10px] text-slate-400 mt-1 truncate">Owner: {t.owner_name}</p>
                           )}
                         </div>
                       </div>
@@ -1312,15 +1423,25 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                       </div>
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all" onClick={e => e.stopPropagation()}>
+                      {canCopyCard && (
+                        <button
+                          onClick={(e) => handleCopyTemplate(t.id, e)}
+                          className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 rounded-lg transition-all shadow-sm"
+                        >
+                          <Layers size={14} />
+                        </button>
+                      )}
                       <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-lg transition-all shadow-sm">
                         <Download size={14} />
                       </button>
-                      <button
-                        onClick={(e) => handleDeleteTrigger(t.name, e)}
-                        className="p-2 bg-red-50 border border-red-100 text-red-400 hover:text-red-600 hover:border-red-200 rounded-lg transition-all shadow-sm"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {canManageCard && (
+                        <button
+                          onClick={(e) => handleDeleteTrigger(String(t.id), e)}
+                          className="p-2 bg-red-50 border border-red-100 text-red-400 hover:text-red-600 hover:border-red-200 rounded-lg transition-all shadow-sm"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1462,6 +1583,36 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                       <span className={`text-sm font-black ${newTemplate.type === 'archive' ? 'text-blue-600' : 'text-slate-600'}`}>
                         压缩包
                       </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
+                    模板可见性
+                  </label>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setNewTemplate({ ...newTemplate, visibility: 'shared' })}
+                      className={`flex-1 px-5 py-3 rounded-xl border-2 transition-all text-sm font-black ${
+                        newTemplate.visibility === 'shared'
+                          ? 'bg-blue-50 border-blue-600 text-blue-600 ring-4 ring-blue-500/5'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-blue-200'
+                      }`}
+                    >
+                      共享模板
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTemplate({ ...newTemplate, visibility: 'private' })}
+                      className={`flex-1 px-5 py-3 rounded-xl border-2 transition-all text-sm font-black ${
+                        newTemplate.visibility === 'private'
+                          ? 'bg-blue-50 border-blue-600 text-blue-600 ring-4 ring-blue-500/5'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-blue-200'
+                      }`}
+                    >
+                      私有模板
                     </button>
                   </div>
                 </div>
@@ -1630,14 +1781,16 @@ spec:
                 即将删除以下模板：
               </p>
               <div className="bg-slate-50 rounded-2xl p-5 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                {deleteConfirm.names.map(name => (
-                  <div key={name} className="flex items-center gap-3">
+                {deleteConfirm.names.map(id => {
+                  const templateName = templates.find((t) => t.id === Number(id))?.name || id;
+                  return (
+                  <div key={id} className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center shrink-0">
                       <Trash2 size={16} className="text-red-600" />
                     </div>
-                    <span className="text-sm font-black text-slate-700">{name}</span>
+                    <span className="text-sm font-black text-slate-700">{templateName}</span>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
 

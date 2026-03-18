@@ -53,40 +53,48 @@ export const environmentApi = {
   // Templates (Global, no project_id)
   getTemplates: async (page = 1, perPage = 20): Promise<{ templates: EnvTemplate[]; total: number }> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/templates?page=${page}&per_page=${perPage}`, { headers: getHeaders() })),
-  getTemplateDetail: async (name: string): Promise<any> => 
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${name}`, { headers: getHeaders() })),
-  getTemplateFiles: async (name: string, path = ''): Promise<{ files: any[] }> => 
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${name}/files?path=${path}`, { headers: getHeaders() })),
+  getTemplateDetail: async (templateId: number): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}`, { headers: getHeaders() })),
+  getTemplateByName: async (name: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/by-name/${encodeURIComponent(name)}`, { headers: getHeaders() })),
+  updateTemplateBasic: async (templateId: number, data: { name?: string; description?: string; visibility?: 'shared' | 'private' }): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    })),
+  getTemplateFiles: async (templateId: number, path = ''): Promise<{ files: any[] }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/files?path=${path}`, { headers: getHeaders() })),
   
-  getTemplateFileContent: async (templateName: string, filePath: string): Promise<{ content: string }> => 
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${templateName}/files/content?path=${encodeURIComponent(filePath)}`, { headers: getHeaders() })),
+  getTemplateFileContent: async (templateId: number, filePath: string): Promise<{ content: string }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/files/content?path=${encodeURIComponent(filePath)}`, { headers: getHeaders() })),
   
-  updateTemplateFileContent: async (templateName: string, filePath: string, content: string): Promise<any> => 
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${templateName}/files/content`, { 
+  updateTemplateFileContent: async (templateId: number, filePath: string, content: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/files/content`, {
       method: 'PUT', 
       headers: getHeaders(), 
       body: JSON.stringify({ path: filePath, content }) 
     })),
 
-  deleteTemplateFile: async (templateName: string, filePath: string): Promise<any> =>
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${templateName}/files`, {
+  deleteTemplateFile: async (templateId: number, filePath: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/files`, {
       method: 'DELETE',
       headers: getHeaders(),
       body: JSON.stringify({ path: filePath })
     })),
 
-  deleteTemplateDirectory: async (templateName: string, dirPath: string, force = false): Promise<any> =>
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${templateName}/directories`, {
+  deleteTemplateDirectory: async (templateId: number, dirPath: string, force = false): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/directories`, {
       method: 'DELETE',
       headers: getHeaders(),
       body: JSON.stringify({ path: dirPath, force })
     })),
 
-  deleteTemplate: async (name: string) => 
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${name}`, { method: 'DELETE', headers: getHeaders() })),
+  deleteTemplate: async (templateId: number) =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}`, { method: 'DELETE', headers: getHeaders() })),
 
-  batchDeleteTemplates: async (names: string[]) => {
-    return Promise.all(names.map(name => environmentApi.deleteTemplate(name)));
+  batchDeleteTemplates: async (templateIds: number[]) => {
+    return Promise.all(templateIds.map(id => environmentApi.deleteTemplate(id)));
   },
   
   uploadTemplate: async (formData: FormData) => {
@@ -102,11 +110,21 @@ export const environmentApi = {
     return handleResponse(response);
   },
 
-  getParsedCompose: async (name: string): Promise<any> =>
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${name}/parsed`, { headers: getHeaders() })),
+  copyTemplate: async (
+    sourceTemplateId: number,
+    data: { target_name: string; visibility?: 'shared' | 'private'; description?: string }
+  ): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${sourceTemplateId}/copy`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    })),
 
-  triggerParse: async (name: string): Promise<any> =>
-    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${name}/parse`, {
+  getParsedCompose: async (templateId: number): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/parsed`, { headers: getHeaders() })),
+
+  triggerParse: async (templateId: number): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/parse`, {
       method: 'POST',
       headers: getHeaders()
     })),

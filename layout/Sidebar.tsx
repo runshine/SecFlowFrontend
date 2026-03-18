@@ -128,9 +128,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
     );
   };
 
-  const renderMainSidebar = () => (
+  const renderMainSidebar = () => {
+    const isAdmin = !!(
+      user && (
+        Number(user.id) === 1 ||
+        (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
+      )
+    );
+
+    return (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">
       <div className="space-y-1">
+        {isAdmin && (
+          <SidebarItem
+            id="admin-dashboard"
+            label="管理员控制台"
+            icon={<ShieldAlert size={20} />}
+            healthStatus={true}
+            applyHealth={true}
+          />
+        )}
+
         <SidebarItem id="dashboard" label="控制台" icon={<LayoutDashboard size={20} />} />
         
         <SidebarItem 
@@ -214,6 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </nav>
   );
+  };
 
   const renderUserMgmtSidebar = () => (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">

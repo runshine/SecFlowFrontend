@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
-import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats } from './types/types';
+import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, AdminDashboardStats } from './types/types';
 import { api } from './api/api';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
@@ -55,6 +55,7 @@ import { MachineTokenPage } from './pages/user/MachineTokenPage';
 import { DepartmentPage } from './pages/org/DepartmentPage';
 import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
 import { ProjectPage } from './pages/org/ProjectPage';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
 
 const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
@@ -83,6 +84,8 @@ const App: React.FC = () => {
   const [packageStats, setPackageStats] = useState<PackageStats | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [dashboardServicesCount, setDashboardServicesCount] = useState(0);
+  const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
+  const [adminStatsLoading, setAdminStatsLoading] = useState(false);
 
   // Health Status
   const [resourceServiceHealthy, setResourceServiceHealthy] = useState<boolean | null>(null);
@@ -176,6 +179,33 @@ const App: React.FC = () => {
     }
   };
 
+  // UID=1 is always admin, or has admin role
+  const isAdmin = !!(
+    user && (
+      Number(user.id) === 1 ||
+      (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
+    )
+  );
+
+  const fetchAdminStats = async () => {
+    if (!user || !isAdmin) return;
+    setAdminStatsLoading(true);
+    try {
+      const stats = await api.admin.getStatistics();
+      setAdminStats(stats);
+    } catch (e) {
+      console.error('Failed to fetch admin statistics', e);
+    } finally {
+      setAdminStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (token && currentView === 'admin-dashboard' && isAdmin) {
+      fetchAdminStats();
+    }
+  }, [token, currentView, user]);
+
   useEffect(() => {
     if (selectedProjectId) {
       localStorage.setItem('last_project_id', selectedProjectId);
@@ -262,6 +292,14 @@ const App: React.FC = () => {
           templates={templates}
           servicesCount={dashboardServicesCount}
           setCurrentView={setCurrentView} 
+        />
+      );
+      case 'admin-dashboard': return (
+        <AdminDashboardPage
+          adminStats={adminStats}
+          loading={adminStatsLoading}
+          onRefresh={fetchAdminStats}
+          setCurrentView={setCurrentView}
         />
       );
       case 'project-mgmt': return (

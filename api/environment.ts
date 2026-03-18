@@ -1,6 +1,22 @@
 import { API_BASE, handleResponse, getHeaders } from './base';
 import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace, DaemonServicesResponse, DaemonServiceLogs, AgentTtydConnectionInfo, AgentIngressRouteInfo } from '../types/types';
 
+const normalizeTask = (raw: any): AsyncTask => ({
+  id: raw?.id || raw?.task_id || '',
+  type: raw?.type || raw?.task_type || '',
+  status: raw?.status || 'pending',
+  service_name: raw?.service_name || '',
+  progress: typeof raw?.progress === 'number' ? raw.progress : Number(raw?.progress || 0),
+  create_time: raw?.create_time || raw?.created_at || '',
+  agent_key: raw?.agent_key || '',
+});
+
+const normalizeTaskLog = (raw: any): TaskLog => ({
+  timestamp: raw?.timestamp || '',
+  level: raw?.level || 'INFO',
+  message: raw?.message || '',
+});
+
 export const environmentApi = {
   // Global Health Check
   getHealth: async (): Promise<{ status: string }> => {
@@ -52,6 +68,20 @@ export const environmentApi = {
       body: JSON.stringify({ path: filePath, content }) 
     })),
 
+  deleteTemplateFile: async (templateName: string, filePath: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${templateName}/files`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+      body: JSON.stringify({ path: filePath })
+    })),
+
+  deleteTemplateDirectory: async (templateName: string, dirPath: string, force = false): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/${templateName}/directories`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+      body: JSON.stringify({ path: dirPath, force })
+    })),
+
   deleteTemplate: async (name: string) => 
     handleResponse(await fetch(`${API_BASE}/api/agent/templates/${name}`, { method: 'DELETE', headers: getHeaders() })),
 
@@ -84,12 +114,28 @@ export const environmentApi = {
   // Tasks
   getTasks: async (projectId: string, params: { type?: string; status?: string; agent_key?: string } = {}): Promise<{ task: AsyncTask[]; total: number }> => {
     const query = new URLSearchParams({ ...params as any, project_id: projectId }).toString();
-    return handleResponse(await fetch(`${API_BASE}/api/agent/task?${query}`, { headers: getHeaders() }));
+    const raw = await handleResponse(await fetch(`${API_BASE}/api/agent/task?${query}`, { headers: getHeaders() }));
+    const list = (raw?.task || raw?.tasks || raw?.secflow_agent_tasks || []).map((item: any) => normalizeTask(item));
+    return {
+      ...raw,
+      task: list,
+      tasks: list,
+      total: raw?.total || list.length,
+    };
   },
   getTaskDetail: async (id: string, projectId: string): Promise<AsyncTask> => 
-    handleResponse(await fetch(`${API_BASE}/api/agent/task/${id}?project_id=${projectId}`, { headers: getHeaders() })),
+    normalizeTask(await handleResponse(await fetch(`${API_BASE}/api/agent/task/${id}?project_id=${projectId}`, { headers: getHeaders() }))),
   getTaskLogs: async (id: string, projectId: string, page = 1): Promise<{ log: TaskLog[]; total: number }> => 
-    handleResponse(await fetch(`${API_BASE}/api/agent/task/${id}/logs?page=${page}&project_id=${projectId}`, { headers: getHeaders() })),
+    (async () => {
+      const raw = await handleResponse(await fetch(`${API_BASE}/api/agent/task/${id}/logs?page=${page}&project_id=${projectId}`, { headers: getHeaders() }));
+      const list = (raw?.log || raw?.logs || []).map((item: any) => normalizeTaskLog(item));
+      return {
+        ...raw,
+        log: list,
+        logs: list,
+        total: raw?.total || list.length,
+      };
+    })(),
   deploy: async (data: { service_name: string; agent_key: string; template_name: string; project_id: string; extra_params?: any }) => 
     handleResponse(await fetch(`${API_BASE}/api/agent/task/deploy`, { 
       method: 'POST', 
@@ -113,6 +159,32 @@ export const environmentApi = {
       method: 'DELETE', 
       headers: getHeaders() 
     })),
+
+  getGlobalServices: async (
+    projectId: string,
+    params: { page?: number; per_page?: number; status?: string; q?: string; agent_key?: string; include_stale?: boolean } = {}
+  ): Promise<{ items: AgentService[]; total: number; page: number; per_page: number; project_id: string }> => {
+    const query = new URLSearchParams({
+      ...params as any,
+      project_id: projectId,
+      include_stale: params.include_stale ? 'true' : 'false'
+    }).toString();
+    return handleResponse(await fetch(`${API_BASE}/api/agent/services/global?${query}`, { headers: getHeaders() }));
+  },
+
+  syncGlobalServices: async (data?: { project_id?: string; agent_key?: string; stale_only?: boolean }): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/services/global/sync`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: data ? JSON.stringify(data) : undefined
+    })),
+
+  getGlobalServiceSyncHistory: async (params: { project_id?: string; page?: number; per_page?: number } = {}): Promise<any> => {
+    const query = new URLSearchParams({ ...params as any }).toString();
+    return handleResponse(await fetch(`${API_BASE}/api/agent/services/global/sync/history${query ? `?${query}` : ''}`, {
+      headers: getHeaders()
+    }));
+  },
 
   // Proxies
   getAgentServices: async (key: string): Promise<{ services: AgentService[] }> =>

@@ -355,21 +355,27 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
+  const buildServiceName = (templateName: string, agentKey: string) => {
+    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 48);
+    const stamp = Date.now().toString(36).slice(-6);
+    return `${normalized}-${agentKey.slice(0, 6)}-${stamp}`;
+  };
+
   const executeDeploy = async () => {
     if (selectedAgentKeys.size === 0 || !projectId) return;
     setDeploying(true);
     try {
       // 根据部署来源决定部署哪些模板
-      const templatesToDeploy = deploySource === 'detail'
+      const templatesToDeploy = (deploySource === 'detail'
         ? [selectedTemplate]
-        : Array.from(selectedNames) as string[];
+        : Array.from(selectedNames) as string[]).filter((name): name is string => !!name);
       const agentsToDeploy = Array.from(selectedAgentKeys) as string[];
 
       let successCount = 0;
       for (const tName of templatesToDeploy) {
         for (const aKey of agentsToDeploy) {
            await api.environment.deploy({
-            service_name: `${tName}-${Math.random().toString(36).slice(-4)}`,
+            service_name: buildServiceName(tName || 'service', aKey),
             agent_key: aKey,
             template_name: tName,
             project_id: projectId
@@ -499,6 +505,54 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
+  const handleDeleteFile = async (filePath: string) => {
+    if (!selectedTemplate) return;
+    const confirmed = window.confirm(`确认删除文件 "${filePath}" 吗？此操作无法撤销。`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      await api.environment.deleteTemplateFile(selectedTemplate, filePath);
+      if (isEditorOpen && editingFile?.path === filePath) {
+        setIsEditorOpen(false);
+        setEditingFile(null);
+      }
+      await viewDetail(selectedTemplate);
+    } catch (err: any) {
+      alert(err?.message || "删除文件失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteDirectory = async (dirPath: string) => {
+    if (!selectedTemplate) return;
+    const confirmed = window.confirm(`确认删除目录 "${dirPath}" 吗？`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      await api.environment.deleteTemplateDirectory(selectedTemplate, dirPath, false);
+      await viewDetail(selectedTemplate);
+    } catch (err: any) {
+      const message = err?.message || '';
+      if (message.includes('force=true') || message.includes('目录不为空')) {
+        const forceConfirmed = window.confirm(`目录 "${dirPath}" 非空。是否强制删除（包含全部子文件）？`);
+        if (!forceConfirmed) return;
+        try {
+          await api.environment.deleteTemplateDirectory(selectedTemplate, dirPath, true);
+          await viewDetail(selectedTemplate);
+        } catch (forceErr: any) {
+          alert(forceErr?.message || "强制删除目录失败");
+        }
+      } else {
+        alert(message || "删除目录失败");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteTrigger = (name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setDeleteConfirm({ show: true, names: [name] });
@@ -591,6 +645,115 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     t.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const renderDeployModal = () => (
+    isDeployModalOpen && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
+         <div className="bg-white w-full max-w-5xl h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
+            <div className="p-10 pb-6 border-b border-slate-50 bg-slate-50/30 shrink-0">
+               <div className="flex justify-between items-start mb-8">
+                  <div className="flex items-center gap-5">
+                     <div className="w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl shadow-blue-600/20">
+                        <Monitor size={32} />
+                     </div>
+                     <div>
+                        <h3 className="text-3xl font-black text-slate-800 tracking-tight">选择目标执行节点</h3>
+                        <div className="flex items-center gap-3 mt-1.5">
+                           <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              <Box size={12} /> 模板: <span className="text-blue-600">
+                                {deploySource === 'detail'
+                                  ? `1 个 (${selectedTemplate})`
+                                  : `${selectedNames.size} 个`}
+                              </span>
+                           </div>
+                           <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                           <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              <Activity size={12} /> 总节点: <span>{availableAgents.length}</span>
+                           </div>
+                           <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                           <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              <Check size={12} className="text-green-500" /> 已就绪: <span className="text-green-600">{availableAgents.filter(a => a.status === 'online').length}</span>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+                  <button onClick={() => setIsDeployModalOpen(false)} className="p-4 text-slate-400 hover:bg-white hover:text-slate-600 rounded-2xl transition-all shadow-sm">
+                     <X size={28} />
+                  </button>
+               </div>
+
+               <div className="flex flex-col md:flex-row gap-4 items-center">
+                  <div className="relative flex-1 w-full group">
+                     <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={20} />
+                     <input
+                       type="text"
+                       autoFocus
+                       placeholder="主机名、IP 地址或工作空间检索..."
+                       className="w-full pl-16 pr-8 py-4 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
+                       value={agentSearch}
+                       onChange={(e) => setAgentSearch(e.target.value)}
+                     />
+                  </div>
+                  <div className="flex gap-2 p-1 bg-white border border-slate-200 rounded-2xl shrink-0 shadow-sm">
+                     <button onClick={() => setStatusFilter('all')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
+                     <button onClick={() => setStatusFilter('online')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'online' ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>在线</button>
+                  </div>
+                  <button onClick={toggleSelectAllAgents} className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm shrink-0">
+                     <CheckSquare size={16} /> {selectedAgentKeys.size === filteredAgents.length ? '取消' : '全选'}
+                  </button>
+               </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-10 bg-slate-50/20 custom-scrollbar relative">
+               {agentsLoading ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
+                     <Loader2 className="animate-spin text-blue-600" size={48} />
+                     <p className="text-[10px] font-black uppercase tracking-widest">拉取节点清单...</p>
+                  </div>
+               ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                     {filteredAgents.map(agent => (
+                        <div
+                          key={agent.key}
+                          onClick={() => toggleAgentSelect(agent.key)}
+                          className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between group ${selectedAgentKeys.has(agent.key) ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5' : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-lg'}`}
+                        >
+                           <div className="flex items-center gap-4 min-w-0">
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all shrink-0 shadow-sm ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>{agent.hostname[0].toUpperCase()}</div>
+                              <div className="min-w-0">
+                                 <p className="font-black text-slate-800 text-sm truncate">{agent.hostname}</p>
+                                 <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] font-mono font-bold text-slate-400">{agent.ip_address}</span>
+                                    <StatusBadge status={agent.status} />
+                                 </div>
+                              </div>
+                           </div>
+                           <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200'}`}>{selectedAgentKeys.has(agent.key) && <Check size={14} />}</div>
+                        </div>
+                     ))}
+                  </div>
+               )}
+            </div>
+
+            <div className="p-10 border-t border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-6 shrink-0">
+               <div className="flex items-center gap-6">
+                  <div>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">任务概览</p>
+                     <p className="text-lg font-black text-slate-800 mt-0.5"><span className="text-blue-600">{deploySource === 'detail' ? 1 : selectedNames.size}</span> 模板 ➔ <span className="text-blue-600">{selectedAgentKeys.size}</span> 节点</p>
+                  </div>
+               </div>
+               <div className="flex gap-4">
+                  <button onClick={() => setIsDeployModalOpen(false)} disabled={deploying} className="px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">取消</button>
+                  <button onClick={executeDeploy} disabled={deploying || selectedAgentKeys.size === 0} className="px-12 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-2xl transition-all flex items-center gap-3 min-w-[200px]">
+                    {deploying ? <Loader2 className="animate-spin" size={24} /> : <Zap size={24} />}
+                    执行批量部署
+                  </button>
+               </div>
+            </div>
+         </div>
+      </div>
+    )
+  );
+
   // Tree Render Component
   const RenderTreeNode: React.FC<{ node: TreeNode; depth: number }> = ({ node, depth }) => {
     const isExpanded = expandedFolders.has(node.path || 'root');
@@ -643,6 +806,24 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                 title="下载文件"
               >
                 <Download size={14} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteFile(node.path); }}
+                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                title="删除文件"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
+          {!isFile && node.path && node.path !== 'root' && (
+            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteDirectory(node.path); }}
+                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                title="删除目录"
+              >
+                <Trash2 size={14} />
               </button>
             </div>
           )}
@@ -920,6 +1101,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
              </div>
           </div>
         )}
+        {renderDeployModal()}
       </div>
     );
   }
@@ -1163,113 +1345,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         )}
       </div>
 
-      {/* Advanced Agent Selection Modal */}
-      {isDeployModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">
-           <div className="bg-white w-full max-w-5xl h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
-              <div className="p-10 pb-6 border-b border-slate-50 bg-slate-50/30 shrink-0">
-                 <div className="flex justify-between items-start mb-8">
-                    <div className="flex items-center gap-5">
-                       <div className="w-16 h-16 bg-blue-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl shadow-blue-600/20">
-                          <Monitor size={32} />
-                       </div>
-                       <div>
-                          <h3 className="text-3xl font-black text-slate-800 tracking-tight">选择目标执行节点</h3>
-                          <div className="flex items-center gap-3 mt-1.5">
-                             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                <Box size={12} /> 模板: <span className="text-blue-600">
-                                  {deploySource === 'detail'
-                                    ? `1 个 (${selectedTemplate})`
-                                    : `${selectedNames.size} 个`}
-                                </span>
-                             </div>
-                             <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                <Activity size={12} /> 总节点: <span>{availableAgents.length}</span>
-                             </div>
-                             <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                <Check size={12} className="text-green-500" /> 已就绪: <span className="text-green-600">{availableAgents.filter(a => a.status === 'online').length}</span>
-                             </div>
-                          </div>
-                       </div>
-                    </div>
-                    <button onClick={() => setIsDeployModalOpen(false)} className="p-4 text-slate-400 hover:bg-white hover:text-slate-600 rounded-2xl transition-all shadow-sm">
-                       <X size={28} />
-                    </button>
-                 </div>
-
-                 <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <div className="relative flex-1 w-full group">
-                       <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={20} />
-                       <input 
-                         type="text" 
-                         autoFocus
-                         placeholder="主机名、IP 地址或工作空间检索..." 
-                         className="w-full pl-16 pr-8 py-4 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
-                         value={agentSearch}
-                         onChange={(e) => setAgentSearch(e.target.value)}
-                       />
-                    </div>
-                    <div className="flex gap-2 p-1 bg-white border border-slate-200 rounded-2xl shrink-0 shadow-sm">
-                       <button onClick={() => setStatusFilter('all')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>全部</button>
-                       <button onClick={() => setStatusFilter('online')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === 'online' ? 'bg-green-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>在线</button>
-                    </div>
-                    <button onClick={toggleSelectAllAgents} className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm shrink-0">
-                       <CheckSquare size={16} /> {selectedAgentKeys.size === filteredAgents.length ? '取消' : '全选'}
-                    </button>
-                 </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-10 bg-slate-50/20 custom-scrollbar relative">
-                 {agentsLoading ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
-                       <Loader2 className="animate-spin text-blue-600" size={48} />
-                       <p className="text-[10px] font-black uppercase tracking-widest">拉取节点清单...</p>
-                    </div>
-                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                       {filteredAgents.map(agent => (
-                          <div 
-                            key={agent.key}
-                            onClick={() => toggleAgentSelect(agent.key)}
-                            className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between group ${selectedAgentKeys.has(agent.key) ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-500/5' : 'bg-white border-slate-100 hover:border-blue-200 hover:shadow-lg'}`}
-                          >
-                             <div className="flex items-center gap-4 min-w-0">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black transition-all shrink-0 shadow-sm ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>{agent.hostname[0].toUpperCase()}</div>
-                                <div className="min-w-0">
-                                   <p className="font-black text-slate-800 text-sm truncate">{agent.hostname}</p>
-                                   <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[10px] font-mono font-bold text-slate-400">{agent.ip_address}</span>
-                                      <StatusBadge status={agent.status} />
-                                   </div>
-                                </div>
-                             </div>
-                             <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${selectedAgentKeys.has(agent.key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200'}`}>{selectedAgentKeys.has(agent.key) && <Check size={14} />}</div>
-                          </div>
-                       ))}
-                    </div>
-                 )}
-              </div>
-
-              <div className="p-10 border-t border-slate-100 bg-white flex flex-col md:flex-row justify-between items-center gap-6 shrink-0">
-                 <div className="flex items-center gap-6">
-                    <div>
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">任务概览</p>
-                       <p className="text-lg font-black text-slate-800 mt-0.5"><span className="text-blue-600">{deploySource === 'detail' ? 1 : selectedNames.size}</span> 模板 ➔ <span className="text-blue-600">{selectedAgentKeys.size}</span> 节点</p>
-                    </div>
-                 </div>
-                 <div className="flex gap-4">
-                    <button onClick={() => setIsDeployModalOpen(false)} disabled={deploying} className="px-10 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">取消</button>
-                    <button onClick={executeDeploy} disabled={deploying || selectedAgentKeys.size === 0} className="px-12 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 shadow-2xl transition-all flex items-center gap-3 min-w-[200px]">
-                      {deploying ? <Loader2 className="animate-spin" size={24} /> : <Zap size={24} />}
-                      执行批量部署
-                    </button>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
+      {renderDeployModal()}
       {/* Upload Template Modal */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/70 backdrop-blur-md animate-in fade-in">

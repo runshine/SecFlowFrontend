@@ -62,6 +62,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   const [selectedAgentKeys, setSelectedAgentKeys] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [isCleaning, setIsCleaning] = useState(false);
+  const [forceSyncing, setForceSyncing] = useState(false);
 
   // Integration Modals State
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
@@ -138,6 +139,48 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
       alert("清理失败");
     } finally {
       setIsCleaning(false);
+    }
+  };
+
+  const handleForceSyncServices = async () => {
+    if (!projectId) return;
+    if (forceSyncing) return;
+
+    const selectedKeys = Array.from(selectedAgentKeys.values()) as string[];
+    const mode = selectedKeys.length > 0 ? 'selected' : 'stale';
+    const confirmText = mode === 'selected'
+      ? `确认强制同步已选择的 ${selectedKeys.length} 个 Agent 服务状态？`
+      : '未选择 Agent，将同步当前项目下异常/过期 Agent 的服务状态。确认继续？';
+
+    if (!confirm(confirmText)) return;
+
+    setForceSyncing(true);
+    try {
+      if (mode === 'selected') {
+        let ok = 0;
+        let fail = 0;
+        for (const key of selectedKeys) {
+          try {
+            const res = await api.environment.syncGlobalServices({ agent_key: key });
+            if (res?.status === 'ok' || res?.result?.ok) ok += 1;
+            else fail += 1;
+          } catch {
+            fail += 1;
+          }
+        }
+        alert(`强制同步完成：成功 ${ok}，失败 ${fail}`);
+      } else {
+        const result = await api.environment.syncGlobalServices({ project_id: projectId, stale_only: true });
+        if (result?.total !== undefined) {
+          alert(`异常节点同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
+        } else {
+          alert(result?.message || '已触发强制同步');
+        }
+      }
+    } catch (err: any) {
+      alert(`强制同步失败: ${err?.message || 'unknown error'}`);
+    } finally {
+      setForceSyncing(false);
     }
   };
 
@@ -371,6 +414,15 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             className="bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
           >
             <Zap size={18} /> 批量部署服务
+          </button>
+          <button
+            onClick={handleForceSyncServices}
+            disabled={!projectId || forceSyncing}
+            className="bg-indigo-600 text-white px-6 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+            title={selectedAgentKeys.size > 0 ? '强制同步选中Agent服务状态' : '同步当前项目异常/过期Agent服务状态'}
+          >
+            {forceSyncing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+            强制同步服务
           </button>
           <button 
             onClick={() => {

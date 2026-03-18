@@ -188,8 +188,15 @@ const App: React.FC = () => {
     }
   };
 
-  // Check if user is admin (UID=1 or has admin role)
-  const isAdmin = user && (user.id === 1 || user.role.includes('admin') || user.role.includes('管理员'));
+  // Check if user is admin:
+  // 1) UID=1 must always be treated as admin (supports id as number or string)
+  // 2) or has admin role
+  const isAdmin = !!(
+    user && (
+      Number(user.id) === 1 ||
+      (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
+    )
+  );
 
   // Fetch admin dashboard statistics
   const fetchAdminStats = async () => {

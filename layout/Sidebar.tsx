@@ -129,8 +129,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const renderMainSidebar = () => {
-    // Check if user is admin (UID=1 or has admin role)
-    const isAdmin = user && (user.id === 1 || user.role.includes('admin') || user.role.includes('管理员'));
+    // Check if user is admin:
+    // UID=1 is always admin (supports id as number or string), or has admin role
+    const isAdmin = !!(
+      user && (
+        Number(user.id) === 1 ||
+        (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
+      )
+    );
 
     return (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">

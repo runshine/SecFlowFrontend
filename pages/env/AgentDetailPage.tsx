@@ -200,7 +200,8 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       await loadIngressRoutes();
     } catch (err) {
       console.error('Failed to create ingress route', err);
-      alert('创建Ingress路由失败');
+      const message = err instanceof Error ? err.message : '创建Ingress路由失败';
+      alert(message || '创建Ingress路由失败');
     }
   };
 
@@ -828,12 +829,6 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-5">
-                  <button
-                    onClick={() => handleCreateIngressRoute(11188, true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700"
-                  >
-                    创建 11188 转发
-                  </button>
                   <button
                     onClick={() => handleCreateIngressRoute(11198, true)}
                     className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700"

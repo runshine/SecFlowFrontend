@@ -11,6 +11,13 @@ export const secmateNGApi = {
     return handleResponse(response);
   },
 
+  getDefaultEnvConfig: async (): Promise<{
+    common_env: Record<string, string>;
+    default_secmate_env: Record<string, string>;
+    merged_default_env: Record<string, string>;
+  }> =>
+    handleResponse(await fetch(`${API_BASE}/api/app/secmate-ng/config/default-env`, { headers: getHeaders() })),
+
   list: async (projectId: string): Promise<{ total: number; items: any[] }> =>
     handleResponse(await fetch(`${API_BASE}/api/app/secmate-ng/projects/${projectId}/secmate-instances`, { headers: getHeaders() })),
 

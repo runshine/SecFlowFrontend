@@ -1080,7 +1080,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   </button>
                 </div>
               </div>
-              <div className="p-6 bg-slate-900 min-h-[300px] max-h-[500px] overflow-y-auto custom-scrollbar">
+              <div className="p-6 bg-slate-900 min-h-[300px]">
                 {yamlFileLoading ? (
                   <div className="flex items-center justify-center py-16">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-400" />

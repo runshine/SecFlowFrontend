@@ -830,6 +830,12 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
 
                 <div className="flex flex-wrap gap-2 mb-5">
                   <button
+                    onClick={() => handleCreateIngressRoute(11197, false)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700"
+                  >
+                    创建 11197(Nacos Web) 转发
+                  </button>
+                  <button
                     onClick={() => handleCreateIngressRoute(11198, true)}
                     className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700"
                   >

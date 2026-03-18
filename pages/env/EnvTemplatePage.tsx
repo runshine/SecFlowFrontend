@@ -371,9 +371,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   const buildServiceName = (templateName: string, agentKey: string) => {
-    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 48);
-    const stamp = Date.now().toString(36).slice(-6);
-    return `${normalized}-${agentKey.slice(0, 6)}-${stamp}`;
+    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+    return `${normalized}-${agentKey.slice(0, 6)}`;
   };
 
   const executeDeploy = async () => {
@@ -389,22 +388,57 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       templates.forEach((t) => templateNameMap.set(t.id, t.name));
       const agentsToDeploy = Array.from(selectedAgentKeys) as string[];
 
+      const serviceNameMap = new Map<string, Set<string>>();
+      await Promise.all(
+        agentsToDeploy.map(async (agentKey) => {
+          try {
+            const data = await api.environment.getAgentServices(agentKey);
+            const names = new Set<string>((data?.services || []).map((svc) => svc.name));
+            serviceNameMap.set(agentKey, names);
+          } catch {
+            serviceNameMap.set(agentKey, new Set<string>());
+          }
+        })
+      );
+
       let successCount = 0;
+      let duplicateCount = 0;
+      let failedCount = 0;
       for (const tId of templatesToDeploy) {
         const tName = templateNameMap.get(tId);
         if (!tName) continue;
         for (const aKey of agentsToDeploy) {
-           await api.environment.deploy({
-            service_name: buildServiceName(tName || 'service', aKey),
-            agent_key: aKey,
-            template_name: tName,
-            project_id: projectId
-          });
-          successCount++;
+          const serviceName = buildServiceName(tName || 'service', aKey);
+          const existing = serviceNameMap.get(aKey) || new Set<string>();
+          if (existing.has(serviceName)) {
+            duplicateCount++;
+            continue;
+          }
+          try {
+            await api.environment.deploy({
+              service_name: serviceName,
+              agent_key: aKey,
+              template_name: tName,
+              project_id: projectId
+            });
+            existing.add(serviceName);
+            successCount++;
+          } catch (err: any) {
+            const msg = String(err?.message || '');
+            if (msg.includes('重复部署') || msg.includes('已存在') || msg.includes('进行中的部署任务')) {
+              duplicateCount++;
+            } else {
+              failedCount++;
+            }
+          }
         }
       }
 
-      alert(`已成功提交 ${successCount} 个异步部署任务`);
+      if (duplicateCount > 0 || failedCount > 0) {
+        alert(`已提交 ${successCount} 个任务，跳过重复 ${duplicateCount}，失败 ${failedCount}`);
+      } else {
+        alert(`已成功提交 ${successCount} 个异步部署任务`);
+      }
       setIsDeployModalOpen(false);
 
       // 只在批量部署时清空选中

@@ -317,9 +317,8 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   };
 
   const buildServiceName = (templateName: string) => {
-    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 48);
-    const stamp = Date.now().toString(36).slice(-6);
-    return `${normalized}-${agentKey.slice(0, 6)}-${stamp}`;
+    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+    return `${normalized}-${agentKey.slice(0, 6)}`;
   };
 
   const executeBatchDeploy = async () => {
@@ -327,16 +326,35 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
     setDeployingBatch(true);
     try {
       const templateNames = Array.from(selectedTemplateNames.values()) as string[];
+      const existingServices = await api.environment.getAgentServices(agentKey);
+      const existingServiceNames = new Set<string>((existingServices?.services || []).map((svc) => svc.name));
+      const skippedTemplates: string[] = [];
       const deployments = templateNames.map(templateName => ({
         service_name: buildServiceName(templateName),
         agent_key: agentKey,
         template_name: templateName,
-      }));
+      })).filter(item => {
+        if (existingServiceNames.has(item.service_name)) {
+          skippedTemplates.push(item.template_name);
+          return false;
+        }
+        return true;
+      });
+
+      if (deployments.length === 0) {
+        alert('检测到全部为重复部署，未提交任务');
+        return;
+      }
+
       const result = await api.environment.deployBatch({
         project_id: projectId,
         deployments,
       });
-      alert(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}`);
+      if (skippedTemplates.length > 0) {
+        alert(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}，跳过重复 ${skippedTemplates.length}`);
+      } else {
+        alert(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}`);
+      }
       setIsBatchDeployModalOpen(false);
       setSelectedTemplateNames(new Set());
       loadAllData();

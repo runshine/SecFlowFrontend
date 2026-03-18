@@ -344,9 +344,8 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   };
 
   const buildServiceName = (templateName: string, agentKey: string) => {
-    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').slice(0, 48);
-    const stamp = Date.now().toString(36).slice(-6);
-    return `${normalized}-${agentKey.slice(0, 6)}-${stamp}`;
+    const normalized = templateName.toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+    return `${normalized}-${agentKey.slice(0, 6)}`;
   };
 
   const executeBatchDeploy = async () => {
@@ -355,18 +354,37 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     try {
       const agentKeys = Array.from(selectedAgentKeys.values()) as string[];
       const templateNames = Array.from(selectedTemplateNames.values()) as string[];
+      const serviceNameMap = new Map<string, Set<string>>();
+      await Promise.all(
+        agentKeys.map(async (agentKey) => {
+          try {
+            const data = await api.environment.getAgentServices(agentKey);
+            serviceNameMap.set(agentKey, new Set<string>((data?.services || []).map((svc) => svc.name)));
+          } catch {
+            serviceNameMap.set(agentKey, new Set<string>());
+          }
+        })
+      );
       let successCount = 0;
       let failedCount = 0;
+      let duplicateCount = 0;
 
       for (const templateName of templateNames) {
         for (const agentKey of agentKeys) {
+          const serviceName = buildServiceName(templateName, agentKey);
+          const existing = serviceNameMap.get(agentKey) || new Set<string>();
+          if (existing.has(serviceName)) {
+            duplicateCount += 1;
+            continue;
+          }
           try {
             await api.environment.deploy({
-              service_name: buildServiceName(templateName, agentKey),
+              service_name: serviceName,
               agent_key: agentKey,
               template_name: templateName,
               project_id: projectId
             });
+            existing.add(serviceName);
             successCount += 1;
           } catch {
             failedCount += 1;
@@ -374,7 +392,11 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
         }
       }
 
-      alert(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}`);
+      if (duplicateCount > 0) {
+        alert(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}，跳过重复 ${duplicateCount}`);
+      } else {
+        alert(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}`);
+      }
       setIsBatchDeployModalOpen(false);
       setSelectedTemplateNames(new Set());
     } catch (err) {

@@ -8,6 +8,7 @@ import { codeServerApi } from './codeServer';
 import { secmateNGApi } from './secmateNG';
 import { deployScriptApi } from './deployScript';
 import { workflowApi } from './workflow';
+import { k8sApi } from './k8s';
 import { adminApi } from './admin';
 
 export const api = {
@@ -20,5 +21,6 @@ export const api = {
   secmateNG: secmateNGApi,
   deployScript: deployScriptApi,
   workflow: workflowApi,
+  k8s: k8sApi,
   admin: adminApi
 };

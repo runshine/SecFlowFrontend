@@ -189,12 +189,29 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
-  // 加载 yaml 文件内容
-  const fetchYamlFileContent = async (templateId: number): Promise<{ path: string; content: string } | null> => {
+  const getPrimaryYamlPathFromDetail = (detail: any): string => {
+    if (!detail) return '';
+    const raw = String(detail?.file_path || '').trim();
+    if (!raw) return '';
+    const normalized = raw.replace(/\\/g, '/');
+    const filename = normalized.split('/').filter(Boolean).pop() || '';
+    if (!filename) return '';
+    if (!filename.endsWith('.yaml') && !filename.endsWith('.yml')) return '';
+    return filename;
+  };
+
+  // 加载 yaml 文件内容（优先主文件，避免编辑了非部署主YAML）
+  const fetchYamlFileContent = async (
+    templateId: number,
+    preferredPath?: string
+  ): Promise<{ path: string; content: string } | null> => {
     setYamlFileLoading(true);
     try {
-      // 尝试获取 docker-compose.yaml 或 docker-compose.yml
-      const possibleFiles = ['docker-compose.yaml', 'docker-compose.yml', 'compose.yaml', 'compose.yml'];
+      const possibleFiles: string[] = [];
+      const preferred = String(preferredPath || '').trim();
+      if (preferred) possibleFiles.push(preferred);
+      // 兼容兜底：尝试常见 compose 文件名
+      possibleFiles.push('docker-compose.yaml', 'docker-compose.yml', 'compose.yaml', 'compose.yml');
       let content = '';
       let foundFile = '';
 
@@ -290,7 +307,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       // 如果是 yaml 类型模板，获取解析数据和文件内容
       if (detail.type === 'yaml') {
         fetchParsedCompose(templateId);
-        fetchYamlFileContent(templateId);
+        fetchYamlFileContent(templateId, getPrimaryYamlPathFromDetail(detail));
       } else {
         setParsedCompose(null);
         setYamlFilePath('');
@@ -569,7 +586,10 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
     let targetPath = (yamlFilePath || '').trim();
     if (!targetPath) {
-      const loaded = await fetchYamlFileContent(templateDetail.id);
+      const loaded = await fetchYamlFileContent(
+        templateDetail.id,
+        getPrimaryYamlPathFromDetail(templateDetail)
+      );
       if (loaded?.path) targetPath = loaded.path;
     }
 

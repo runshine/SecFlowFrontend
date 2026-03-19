@@ -27,12 +27,15 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [allServices, setAllServices] = useState<AgentService[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [nodeFilter, setNodeFilter] = useState('all');
   const [templateFilter, setTemplateFilter] = useState('all');
+  const [serviceStateFilter, setServiceStateFilter] = useState<'all' | 'running' | 'stopped' | 'offline_agent' | 'stale' | 'error'>('all');
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set<string>());
   const [selectedService, setSelectedService] = useState<AgentService | null>(null);
   const [serviceDetail, setServiceDetail] = useState<any>(null);
+  const [serviceDetailError, setServiceDetailError] = useState('');
   const [detailLoading, setDetailLoading] = useState(false);
   const [serviceLogs, setServiceLogs] = useState('');
   const [execContainer, setExecContainer] = useState('');
@@ -75,8 +78,12 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     if (!projectId) return;
     setLoading(true);
     try {
-      const data = await api.environment.getGlobalServices(projectId, { per_page: 2000 });
+      const [data, agentData] = await Promise.all([
+        api.environment.getGlobalServices(projectId, { per_page: 2000 }),
+        api.environment.getAgents(projectId, { per_page: 2000 })
+      ]);
       setAllServices(data?.items || []);
+      setAgents(agentData?.agents || []);
       setSelectedServiceIds(new Set<string>());
       await loadGlobalIngress();
     } catch (err) {
@@ -135,9 +142,45 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   const serviceRowId = (svc: AgentService) => `${svc.agent_key || 'unknown'}::${svc.name}`;
 
+  const agentByKey = useMemo(() => {
+    const map = new Map<string, Agent>();
+    agents.forEach((a) => {
+      if (a?.key) map.set(a.key, a);
+    });
+    return map;
+  }, [agents]);
+
+  const getEffectiveServiceState = (
+    svc: AgentService,
+    agentStatus: string
+  ): 'running' | 'stopped' | 'offline_agent' | 'stale' | 'error' | 'unknown' => {
+    const aStatus = String(agentStatus || '').toLowerCase();
+    if (aStatus !== 'online') return 'offline_agent';
+    if (svc?.is_stale) return 'stale';
+    const s = String(svc?.status || '').toLowerCase();
+    if (['running', 'partially_running', 'ready', 'active'].includes(s)) return 'running';
+    if (['stopped', 'not_found', 'exited', 'disabled'].includes(s)) return 'stopped';
+    if (['error', 'failed', 'timeout', 'unhealthy'].includes(s)) return 'error';
+    return 'unknown';
+  };
+
+  const servicesWithAgentStatus = useMemo(() => {
+    return allServices.map((svc) => {
+      const agent = svc.agent_key ? agentByKey.get(svc.agent_key) : undefined;
+      const agentStatus = String(agent?.status || 'unknown');
+      const effectiveState = getEffectiveServiceState(svc, agentStatus);
+      return {
+        ...svc,
+        agent_status: agentStatus,
+        agent_online: agentStatus === 'online',
+        effective_state: effectiveState
+      };
+    });
+  }, [allServices, agentByKey]);
+
   const filteredServices = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return allServices.filter((svc) => {
+    return servicesWithAgentStatus.filter((svc: any) => {
       const hitKeyword = !q
         || svc.name.toLowerCase().includes(q)
         || (svc.template_name || '').toLowerCase().includes(q)
@@ -145,27 +188,44 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         || (svc.agent_key || '').toLowerCase().includes(q);
       const hitNode = nodeFilter === 'all' || (svc.agent_key || '') === nodeFilter;
       const hitTemplate = templateFilter === 'all' || (svc.template_name || '') === templateFilter;
-      return hitKeyword && hitNode && hitTemplate;
+      const hitState = serviceStateFilter === 'all' || svc.effective_state === serviceStateFilter;
+      return hitKeyword && hitNode && hitTemplate && hitState;
     });
-  }, [allServices, searchTerm, nodeFilter, templateFilter]);
+  }, [servicesWithAgentStatus, searchTerm, nodeFilter, templateFilter, serviceStateFilter]);
 
   const nodeOptions = useMemo(() => {
     const seen = new Map<string, string>();
-    allServices.forEach((svc) => {
+    servicesWithAgentStatus.forEach((svc: any) => {
       if (svc.agent_key) {
         seen.set(svc.agent_key, svc.agent_hostname || svc.agent_key);
       }
     });
     return Array.from(seen.entries()).map(([key, hostname]) => ({ key, hostname }));
-  }, [allServices]);
+  }, [servicesWithAgentStatus]);
 
   const templateOptions = useMemo(() => {
     const seen = new Set<string>();
-    allServices.forEach((svc) => {
+    servicesWithAgentStatus.forEach((svc: any) => {
       if (svc.template_name) seen.add(svc.template_name);
     });
     return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
-  }, [allServices]);
+  }, [servicesWithAgentStatus]);
+
+  const serviceStateSummary = useMemo(() => {
+    const summary = {
+      running: 0,
+      stopped: 0,
+      offline_agent: 0,
+      stale: 0,
+      error: 0,
+      unknown: 0
+    };
+    servicesWithAgentStatus.forEach((svc: any) => {
+      const k = String(svc.effective_state || 'unknown') as keyof typeof summary;
+      summary[k] = (summary[k] || 0) + 1;
+    });
+    return summary;
+  }, [servicesWithAgentStatus]);
 
   const selectedItems = filteredServices.filter((svc) => selectedServiceIds.has(serviceRowId(svc)));
 
@@ -572,6 +632,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
     setSelectedService(svc);
     setDetailLoading(true);
+    setServiceDetailError('');
     setServiceDetail(null);
     setServiceLogs('');
     setTerminalMode('shell');
@@ -613,8 +674,10 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
       await loadIngressRoutesForService(svc);
       await loadServiceLogs(svc);
-    } catch (err) {
-      notify('加载服务详情失败', 'error');
+    } catch (err: any) {
+      setServiceDetail(null);
+      setServiceDetailError(err?.message || '加载服务详情失败');
+      notify(err?.message || '加载服务详情失败', 'error');
     } finally {
       setDetailLoading(false);
     }
@@ -623,12 +686,17 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   const closeServiceDetail = () => {
     setSelectedService(null);
     setServiceDetail(null);
+    setServiceDetailError('');
     setTemplateWebPortPresets([]);
     setIngressRoutes([]);
   };
 
   const openServiceTerminalWindow = (mode: 'attach' | 'shell') => {
     if (!selectedService?.agent_key) return;
+    if (!serviceDetail) {
+      notify(serviceDetailError || '当前服务详情未加载成功，无法建立终端连接', 'error');
+      return;
+    }
     const params = new URLSearchParams({
       service_terminal: '1',
       project_id: projectId,
@@ -691,7 +759,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
           </div>
           <div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">服务实例</p>
-            <h3 className="text-3xl font-black text-slate-800">{allServices.length}</h3>
+            <h3 className="text-3xl font-black text-slate-800">{servicesWithAgentStatus.length}</h3>
           </div>
         </div>
         <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm flex items-center gap-5">
@@ -699,92 +767,16 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
             <Monitor size={24} />
           </div>
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">节点数</p>
-            <h3 className="text-3xl font-black text-indigo-600">{nodeOptions.length}</h3>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">在线节点服务</p>
+            <h3 className="text-3xl font-black text-indigo-600">{serviceStateSummary.running}</h3>
           </div>
         </div>
         <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white flex items-center justify-between">
           <div>
-            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">模板数</p>
-            <p className="text-3xl font-black mt-1">{templateOptions.length}</p>
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">离线/失联服务</p>
+            <p className="text-3xl font-black mt-1">{serviceStateSummary.offline_agent + serviceStateSummary.stale}</p>
           </div>
           <Zap className="opacity-20" size={30} />
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="过滤服务名 / 模板名 / 节点"
-            className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 ring-blue-500/10"
-          />
-        </div>
-        <select
-          value={nodeFilter}
-          onChange={(e) => setNodeFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 bg-white"
-        >
-          <option value="all">全部节点</option>
-          {nodeOptions.map((node) => (
-            <option key={node.key} value={node.key}>
-              {node.hostname} ({node.key.slice(0, 8)}...)
-            </option>
-          ))}
-        </select>
-        <select
-          value={templateFilter}
-          onChange={(e) => setTemplateFilter(e.target.value)}
-          className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 bg-white"
-        >
-          <option value="all">全部模板</option>
-          {templateOptions.map((name) => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-2">
-        <button
-          onClick={toggleSelectAllFiltered}
-          disabled={!projectId || filteredServices.length === 0}
-          className="px-4 py-2 rounded-xl text-xs font-black bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 flex items-center gap-2"
-        >
-          <CheckSquare size={14} /> 全选筛选结果
-        </button>
-        <button
-          onClick={() => void applyBatchAction('start', selectedItems)}
-          disabled={!projectId || actionLoading || selectedItems.length === 0}
-          className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
-        >
-          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} 批量启动
-        </button>
-        <button
-          onClick={() => void applyBatchAction('stop', selectedItems)}
-          disabled={!projectId || actionLoading || selectedItems.length === 0}
-          className="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2"
-        >
-          <Square size={14} /> 批量停止
-        </button>
-        <button
-          onClick={() => void applyBatchAction('delete', selectedItems)}
-          disabled={!projectId || actionLoading || selectedItems.length === 0}
-          className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2"
-        >
-          <Trash2 size={14} /> 批量删除
-        </button>
-        <button
-          onClick={() => void handleDeleteByTemplate()}
-          disabled={!projectId || actionLoading || templateFilter === 'all'}
-          className="px-4 py-2 rounded-xl text-xs font-black bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
-        >
-          按模板删除实例
-        </button>
-        <div className="text-xs text-slate-500 ml-auto">
-          已选 {selectedItems.length} / 当前结果 {filteredServices.length}
         </div>
       </div>
 
@@ -875,6 +867,94 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         </div>
       </div>
 
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="过滤服务名 / 模板名 / 节点"
+            className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 ring-blue-500/10"
+          />
+        </div>
+        <select
+          value={nodeFilter}
+          onChange={(e) => setNodeFilter(e.target.value)}
+          className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 bg-white"
+        >
+          <option value="all">全部节点</option>
+          {nodeOptions.map((node) => (
+            <option key={node.key} value={node.key}>
+              {node.hostname} ({node.key.slice(0, 8)}...)
+            </option>
+          ))}
+        </select>
+        <select
+          value={templateFilter}
+          onChange={(e) => setTemplateFilter(e.target.value)}
+          className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 bg-white"
+        >
+          <option value="all">全部模板</option>
+          {templateOptions.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+        <select
+          value={serviceStateFilter}
+          onChange={(e) => setServiceStateFilter(e.target.value as any)}
+          className="px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 bg-white"
+        >
+          <option value="all">全部状态</option>
+          <option value="running">运行中</option>
+          <option value="stopped">已停止</option>
+          <option value="offline_agent">节点离线</option>
+          <option value="stale">状态过期</option>
+          <option value="error">异常</option>
+        </select>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={toggleSelectAllFiltered}
+          disabled={!projectId || filteredServices.length === 0}
+          className="px-4 py-2 rounded-xl text-xs font-black bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50 flex items-center gap-2"
+        >
+          <CheckSquare size={14} /> 全选筛选结果
+        </button>
+        <button
+          onClick={() => void applyBatchAction('start', selectedItems)}
+          disabled={!projectId || actionLoading || selectedItems.length === 0}
+          className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
+        >
+          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} 批量启动
+        </button>
+        <button
+          onClick={() => void applyBatchAction('stop', selectedItems)}
+          disabled={!projectId || actionLoading || selectedItems.length === 0}
+          className="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2"
+        >
+          <Square size={14} /> 批量停止
+        </button>
+        <button
+          onClick={() => void applyBatchAction('delete', selectedItems)}
+          disabled={!projectId || actionLoading || selectedItems.length === 0}
+          className="px-4 py-2 rounded-xl text-xs font-black bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2"
+        >
+          <Trash2 size={14} /> 批量删除
+        </button>
+        <button
+          onClick={() => void handleDeleteByTemplate()}
+          disabled={!projectId || actionLoading || templateFilter === 'all'}
+          className="px-4 py-2 rounded-xl text-xs font-black bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+        >
+          按模板删除实例
+        </button>
+        <div className="text-xs text-slate-500 ml-auto">
+          已选 {selectedItems.length} / 当前结果 {filteredServices.length}
+        </div>
+      </div>
+
       <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-slate-50/50 border-b border-slate-100">
@@ -888,7 +968,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {projectId && filteredServices.map((svc) => {
+            {projectId && filteredServices.map((svc: any) => {
               const rowId = serviceRowId(svc);
               return (
                 <tr key={rowId} className="hover:bg-slate-50 transition-all">
@@ -921,6 +1001,9 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                       <span className="text-[10px] font-mono text-slate-400 uppercase tracking-tighter">
                         {(svc.agent_key || '').slice(0, 12)}
                       </span>
+                      <span className={`text-[10px] font-black uppercase mt-1 ${svc.agent_online ? 'text-green-600' : 'text-rose-600'}`}>
+                        节点{svc.agent_online ? '在线' : '离线'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-5">
@@ -936,7 +1019,14 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <StatusBadge status={svc.status} />
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={svc.effective_state === 'offline_agent' ? 'offline' : (svc.effective_state === 'stale' ? 'checking' : svc.status)} />
+                      {svc.is_stale && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-black uppercase tracking-wider">
+                          stale
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -994,6 +1084,11 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
                 <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 border border-slate-200 rounded-2xl p-4">
                   <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">实时终端（新窗口）</p>
+                  {serviceDetailError && (
+                    <div className="mb-2 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold">
+                      {serviceDetailError}
+                    </div>
+                  )}
                   <div className="space-y-2.5">
                     <select
                       value={execContainer}
@@ -1023,10 +1118,18 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs disabled:opacity-50"
                     />
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => openServiceTerminalWindow('attach')} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 flex items-center justify-center gap-1 transition-colors">
+                      <button
+                        onClick={() => openServiceTerminalWindow('attach')}
+                        disabled={!serviceDetail}
+                        className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                      >
                         <TerminalSquare size={14} /> Attach
                       </button>
-                      <button onClick={() => openServiceTerminalWindow('shell')} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 flex items-center justify-center gap-1 transition-colors">
+                      <button
+                        onClick={() => openServiceTerminalWindow('shell')}
+                        disabled={!serviceDetail}
+                        className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                      >
                         <TerminalSquare size={14} /> Shell
                       </button>
                     </div>

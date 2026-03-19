@@ -650,6 +650,13 @@ export interface AgentService {
   ports: Record<string, string>;
   agent_key?: string;
   agent_hostname?: string;
+  agent_ip?: string;
+  service_uid?: string;
+  is_stale?: boolean;
+  source?: string;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  updated_at?: string;
 }
 
 export interface Workspace {

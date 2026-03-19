@@ -27,6 +27,7 @@ import { EnvAgentPage } from './pages/env/EnvAgentPage';
 import { EnvTemplatePage } from './pages/env/EnvTemplatePage';
 import { EnvTasksPage } from './pages/env/EnvTasksPage';
 import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
+import { ServiceTerminalWindowPage } from './pages/env/ServiceTerminalWindowPage';
 
 // Workflow Pages
 import { WorkflowInstancePage } from './pages/workflow/WorkflowInstancePage';
@@ -71,6 +72,9 @@ const PROJECT_REQUIRED_VIEWS = new Set<string>([
 ]);
 
 const App: React.FC = () => {
+  const queryParams = new URLSearchParams(window.location.search);
+  const isServiceTerminalWindow = queryParams.get('service_terminal') === '1';
+
   const [token, setToken] = useState<string | null>(localStorage.getItem('secflow_token'));
   const [user, setUser] = useState<UserInfo | null>(null);
   const [currentView, setCurrentView] = useState<ViewType | string>('dashboard');
@@ -386,6 +390,10 @@ const App: React.FC = () => {
       default: return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">模块 "{currentView}" 开发中...</h3></div>;
     }
   };
+
+  if (isServiceTerminalWindow) {
+    return <ServiceTerminalWindowPage />;
+  }
 
   if (!token) return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-950 relative overflow-hidden">

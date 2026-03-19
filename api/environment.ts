@@ -298,13 +298,14 @@ export const environmentApi = {
   getAgentServiceExecWsConnection: async (
     key: string,
     serviceName: string,
-    params: { project_id?: string; container?: string; shell?: string; user?: string } = {}
+    params: { project_id?: string; container?: string; shell?: string; user?: string; mode?: 'attach' | 'shell' } = {}
   ): Promise<any> => {
     const query = new URLSearchParams();
     if (params.project_id) query.append('project_id', params.project_id);
     if (params.container) query.append('container', params.container);
     if (params.shell) query.append('shell', params.shell);
     if (params.user) query.append('user', params.user);
+    if (params.mode) query.append('mode', params.mode);
     return handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}/exec/ws-connection?${query.toString()}`, {
       headers: getHeaders()
     }));

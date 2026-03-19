@@ -14,13 +14,11 @@ import {
   CheckSquare,
   TerminalSquare,
   X,
-  FileText,
 } from 'lucide-react';
 import { Agent, AgentService, EnvTemplate } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useUiFeedback } from '../../components/UiFeedback';
-import { XTerminal } from '../../components/XTerminal';
 
 type BatchAction = 'start' | 'stop' | 'delete';
 
@@ -37,14 +35,9 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   const [serviceDetail, setServiceDetail] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [serviceLogs, setServiceLogs] = useState('');
-  const [serviceFiles, setServiceFiles] = useState<any[]>([]);
   const [execContainer, setExecContainer] = useState('');
-  const [execCommand, setExecCommand] = useState('sh -lc "ps -ef | head -n 20"');
-  const [execOutput, setExecOutput] = useState('');
-  const [execLoading, setExecLoading] = useState(false);
-  const [terminalWs, setTerminalWs] = useState<WebSocket | null>(null);
-  const [terminalConnected, setTerminalConnected] = useState(false);
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalMode, setTerminalMode] = useState<'attach' | 'shell'>('attach');
+  const [terminalShell, setTerminalShell] = useState('/bin/bash');
   const [templateWebPortPresets, setTemplateWebPortPresets] = useState<any[]>([]);
   const [ingressRoutes, setIngressRoutes] = useState<any[]>([]);
   const [ingressLoading, setIngressLoading] = useState(false);
@@ -77,12 +70,6 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
       void loadAllServices();
     }
   }, [projectId]);
-
-  useEffect(() => {
-    return () => {
-      if (terminalWs) terminalWs.close();
-    };
-  }, [terminalWs]);
 
   const loadAllServices = async () => {
     if (!projectId) return;
@@ -577,16 +564,6 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
-  const loadServiceFiles = async (svc: AgentService) => {
-    if (!svc.agent_key) return;
-    try {
-      const res = await api.environment.getAgentServiceFiles(svc.agent_key, svc.name);
-      setServiceFiles(res?.files || []);
-    } catch {
-      setServiceFiles([]);
-    }
-  };
-
   const openServiceDetail = async (svc: AgentService) => {
     if (!svc.agent_key) {
       notify('服务缺少agent_key，无法查看详情', 'warning');
@@ -596,8 +573,8 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     setDetailLoading(true);
     setServiceDetail(null);
     setServiceLogs('');
-    setServiceFiles([]);
-    setExecOutput('');
+    setTerminalMode('shell');
+    setTerminalShell('/bin/bash');
     setTemplateWebPortPresets([]);
     setIngressRoutes([]);
     try {
@@ -634,7 +611,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
       }
 
       await loadIngressRoutesForService(svc);
-      await Promise.all([loadServiceLogs(svc), loadServiceFiles(svc)]);
+      await loadServiceLogs(svc);
     } catch (err) {
       notify('加载服务详情失败', 'error');
     } finally {
@@ -643,71 +620,26 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   const closeServiceDetail = () => {
-    if (terminalWs) {
-      terminalWs.close();
-      setTerminalWs(null);
-    }
-    setTerminalConnected(false);
-    setTerminalOpen(false);
     setSelectedService(null);
     setServiceDetail(null);
     setTemplateWebPortPresets([]);
     setIngressRoutes([]);
   };
 
-  const executeServiceCommand = async () => {
+  const openServiceTerminalWindow = (mode: 'attach' | 'shell') => {
     if (!selectedService?.agent_key) return;
-    if (!execContainer.trim() || !execCommand.trim()) {
-      notify('请输入容器和命令', 'warning');
-      return;
-    }
-    setExecLoading(true);
-    try {
-      const res = await api.environment.execAgentServiceCommand(selectedService.agent_key, selectedService.name, {
-        container: execContainer.trim(),
-        command: execCommand.trim(),
-      });
-      setExecOutput(res?.output || res?.error || '');
-    } catch (err: any) {
-      setExecOutput(`执行失败: ${err?.message || err}`);
-    } finally {
-      setExecLoading(false);
-    }
-  };
-
-  const openServiceTerminal = async () => {
-    if (!selectedService?.agent_key) return;
-    try {
-      if (terminalWs) {
-        terminalWs.close();
-        setTerminalWs(null);
-      }
-
-      const conn = await api.environment.getAgentServiceExecWsConnection(
-        selectedService.agent_key,
-        selectedService.name,
-        {
-          project_id: projectId,
-          container: execContainer.trim(),
-          shell: '/bin/sh',
-        }
-      );
-
-      const wsUrl = conn?.ws_url;
-      if (!wsUrl) {
-        notify('未获取到终端连接地址', 'error');
-        return;
-      }
-
-      const ws = new WebSocket(wsUrl);
-      ws.onopen = () => setTerminalConnected(true);
-      ws.onclose = () => setTerminalConnected(false);
-      ws.onerror = () => setTerminalConnected(false);
-      setTerminalWs(ws);
-      setTerminalOpen(true);
-    } catch (err: any) {
-      notify(`打开终端失败: ${err?.message || err}`, 'error');
-    }
+    const params = new URLSearchParams({
+      service_terminal: '1',
+      project_id: projectId,
+      agent_key: selectedService.agent_key,
+      service_name: selectedService.name,
+      container: execContainer.trim() || '',
+      mode,
+      shell: (terminalShell || '/bin/bash').trim() || '/bin/bash',
+    });
+    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!win) notify('浏览器拦截了新窗口，请允许弹窗后重试', 'warning');
   };
 
   if (loading && projectId) {
@@ -1043,33 +975,74 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
             </div>
           ) : (
             <div className="flex-1 overflow-auto p-5 space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 lg:col-span-2">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">服务状态</p>
                     <StatusBadge status={serviceDetail?.real_status?.status || selectedService.status} />
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="text-slate-500">启用状态</div><div className="font-bold text-slate-700">{serviceDetail?.enabled ? 'enabled' : 'disabled'}</div>
-                    <div className="text-slate-500">容器数量</div><div className="font-bold text-slate-700">{serviceDetail?.real_status?.total ?? 0}</div>
-                    <div className="text-slate-500">运行中</div><div className="font-bold text-slate-700">{serviceDetail?.real_status?.running ?? 0}</div>
-                    <div className="text-slate-500">模板</div><div className="font-bold text-slate-700">{selectedService.template_name || '-'}</div>
+                    <div className="text-slate-500">容器总数</div><div className="font-bold text-slate-700">{serviceDetail?.real_status?.total ?? 0}</div>
+                    <div className="text-slate-500">运行容器</div><div className="font-bold text-emerald-700">{serviceDetail?.real_status?.running ?? 0}</div>
+                    <div className="text-slate-500">模板</div><div className="font-bold text-slate-700 truncate">{selectedService.template_name || '-'}</div>
+                    <div className="text-slate-500">节点</div><div className="font-mono text-[11px] text-slate-700 truncate">{selectedService.agent_key || '-'}</div>
+                    <div className="text-slate-500">主机</div><div className="font-bold text-slate-700 truncate">{selectedService.agent_hostname || '-'}</div>
                   </div>
                 </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">快速操作</p>
-                  <div className="space-y-2">
-                    <button onClick={() => void loadServiceLogs(selectedService)} className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-100">刷新日志</button>
-                    <button onClick={() => void loadServiceFiles(selectedService)} className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-100">刷新文件列表</button>
-                    <button onClick={openServiceTerminal} className="w-full px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 flex items-center justify-center gap-1">
-                      <TerminalSquare size={14} /> 打开实时终端
-                    </button>
-                    <div className="text-[10px] text-slate-500">终端状态: {terminalConnected ? '已连接' : '未连接'}</div>
+
+                <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 border border-slate-200 rounded-2xl p-4">
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">实时终端（新窗口）</p>
+                  <div className="space-y-2.5">
+                    <select
+                      value={execContainer}
+                      onChange={(e) => setExecContainer(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                    >
+                      {resolveContainers(serviceDetail).length === 0 && (
+                        <option value="">自动选择容器</option>
+                      )}
+                      {resolveContainers(serviceDetail).map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={terminalMode}
+                      onChange={(e) => setTerminalMode(e.target.value === 'shell' ? 'shell' : 'attach')}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                    >
+                      <option value="attach">Attach 模式</option>
+                      <option value="shell">新建 Shell</option>
+                    </select>
+                    <input
+                      value={terminalShell}
+                      onChange={(e) => setTerminalShell(e.target.value)}
+                      placeholder="/bin/bash 或 /bin/sh"
+                      disabled={terminalMode === 'attach'}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs disabled:opacity-50"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => openServiceTerminalWindow('attach')} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 flex items-center justify-center gap-1 transition-colors">
+                        <TerminalSquare size={14} /> Attach
+                      </button>
+                      <button onClick={() => openServiceTerminalWindow('shell')} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 flex items-center justify-center gap-1 transition-colors">
+                        <TerminalSquare size={14} /> Shell
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl p-4">
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">快捷操作</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    <button onClick={() => void loadServiceLogs(selectedService)} className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-100 transition-colors">刷新日志</button>
+                    <button onClick={() => selectedService && loadIngressRoutesForService(selectedService)} className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-100 transition-colors">刷新转发路由</button>
+                    <button onClick={closeServiceDetail} className="px-3 py-2 rounded-xl bg-slate-900 text-xs font-black text-white hover:bg-slate-800 transition-colors">关闭详情</button>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">动态 WEB 转发（HTTP/HTTPS）</p>
                   <button
@@ -1171,80 +1144,13 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="bg-slate-950 text-slate-100 rounded-2xl border border-slate-800 p-4">
+              <div className="bg-slate-950 text-slate-100 rounded-2xl border border-slate-800 p-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">服务日志</p>
                     <button onClick={() => void loadServiceLogs(selectedService)} className="text-[10px] px-2 py-1 rounded-lg bg-slate-800 text-slate-300">刷新</button>
                   </div>
-                  <pre className="text-[11px] leading-tight font-mono whitespace-pre-wrap break-words h-64 overflow-auto">{serviceLogs || '暂无日志输出'}</pre>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">服务文件</p>
-                    <button onClick={() => void loadServiceFiles(selectedService)} className="text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-700">刷新</button>
-                  </div>
-                  <div className="h-64 overflow-auto divide-y divide-slate-100">
-                    {serviceFiles.length === 0 && (
-                      <p className="text-xs text-slate-400 py-3">暂无文件信息</p>
-                    )}
-                    {serviceFiles.map((f: any) => (
-                      <div key={`${f.path || f.name}`} className="py-2 text-xs flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText size={12} className="text-slate-400" />
-                          <span className="font-mono text-slate-700 truncate">{f.path || f.name}</span>
-                        </div>
-                        <span className="text-slate-400">{f.type || (f.is_dir ? 'dir' : 'file')}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  <pre className="text-[11px] leading-tight font-mono whitespace-pre-wrap break-words h-[40vh] overflow-auto">{serviceLogs || '暂无日志输出'}</pre>
               </div>
-
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">容器命令执行 (REST)</p>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-                  <input
-                    value={execContainer}
-                    onChange={(e) => setExecContainer(e.target.value)}
-                    placeholder="容器名"
-                    className="px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10"
-                  />
-                  <input
-                    value={execCommand}
-                    onChange={(e) => setExecCommand(e.target.value)}
-                    placeholder="命令"
-                    className="px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10 lg:col-span-2"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => void executeServiceCommand()}
-                    disabled={execLoading}
-                    className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {execLoading ? '执行中...' : '执行命令'}
-                  </button>
-                </div>
-                <pre className="bg-slate-950 text-slate-100 rounded-xl p-3 text-[11px] leading-tight font-mono whitespace-pre-wrap break-words min-h-24">{execOutput || '暂无执行结果'}</pre>
-              </div>
-            </div>
-          )}
-
-          {terminalOpen && (
-            <div className="border-t border-slate-100 h-[36vh] bg-slate-950">
-              <XTerminal
-                ws={terminalWs}
-                connected={terminalConnected}
-                podName={`${selectedService.name}:${execContainer || 'default'}`}
-                onClose={() => {
-                  if (terminalWs) terminalWs.close();
-                  setTerminalWs(null);
-                  setTerminalConnected(false);
-                  setTerminalOpen(false);
-                }}
-              />
             </div>
           )}
         </div>

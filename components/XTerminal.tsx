@@ -191,7 +191,7 @@ export const XTerminal: React.FC<XTerminalProps> = ({
   useEffect(() => {
     if (!xtermRef.current || !isInitialized) return;
 
-    if (!connected && ws?.readyState !== WebSocket.CONNECTING) {
+    if (ws && !connected && ws.readyState !== WebSocket.CONNECTING) {
       xtermRef.current.write('\r\n\x1b[33m提示: 连接已断开\x1b[0m\r\n');
     }
   }, [connected, ws, isInitialized]);

@@ -693,6 +693,10 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   const openServiceTerminalWindow = (mode: 'attach' | 'shell') => {
     if (!selectedService?.agent_key) return;
+    if (selectedService?.is_stale) {
+      notify('该服务状态已过期（stale），请先刷新服务发现并确认服务仍在线', 'warning');
+      return;
+    }
     if (!serviceDetail) {
       notify(serviceDetailError || '当前服务详情未加载成功，无法建立终端连接', 'error');
       return;
@@ -710,6 +714,11 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     const win = window.open(url, '_blank', 'noopener,noreferrer');
     if (!win) notify('浏览器拦截了新窗口，请允许弹窗后重试', 'warning');
   };
+
+  const terminalDisabled = !serviceDetail || !!selectedService?.is_stale;
+  const terminalDisabledHint = selectedService?.is_stale
+    ? '服务状态已过期（stale），请先刷新服务发现'
+    : '';
 
   if (loading && projectId) {
     return (
@@ -1084,6 +1093,11 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
                 <div className="bg-gradient-to-br from-slate-50 to-blue-50/40 border border-slate-200 rounded-2xl p-4">
                   <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">实时终端（新窗口）</p>
+                  {selectedService?.is_stale && (
+                    <div className="mb-2 px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">
+                      当前服务状态为 stale，可能已被删除或离线。请先刷新服务发现后再尝试终端连接。
+                    </div>
+                  )}
                   {serviceDetailError && (
                     <div className="mb-2 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold">
                       {serviceDetailError}
@@ -1120,14 +1134,16 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => openServiceTerminalWindow('attach')}
-                        disabled={!serviceDetail}
+                        disabled={terminalDisabled}
+                        title={terminalDisabledHint}
                         className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
                       >
                         <TerminalSquare size={14} /> Attach
                       </button>
                       <button
                         onClick={() => openServiceTerminalWindow('shell')}
-                        disabled={!serviceDetail}
+                        disabled={terminalDisabled}
+                        title={terminalDisabledHint}
                         className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
                       >
                         <TerminalSquare size={14} /> Shell

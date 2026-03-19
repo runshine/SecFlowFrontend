@@ -134,6 +134,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   // Yaml 文件内容 (用于 yaml 类型模板的文件查看)
   const [yamlFileContent, setYamlFileContent] = useState<string>('');
+  const [yamlFilePath, setYamlFilePath] = useState<string>('');
+  const [yamlFileLoaded, setYamlFileLoaded] = useState(false);
   const [yamlFileLoading, setYamlFileLoading] = useState(false);
 
   // 所有模板的解析数据 (用于卡片视图)
@@ -188,7 +190,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   // 加载 yaml 文件内容
-  const fetchYamlFileContent = async (templateId: number) => {
+  const fetchYamlFileContent = async (templateId: number): Promise<{ path: string; content: string } | null> => {
     setYamlFileLoading(true);
     try {
       // 尝试获取 docker-compose.yaml 或 docker-compose.yml
@@ -199,7 +201,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       for (const file of possibleFiles) {
         try {
           const data = await api.environment.getTemplateFileContent(templateId, file);
-          if (data.content) {
+          if (typeof data.content === 'string') {
             content = data.content;
             foundFile = file;
             break;
@@ -218,16 +220,31 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           );
           if (yamlFile) {
             const data = await api.environment.getTemplateFileContent(templateId, yamlFile.path);
-            content = data.content;
-            foundFile = yamlFile.path;
+            if (typeof data.content === 'string') {
+              content = data.content;
+              foundFile = yamlFile.path;
+            }
           }
         }
       }
 
-      setYamlFileContent(content);
+      if (foundFile) {
+        setYamlFilePath(foundFile);
+        setYamlFileContent(content);
+        setYamlFileLoaded(true);
+        return { path: foundFile, content };
+      }
+
+      setYamlFilePath('');
+      setYamlFileContent('');
+      setYamlFileLoaded(false);
+      return null;
     } catch (error) {
       console.error('Failed to fetch yaml file content:', error);
+      setYamlFilePath('');
       setYamlFileContent('');
+      setYamlFileLoaded(false);
+      return null;
     } finally {
       setYamlFileLoading(false);
     }
@@ -276,7 +293,9 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         fetchYamlFileContent(templateId);
       } else {
         setParsedCompose(null);
+        setYamlFilePath('');
         setYamlFileContent('');
+        setYamlFileLoaded(false);
       }
     } catch (err) {
       notify("获取模版详情失败", 'error');
@@ -531,11 +550,35 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       const res = await api.environment.getTemplateFileContent(selectedTemplate, path);
       setEditingFile({ path, content: res.content });
       setIsEditorOpen(true);
-    } catch (err) {
-      notify("无法读取文件内容", 'error');
+    } catch (err: any) {
+      notify(err?.message || "无法读取文件内容", 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenYamlEditor = async (canManageCurrentTemplate: boolean) => {
+    if (!canManageCurrentTemplate) {
+      notify('仅模板拥有者可在线编辑', 'warning');
+      return;
+    }
+    if (!templateDetail?.id) {
+      notify('模板信息未就绪，请刷新后重试', 'warning');
+      return;
+    }
+
+    let targetPath = (yamlFilePath || '').trim();
+    if (!targetPath) {
+      const loaded = await fetchYamlFileContent(templateDetail.id);
+      if (loaded?.path) targetPath = loaded.path;
+    }
+
+    if (!targetPath) {
+      notify('未找到可编辑的YAML文件', 'warning');
+      return;
+    }
+
+    await handleEditFile(targetPath);
   };
 
   const handleSaveFile = async () => {
@@ -1319,15 +1362,12 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                     <Download size={18} />
                   </button>
                   <button
-                    onClick={() => {
-                      if (!canManageCurrentTemplate) return;
-                      if (yamlFileContent) {
-                        setEditingFile({ path: 'docker-compose.yaml', content: yamlFileContent });
-                        setIsEditorOpen(true);
-                      }
-                    }}
-                    disabled={!canManageCurrentTemplate}
-                    className="p-3 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all shadow-sm"
+                    onClick={() => handleOpenYamlEditor(canManageCurrentTemplate)}
+                    className={`p-3 rounded-xl transition-all shadow-sm ${
+                      canManageCurrentTemplate
+                        ? 'text-slate-400 hover:text-green-600 hover:bg-green-50'
+                        : 'text-slate-300 hover:text-amber-600 hover:bg-amber-50'
+                    }`}
                     title="编辑文件"
                   >
                     <Edit3 size={18} />
@@ -1339,9 +1379,9 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   <div className="flex items-center justify-center py-16">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
                   </div>
-                ) : yamlFileContent ? (
+                ) : yamlFileLoaded ? (
                   <pre className="text-xs font-mono text-blue-100/90 leading-relaxed whitespace-pre-wrap">
-                    {yamlFileContent}
+                    {yamlFileContent || '# 文件为空'}
                   </pre>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-slate-500">

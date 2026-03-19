@@ -79,6 +79,38 @@ export const environmentApi = {
       headers: getHeaders(),
       body: JSON.stringify(data)
     })),
+  getTemplateWebPorts: async (templateId: number): Promise<{
+    template_id: number;
+    template_name: string;
+    web_port_presets: Array<{
+      name?: string;
+      port: number;
+      protocol?: 'http' | 'https';
+      description?: string;
+      path?: string;
+      websocket_enabled?: boolean;
+      tls_enabled?: boolean;
+    }>;
+    permissions?: { can_manage?: boolean };
+  }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/web-ports`, { headers: getHeaders() })),
+  updateTemplateWebPorts: async (
+    templateId: number,
+    webPortPresets: Array<{
+      name?: string;
+      port: number;
+      protocol?: 'http' | 'https';
+      description?: string;
+      path?: string;
+      websocket_enabled?: boolean;
+      tls_enabled?: boolean;
+    }>
+  ): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/web-ports`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ web_port_presets: webPortPresets })
+    })),
   getTemplateFiles: async (templateId: number, path = ''): Promise<{ files: any[] }> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/files?path=${path}`, { headers: getHeaders() })),
   
@@ -238,6 +270,34 @@ export const environmentApi = {
       headers: getHeaders(),
       body: JSON.stringify({ project_id: projectId, include_deleted: includeDeleted })
     })),
+  getGlobalAgentIngress: async (
+    projectId: string,
+    params: { include_deleted?: boolean } = {}
+  ): Promise<{ project_id: string; items: any[]; stats: any }> => {
+    const query = new URLSearchParams({
+      project_id: projectId,
+      include_deleted: params.include_deleted ? 'true' : 'false'
+    }).toString();
+    return handleResponse(await fetch(`${API_BASE}/api/agent/agents/global/ingress?${query}`, { headers: getHeaders() }));
+  },
+  deleteGlobalAgentIngressBatch: async (projectId: string, routeIds: string[]): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agents/global/ingress/delete-batch`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ project_id: projectId, route_ids: routeIds })
+    })),
+  cleanupStaleGlobalAgentIngress: async (projectId: string, dryRun = false): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agents/global/ingress/cleanup-stale`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ project_id: projectId, dry_run: dryRun })
+    })),
+  clearAllGlobalAgentIngress: async (projectId: string, includeDeleted = false): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agents/global/ingress/clear-all`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ project_id: projectId, include_deleted: includeDeleted })
+    })),
 
   syncGlobalServices: async (data?: { project_id?: string; agent_key?: string; stale_only?: boolean }): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/services/global/sync`, {
@@ -249,6 +309,18 @@ export const environmentApi = {
   getGlobalServiceSyncHistory: async (params: { project_id?: string; page?: number; per_page?: number } = {}): Promise<any> => {
     const query = new URLSearchParams({ ...params as any }).toString();
     return handleResponse(await fetch(`${API_BASE}/api/agent/services/global/sync/history${query ? `?${query}` : ''}`, {
+      headers: getHeaders()
+    }));
+  },
+  deleteGlobalServiceSyncHistoryItem: async (syncId: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/services/global/sync/history/${encodeURIComponent(syncId)}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    })),
+  clearGlobalServiceSyncHistory: async (projectId?: string): Promise<any> => {
+    const query = new URLSearchParams(projectId ? { project_id: projectId } : {}).toString();
+    return handleResponse(await fetch(`${API_BASE}/api/agent/services/global/sync/history${query ? `?${query}` : ''}`, {
+      method: 'DELETE',
       headers: getHeaders()
     }));
   },

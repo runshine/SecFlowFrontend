@@ -198,6 +198,10 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
         host_prefix: `${agentKey}-${targetPort}`,
         websocket_enabled: websocketEnabled,
         force_recreate: true,
+        metadata: {
+          ingress_scope: 'agent_console',
+          source: 'agent-detail'
+        }
       });
       await loadIngressRoutes();
     } catch (err) {

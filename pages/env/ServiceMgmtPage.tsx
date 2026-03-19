@@ -538,6 +538,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         path: ingressPath?.trim() || '/',
         metadata: {
           source: 'service-mgmt',
+          ingress_scope: 'service_binding',
           service_name: selectedService.name,
           template_id: selectedService.template_id,
           template_name: selectedService.template_name,

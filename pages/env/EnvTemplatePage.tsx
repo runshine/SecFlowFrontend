@@ -258,8 +258,15 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     setLoading(true);
     try {
       const detail = await api.environment.getTemplateDetail(templateId);
+      let detailPresets: WebPortPreset[] = normalizeWebPortPresets(detail?.metadata?.web_port_presets || []);
+      try {
+        const webPortsResp = await api.environment.getTemplateWebPorts(templateId);
+        detailPresets = normalizeWebPortPresets(webPortsResp?.web_port_presets || []);
+      } catch (err) {
+        console.error('Failed to load template web ports from dedicated API:', err);
+      }
       setTemplateDetail(detail);
-      setDetailWebPortPresets(normalizeWebPortPresets(detail?.metadata?.web_port_presets || []));
+      setDetailWebPortPresets(detailPresets);
       setViewMode('detail');
       setExpandedFolders(new Set(['root']));
 
@@ -750,7 +757,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     setSavingWebPortPresets(true);
     try {
       const normalized = normalizeWebPortPresets(detailWebPortPresets);
-      await api.environment.updateTemplateBasic(templateDetail.id, { web_port_presets: normalized });
+      await api.environment.updateTemplateWebPorts(templateDetail.id, normalized);
       notify('WEB端口已更新', 'success');
       await viewDetail(templateDetail.id);
       await loadTemplates();

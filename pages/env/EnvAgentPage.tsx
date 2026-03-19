@@ -102,6 +102,12 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   const [lastSyncMessage, setLastSyncMessage] = useState('');
   const [syncHistory, setSyncHistory] = useState<SyncHistoryItem[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<SyncHistoryItem | null>(null);
+  const [historyOperating, setHistoryOperating] = useState(false);
+  const [agentIngressLoading, setAgentIngressLoading] = useState(false);
+  const [agentIngressItems, setAgentIngressItems] = useState<any[]>([]);
+  const [agentIngressStats, setAgentIngressStats] = useState<any>({});
+  const [selectedAgentIngressRouteIds, setSelectedAgentIngressRouteIds] = useState<Set<string>>(new Set<string>());
+  const [agentIngressActionLoading, setAgentIngressActionLoading] = useState(false);
 
   // Integration Modals State
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
@@ -125,6 +131,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     if (projectId) {
       loadData();
       void loadSyncHistory();
+      void loadGlobalAgentIngress();
     }
   }, [projectId]);
 
@@ -176,6 +183,168 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
       setSyncHistory(data?.items || []);
     } catch (err) {
       console.error('Failed to load sync history', err);
+    }
+  };
+
+  const loadGlobalAgentIngress = async () => {
+    if (!projectId) return;
+    setAgentIngressLoading(true);
+    try {
+      const data = await api.environment.getGlobalAgentIngress(projectId, { include_deleted: false });
+      setAgentIngressItems(data?.items || []);
+      setAgentIngressStats(data?.stats || {});
+      setSelectedAgentIngressRouteIds(new Set<string>());
+    } catch (err) {
+      console.error('Failed to load global agent ingress', err);
+      setAgentIngressItems([]);
+      setAgentIngressStats({});
+    } finally {
+      setAgentIngressLoading(false);
+    }
+  };
+
+  const getDisplayTotal = (item: SyncHistoryItem): number => {
+    const raw = Number(item?.total || 0);
+    if (raw > 0) return raw;
+    if (Array.isArray(item?.details)) return item.details.length;
+    return 0;
+  };
+
+  const handleDeleteSyncHistoryItem = async (syncId: string) => {
+    const okToDelete = await confirm({
+      title: '删除同步记录',
+      message: '确认删除这条同步记录？',
+      confirmText: '删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!okToDelete) return;
+
+    setHistoryOperating(true);
+    try {
+      await api.environment.deleteGlobalServiceSyncHistoryItem(syncId);
+      setSelectedHistory(prev => (prev?.sync_id === syncId ? null : prev));
+      await loadSyncHistory();
+      notify('同步记录已删除', 'success');
+    } catch (err: any) {
+      notify(`删除同步记录失败: ${err?.message || 'unknown error'}`, 'error');
+    } finally {
+      setHistoryOperating(false);
+    }
+  };
+
+  const handleClearSyncHistory = async () => {
+    if (!projectId) return;
+    const okToClear = await confirm({
+      title: '清空同步记录',
+      message: '确认清空当前项目的全部同步记录？',
+      confirmText: '确认清空',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!okToClear) return;
+
+    setHistoryOperating(true);
+    try {
+      const res = await api.environment.clearGlobalServiceSyncHistory(projectId);
+      setSelectedHistory(null);
+      await loadSyncHistory();
+      notify(`同步记录已清空（${res?.deleted_count || 0} 条）`, 'success');
+    } catch (err: any) {
+      notify(`清空同步记录失败: ${err?.message || 'unknown error'}`, 'error');
+    } finally {
+      setHistoryOperating(false);
+    }
+  };
+
+  const toggleSelectAgentIngress = (routeId: string) => {
+    setSelectedAgentIngressRouteIds((prev) => {
+      const next = new Set<string>(prev);
+      if (next.has(routeId)) next.delete(routeId);
+      else next.add(routeId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllAgentIngress = () => {
+    if (agentIngressItems.length === 0) return;
+    setSelectedAgentIngressRouteIds((prev) => {
+      const next = new Set<string>(prev);
+      const allSelected = agentIngressItems.every((item) => next.has(item.route_id));
+      if (allSelected) {
+        agentIngressItems.forEach((item) => next.delete(item.route_id));
+      } else {
+        agentIngressItems.forEach((item) => next.add(item.route_id));
+      }
+      return next;
+    });
+  };
+
+  const deleteSelectedAgentIngress = async () => {
+    if (!projectId || selectedAgentIngressRouteIds.size === 0) return;
+    const ok = await confirm({
+      title: '批量删除 Agent 入口 Ingress',
+      message: `确认删除选中的 ${selectedAgentIngressRouteIds.size} 条路由？`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setAgentIngressActionLoading(true);
+    try {
+      const routeIds = Array.from(selectedAgentIngressRouteIds.values()) as string[];
+      const result = await api.environment.deleteGlobalAgentIngressBatch(projectId, routeIds);
+      notify(`删除完成：成功 ${result?.deleted ?? 0}，失败 ${(result?.failed || []).length}`, (result?.failed || []).length > 0 ? 'warning' : 'success');
+      await loadGlobalAgentIngress();
+    } catch (err: any) {
+      notify(err?.message || '批量删除Agent入口Ingress失败', 'error');
+    } finally {
+      setAgentIngressActionLoading(false);
+    }
+  };
+
+  const cleanupStaleAgentIngress = async () => {
+    if (!projectId) return;
+    const ok = await confirm({
+      title: '清理离线节点 Ingress',
+      message: '确认一键删除所有离线/无效节点关联的 11197/11198 Ingress？',
+      confirmText: '执行清理',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return;
+    setAgentIngressActionLoading(true);
+    try {
+      const result = await api.environment.cleanupStaleGlobalAgentIngress(projectId, false);
+      notify(`清理完成：删除 ${result?.deleted ?? 0} 条，失败 ${(result?.failed || []).length}`, (result?.failed || []).length > 0 ? 'warning' : 'success');
+      await loadGlobalAgentIngress();
+    } catch (err: any) {
+      notify(err?.message || '清理离线节点Ingress失败', 'error');
+    } finally {
+      setAgentIngressActionLoading(false);
+    }
+  };
+
+  const clearAllAgentIngress = async () => {
+    if (!projectId) return;
+    const ok = await confirm({
+      title: '清空 Agent 入口 Ingress',
+      message: '确认清空当前项目下全部 11197/11198 Ingress 路由？',
+      confirmText: '确认清空',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return;
+    setAgentIngressActionLoading(true);
+    try {
+      const result = await api.environment.clearAllGlobalAgentIngress(projectId, false);
+      notify(`清空完成：删除 ${result?.deleted ?? 0} 条，失败 ${(result?.failed || []).length}`, (result?.failed || []).length > 0 ? 'warning' : 'success');
+      await loadGlobalAgentIngress();
+    } catch (err: any) {
+      notify(err?.message || '清空Agent入口Ingress失败', 'error');
+    } finally {
+      setAgentIngressActionLoading(false);
     }
   };
 
@@ -614,26 +783,150 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
               <Clock size={14} /> 最近同步记录
             </div>
-            <button onClick={loadSyncHistory} className="text-xs font-bold text-blue-600 hover:text-blue-700">刷新</button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleClearSyncHistory}
+                disabled={historyOperating || syncHistory.length === 0}
+                className="text-xs font-bold text-rose-600 hover:text-rose-700 disabled:opacity-40"
+              >
+                清空
+              </button>
+              <button
+                onClick={loadSyncHistory}
+                disabled={historyOperating}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 disabled:opacity-40"
+              >
+                刷新
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             {syncHistory.length === 0 ? (
               <div className="text-xs text-slate-400">暂无同步记录</div>
             ) : syncHistory.map(item => (
-              <button
+              <div
                 key={item.sync_id}
-                onClick={() => setSelectedHistory(item)}
-                className="w-full text-left border border-slate-100 rounded-xl px-3 py-2 flex flex-col md:flex-row md:items-center md:justify-between gap-1 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
+                className="w-full text-left border border-slate-100 rounded-xl px-3 py-2 flex flex-col gap-2 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
               >
-                <div className="text-xs text-slate-600">
-                  <span className="font-black uppercase mr-2">{item.scope}</span>
-                  <span>{item.message || '-'}</span>
+                <button
+                  onClick={() => setSelectedHistory(item)}
+                  className="w-full text-left flex flex-col md:flex-row md:items-center md:justify-between gap-1"
+                >
+                  <div className="text-xs text-slate-600">
+                    <span className="font-black uppercase mr-2">{item.scope}</span>
+                    <span>{item.message || '-'}</span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-500">
+                    total={getDisplayTotal(item)} ok={item.ok_count} fail={item.fail_count} · {item.created_at}
+                  </div>
+                </button>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => handleDeleteSyncHistoryItem(item.sync_id)}
+                    disabled={historyOperating}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 disabled:opacity-40"
+                  >
+                    删除记录
+                  </button>
                 </div>
-                <div className="text-[11px] font-mono text-slate-500">
-                  total={item.total} ok={item.ok_count} fail={item.fail_count} · {item.created_at}
-                </div>
-              </button>
+              </div>
             ))}
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-black text-slate-700">Agent 节点入口 Ingress 管理 (11197/11198)</p>
+            <span className="text-[11px] text-slate-500">
+              总计 {agentIngressStats?.total || 0} · 11197 {agentIngressStats?.port_11197 || 0} · 11198 {agentIngressStats?.port_11198 || 0} · 无效 {agentIngressStats?.stale_agent_ingress || 0}
+            </span>
+            <button onClick={loadGlobalAgentIngress} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-black hover:bg-slate-200">刷新</button>
+            <button
+              onClick={toggleSelectAllAgentIngress}
+              disabled={agentIngressItems.length === 0}
+              className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-black hover:bg-slate-200 disabled:opacity-50"
+            >
+              全选
+            </button>
+            <button
+              onClick={deleteSelectedAgentIngress}
+              disabled={agentIngressActionLoading || selectedAgentIngressRouteIds.size === 0}
+              className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-black hover:bg-rose-700 disabled:opacity-50"
+            >
+              批量删除
+            </button>
+            <button
+              onClick={cleanupStaleAgentIngress}
+              disabled={agentIngressActionLoading}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-black hover:bg-amber-700 disabled:opacity-50"
+            >
+              一键清理无效
+            </button>
+            <button
+              onClick={clearAllAgentIngress}
+              disabled={agentIngressActionLoading}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-black hover:bg-slate-800 disabled:opacity-50"
+            >
+              清空全部Ingress
+            </button>
+            <span className="text-[11px] text-slate-500 ml-auto">已选 {selectedAgentIngressRouteIds.size}</span>
+          </div>
+          <div className="border border-slate-100 rounded-xl overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50">
+                <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="px-3 py-2">选</th>
+                  <th className="px-3 py-2">Host/Path</th>
+                  <th className="px-3 py-2">节点</th>
+                  <th className="px-3 py-2">端口/协议</th>
+                  <th className="px-3 py-2">状态</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {agentIngressLoading && (
+                  <tr><td colSpan={5} className="px-3 py-8 text-center text-xs text-slate-400">加载Ingress中...</td></tr>
+                )}
+                {!agentIngressLoading && agentIngressItems.length === 0 && (
+                  <tr><td colSpan={5} className="px-3 py-8 text-center text-xs text-slate-400">暂无Agent入口Ingress路由</td></tr>
+                )}
+                {!agentIngressLoading && agentIngressItems.map((item) => (
+                  <tr key={item.route_id} className="hover:bg-slate-50">
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedAgentIngressRouteIds.has(item.route_id)}
+                        onChange={() => toggleSelectAgentIngress(item.route_id)}
+                        className="w-4 h-4 accent-blue-600"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="text-xs font-mono text-slate-700 truncate max-w-[360px]">{item.host}{item.path}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="text-xs text-slate-700">{item.agent_key || '-'}</div>
+                      <div className={`text-[10px] font-black ${item.agent_online ? 'text-green-600' : 'text-amber-600'}`}>
+                        {item.agent_online ? '节点在线' : '节点离线/无效'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="text-xs text-slate-700">{item.target_port} / {item.tls_enabled ? 'HTTPS' : 'HTTP'}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${item.status === 'ready' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+                          {item.status}
+                        </span>
+                        {item.access_url && (
+                          <a href={item.access_url} target="_blank" rel="noreferrer" className="text-[10px] font-black text-blue-600 hover:text-blue-700">
+                            打开
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -821,7 +1114,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
             </div>
             <div className="px-6 py-3 border-b border-slate-100 text-xs text-slate-600 flex flex-wrap gap-4">
               <span>status={selectedHistory.status}</span>
-              <span>total={selectedHistory.total}</span>
+              <span>total={getDisplayTotal(selectedHistory)}</span>
               <span>ok={selectedHistory.ok_count}</span>
               <span>fail={selectedHistory.fail_count}</span>
               <span>time={selectedHistory.created_at}</span>

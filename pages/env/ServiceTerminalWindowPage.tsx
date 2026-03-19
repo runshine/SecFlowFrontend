@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, Plug, PlugZap, TerminalSquare } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Plug, PlugZap, TerminalSquare } from 'lucide-react';
 import { api } from '../../api/api';
 import { XTerminal } from '../../components/XTerminal';
 
@@ -67,6 +67,48 @@ export const ServiceTerminalWindowPage: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
   const [connectionInfo, setConnectionInfo] = useState<any>(null);
+  const [showConnectionDetails, setShowConnectionDetails] = useState(false);
+
+  const connectionTargets = useMemo(() => {
+    if (!connectionInfo) return [];
+
+    const currentUrl = connectionInfo?.ws_url || '';
+    const items = [
+      {
+        key: 'active',
+        label: '当前使用',
+        url: currentUrl,
+        active: true,
+      },
+      {
+        key: 'ingress',
+        label: 'Ingress WS',
+        url: connectionInfo?.ingress_ws_url || '',
+        active: !!connectionInfo?.ingress_ws_url && connectionInfo?.ingress_ws_url === currentUrl,
+      },
+      {
+        key: 'direct',
+        label: '直连 WS',
+        url: connectionInfo?.direct_ws_url || '',
+        active: !!connectionInfo?.direct_ws_url && connectionInfo?.direct_ws_url === currentUrl,
+      },
+      {
+        key: 'original',
+        label: '原始返回',
+        url: connectionInfo?.ws_url_original || '',
+        active: !!connectionInfo?.ws_url_original && connectionInfo?.ws_url_original === currentUrl,
+      },
+    ];
+
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      if (!item.url) return false;
+      const uniqueKey = `${item.label}:${item.url}`;
+      if (seen.has(uniqueKey)) return false;
+      seen.add(uniqueKey);
+      return true;
+    });
+  }, [connectionInfo]);
 
   useEffect(() => {
     return () => {
@@ -244,11 +286,51 @@ export const ServiceTerminalWindowPage: React.FC = () => {
       ) : null}
 
       {connectionInfo ? (
-        <div className="px-4 py-2 text-[11px] bg-slate-900 border-b border-slate-800 text-slate-300 space-y-1">
-          <div>WS地址: <span className="font-mono break-all">{connectionInfo?.ws_url || '-'}</span></div>
-          {connectionInfo?.ingress_ws_url ? <div>Ingress WS: <span className="font-mono break-all">{connectionInfo.ingress_ws_url}</span></div> : null}
-          {connectionInfo?.direct_ws_url ? <div>直连 WS: <span className="font-mono break-all">{connectionInfo.direct_ws_url}</span></div> : null}
-          {connectionInfo?.note ? <div className="text-amber-300">{connectionInfo.note}</div> : null}
+        <div className="px-4 py-2 text-[11px] bg-slate-900 border-b border-slate-800 text-slate-300">
+          <button
+            type="button"
+            onClick={() => setShowConnectionDetails((prev) => !prev)}
+            className="w-full flex items-center justify-between gap-3 text-left rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 hover:bg-slate-950/70 transition-colors"
+          >
+            <div className="min-w-0">
+              <div className="text-slate-200 font-bold">连接详情</div>
+              <div className="text-slate-400 truncate">
+                {connectionTargets.find((item) => item.active)?.label || '当前连接'}
+                {connectionInfo?.ws_url ? `: ${connectionInfo.ws_url}` : ''}
+              </div>
+            </div>
+            <div className="shrink-0 text-slate-400">
+              {showConnectionDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </div>
+          </button>
+
+          {showConnectionDetails ? (
+            <div className="mt-2 space-y-2">
+              <div className="grid gap-2">
+                {connectionTargets.map((item) => (
+                  <div
+                    key={`${item.key}-${item.url}`}
+                    className={`rounded-lg border px-3 py-2 ${
+                      item.active
+                        ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-200'
+                        : 'border-slate-700 bg-slate-950/70 text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold">{item.label}</span>
+                      {item.active ? (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-400/20 text-emerald-300 text-[10px] font-black">
+                          当前连接
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="font-mono break-all">{item.url}</div>
+                  </div>
+                ))}
+              </div>
+              {connectionInfo?.note ? <div className="text-amber-300">{connectionInfo.note}</div> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

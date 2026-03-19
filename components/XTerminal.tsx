@@ -70,6 +70,10 @@ export const XTerminal: React.FC<XTerminalProps> = ({
     term.loadAddon(webLinksAddon);
 
     term.open(terminalRef.current);
+    term.focus();
+
+    const focusTerminal = () => term.focus();
+    terminalRef.current.addEventListener('click', focusTerminal);
 
     // 延迟fit以确保容器尺寸正确
     setTimeout(() => {
@@ -84,6 +88,7 @@ export const XTerminal: React.FC<XTerminalProps> = ({
     term.writeln('\x1b[32m✓ 终端已初始化，等待连接...\x1b[0m');
 
     return () => {
+      terminalRef.current?.removeEventListener('click', focusTerminal);
       if (resizeTimeoutRef.current) {
         clearTimeout(resizeTimeoutRef.current);
       }
@@ -162,6 +167,7 @@ export const XTerminal: React.FC<XTerminalProps> = ({
       if (xtermRef.current) {
         xtermRef.current.clear();
         xtermRef.current.write('\x1b[32m✓ 已连接到容器终端\x1b[0m\r\n\r\n');
+        xtermRef.current.focus();
         // 发送初始终端大小
         const { rows, cols } = xtermRef.current;
         ws.send(JSON.stringify({ resize: { rows, cols } }));

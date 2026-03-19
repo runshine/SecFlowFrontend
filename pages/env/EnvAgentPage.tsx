@@ -919,6 +919,9 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                         <div>
                           <p className="text-sm font-black text-slate-800">{template.name}</p>
                           <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">{template.description || '无描述'}</p>
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            作者: {template.owner_name || template.owner_id || 'system'}
+                          </p>
                         </div>
                         <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center ${
                           selectedTemplateNames.has(template.name)

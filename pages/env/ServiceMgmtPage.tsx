@@ -1071,7 +1071,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
               <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">动态 Ingress 转发（HTTP/HTTPS）</p>
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">动态 WEB 转发（HTTP/HTTPS）</p>
                   <button
                     onClick={() => selectedService && loadIngressRoutesForService(selectedService)}
                     className="text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-700"
@@ -1082,7 +1082,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
                 {templateWebPortPresets.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-bold text-slate-600">模板预制端口（快速创建）</p>
+                    <p className="text-xs font-bold text-slate-600">模板WEB端口（快速创建）</p>
                     <div className="flex flex-wrap gap-2">
                       {templateWebPortPresets.map((preset: any, idx: number) => (
                         <button
@@ -1338,6 +1338,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-slate-800 truncate">#{id} {tpl.name}</div>
                           <div className="text-[11px] text-slate-500 truncate">{tpl.description || '-'}</div>
+                          <div className="text-[10px] text-slate-400 truncate">作者: {tpl.owner_name || tpl.owner_id || 'system'}</div>
                         </div>
                       </label>
                     );

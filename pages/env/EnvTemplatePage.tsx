@@ -744,18 +744,18 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   const saveDetailWebPortPresets = async () => {
     if (!templateDetail?.id) return;
     if (!canManageTemplate(templateDetail)) {
-      notify('仅模板拥有者可更新预制Web端口', 'warning');
+      notify('仅模板拥有者可更新WEB端口', 'warning');
       return;
     }
     setSavingWebPortPresets(true);
     try {
       const normalized = normalizeWebPortPresets(detailWebPortPresets);
       await api.environment.updateTemplateBasic(templateDetail.id, { web_port_presets: normalized });
-      notify('预制Web端口已更新', 'success');
+      notify('WEB端口已更新', 'success');
       await viewDetail(templateDetail.id);
       await loadTemplates();
     } catch (err: any) {
-      notify(err?.message || '更新预制Web端口失败', 'error');
+      notify(err?.message || '更新WEB端口失败', 'error');
     } finally {
       setSavingWebPortPresets(false);
     }
@@ -1146,8 +1146,8 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-black text-slate-800">预制 Ingress 端口</h4>
-              <p className="text-xs text-slate-500 mt-1">用于服务详情页快速创建 HTTP/HTTPS Ingress 转发</p>
+              <h4 className="text-sm font-black text-slate-800">WEB端口</h4>
+              <p className="text-xs text-slate-500 mt-1">用于服务详情页快速创建 HTTP/HTTPS 转发</p>
             </div>
             {canManageCurrentTemplate && (
               <div className="flex items-center gap-2">
@@ -1168,7 +1168,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
             )}
           </div>
           {(detailWebPortPresets || []).length === 0 && (
-            <p className="text-xs text-slate-400">暂无预制Web端口，支持在此维护，服务管理中可一键使用。</p>
+            <p className="text-xs text-slate-400">暂无WEB端口，支持在此维护，服务管理中可一键使用。</p>
           )}
           <div className="space-y-2">
             {(detailWebPortPresets || []).map((preset, idx) => (
@@ -1662,7 +1662,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
                     {cardWebPortPresets.length > 0 && (
                       <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
-                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">预制 Ingress 端口</p>
+                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">WEB端口</p>
                         <div className="flex flex-wrap gap-1.5">
                           {cardWebPortPresets.slice(0, 6).map((preset, idx) => (
                             <span key={`preset-${t.id}-${idx}`} className="text-[10px] bg-white text-indigo-700 px-2 py-0.5 rounded font-mono border border-indigo-100">
@@ -1887,7 +1887,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                 <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-black text-slate-600 uppercase tracking-widest">
-                      预制 Ingress 端口（可选）
+                      WEB端口（可选）
                     </label>
                     <button
                       type="button"
@@ -1898,7 +1898,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                     </button>
                   </div>
                   {(newTemplate.web_port_presets || []).length === 0 && (
-                    <p className="text-xs text-slate-400">可定义模板常用的Web端口，后续服务详情可一键创建Ingress转发。</p>
+                    <p className="text-xs text-slate-400">可定义模板常用的WEB端口，后续服务详情可一键创建HTTP/HTTPS转发。</p>
                   )}
                   {(newTemplate.web_port_presets || []).map((preset, idx) => (
                     <div key={`upload-port-${idx}`} className="border border-slate-200 rounded-xl p-2 space-y-2">

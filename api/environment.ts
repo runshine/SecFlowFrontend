@@ -57,7 +57,23 @@ export const environmentApi = {
     handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}`, { headers: getHeaders() })),
   getTemplateByName: async (name: string): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/templates/by-name/${encodeURIComponent(name)}`, { headers: getHeaders() })),
-  updateTemplateBasic: async (templateId: number, data: { name?: string; description?: string; visibility?: 'shared' | 'private' }): Promise<any> =>
+  updateTemplateBasic: async (
+    templateId: number,
+    data: {
+      name?: string;
+      description?: string;
+      visibility?: 'shared' | 'private';
+      web_port_presets?: Array<{
+        name?: string;
+        port: number;
+        protocol?: 'http' | 'https';
+        description?: string;
+        path?: string;
+        websocket_enabled?: boolean;
+        tls_enabled?: boolean;
+      }>;
+    }
+  ): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}`, {
       method: 'PUT',
       headers: getHeaders(),
@@ -177,6 +193,11 @@ export const environmentApi = {
       method: 'DELETE', 
       headers: getHeaders() 
     })),
+  clearTasks: async (projectId: string) =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/task?project_id=${projectId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    })),
 
   getGlobalServices: async (
     projectId: string,
@@ -189,6 +210,34 @@ export const environmentApi = {
     }).toString();
     return handleResponse(await fetch(`${API_BASE}/api/agent/services/global?${query}`, { headers: getHeaders() }));
   },
+  getGlobalIngress: async (
+    projectId: string,
+    params: { include_deleted?: boolean } = {}
+  ): Promise<{ project_id: string; items: any[]; stats: any }> => {
+    const query = new URLSearchParams({
+      project_id: projectId,
+      include_deleted: params.include_deleted ? 'true' : 'false'
+    }).toString();
+    return handleResponse(await fetch(`${API_BASE}/api/agent/services/global/ingress?${query}`, { headers: getHeaders() }));
+  },
+  deleteGlobalIngressBatch: async (projectId: string, routeIds: string[]): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/services/global/ingress/delete-batch`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ project_id: projectId, route_ids: routeIds })
+    })),
+  cleanupStaleGlobalIngress: async (projectId: string, dryRun = false): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/services/global/ingress/cleanup-stale`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ project_id: projectId, dry_run: dryRun })
+    })),
+  clearAllGlobalIngress: async (projectId: string, includeDeleted = false): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/services/global/ingress/clear-all`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ project_id: projectId, include_deleted: includeDeleted })
+    })),
 
   syncGlobalServices: async (data?: { project_id?: string; agent_key?: string; stale_only?: boolean }): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/services/global/sync`, {
@@ -224,6 +273,42 @@ export const environmentApi = {
       method: 'DELETE',
       headers: getHeaders()
     })),
+  getAgentServiceDetail: async (key: string, serviceName: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}`, {
+      headers: getHeaders()
+    })),
+  getAgentServiceLogs: async (key: string, serviceName: string, tail = 200): Promise<{ logs?: string; error?: string }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}/logs?tail=${tail}`, {
+      headers: getHeaders()
+    })),
+  getAgentServiceFiles: async (key: string, serviceName: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}/files`, {
+      headers: getHeaders()
+    })),
+  execAgentServiceCommand: async (
+    key: string,
+    serviceName: string,
+    data: { container: string; command: string; user?: string }
+  ): Promise<{ output?: string; error?: string }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}/exec`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    })),
+  getAgentServiceExecWsConnection: async (
+    key: string,
+    serviceName: string,
+    params: { project_id?: string; container?: string; shell?: string; user?: string } = {}
+  ): Promise<any> => {
+    const query = new URLSearchParams();
+    if (params.project_id) query.append('project_id', params.project_id);
+    if (params.container) query.append('container', params.container);
+    if (params.shell) query.append('shell', params.shell);
+    if (params.user) query.append('user', params.user);
+    return handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}/exec/ws-connection?${query.toString()}`, {
+      headers: getHeaders()
+    }));
+  },
   getAgentHealth: async (key: string): Promise<any> => 
     handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/health`, { headers: getHeaders() })),
   getDaemonAgentInfo: async (key: string): Promise<any> =>
@@ -242,6 +327,7 @@ export const environmentApi = {
       host?: string;
       host_prefix?: string;
       path?: string;
+      service_port?: number;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
       force_recreate?: boolean;

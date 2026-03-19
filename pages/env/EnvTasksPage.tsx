@@ -21,6 +21,7 @@ import { useUiFeedback } from '../../components/UiFeedback';
 export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const { notify, confirm, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
+  const [clearingAll, setClearingAll] = useState(false);
   const [tasks, setTasks] = useState<AsyncTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AsyncTask | null>(null);
   const [logs, setLogs] = useState<TaskLog[]>([]);
@@ -80,6 +81,29 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
+  const handleClearAllTasks = async () => {
+    if (!projectId) return;
+    const okToClear = await confirm({
+      title: '清空全部任务记录',
+      message: `确认清空当前项目下全部任务记录吗？当前共 ${tasks.length} 条记录，此操作不可恢复。`,
+      confirmText: '确认清空',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!okToClear) return;
+    setClearingAll(true);
+    try {
+      const result = await api.environment.clearTasks(projectId);
+      await loadTasks();
+      if (selectedTask) setSelectedTask(null);
+      notify(`任务记录已清空，删除 ${result?.deleted_count ?? 0} 条`, 'success');
+    } catch (err) {
+      notify("清空任务记录失败", 'error');
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
   const filteredTasks = (tasks || []).filter(t => {
     const serviceMatch = t?.service_name?.toLowerCase().includes(searchTerm.toLowerCase());
     const idMatch = t?.id?.includes(searchTerm);
@@ -103,6 +127,14 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           <p className="text-slate-500 mt-1 font-medium">分布式节点部署任务队列与实时执行审计</p>
         </div>
         <div className="flex gap-4">
+          <button
+            onClick={handleClearAllTasks}
+            disabled={!projectId || clearingAll || tasks.length === 0}
+            className="px-5 py-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl hover:bg-rose-600 hover:text-white transition-all shadow-sm disabled:opacity-50 font-black text-xs tracking-wider uppercase flex items-center gap-2"
+          >
+            {clearingAll ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            清空记录
+          </button>
           <button 
             onClick={loadTasks}
             disabled={!projectId}
@@ -225,26 +257,26 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           onClick={() => setSelectedTask(null)}
         >
           <div
-            className="w-full max-w-5xl h-[78vh] bg-slate-950 border border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            className="w-full max-w-[72rem] h-[72vh] bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-8 py-6 border-b border-slate-800 flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">任务执行细节</p>
-                <p className="text-sm font-black text-white truncate mt-1">
+                <p className="text-xs font-black text-white truncate mt-1">
                   {selectedTask.service_name || 'Unknown'} · {selectedTask.id}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedTask(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
                 title="关闭"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto p-6 space-y-3 custom-scrollbar">
+            <div className="flex-1 overflow-auto p-4 space-y-2 custom-scrollbar">
               {logLoading ? (
                 <div className="h-full flex items-center justify-center">
                   <Loader2 className="animate-spin text-blue-500" />
@@ -256,14 +288,14 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                 </div>
               ) : (
                 logs.map((log, index) => (
-                  <div key={`${log.timestamp}-${index}`} className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                    <div className="flex items-center justify-between gap-4 mb-2">
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${log.level === 'ERROR' ? 'text-red-400' : log.level === 'WARNING' || log.level === 'WARN' ? 'text-amber-400' : 'text-blue-400'}`}>
+                  <div key={`${log.timestamp}-${index}`} className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <span className={`text-[9px] font-black uppercase tracking-widest ${log.level === 'ERROR' ? 'text-red-400' : log.level === 'WARNING' || log.level === 'WARN' ? 'text-amber-400' : 'text-blue-400'}`}>
                         {log.level}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-500">{log.timestamp || '-'}</span>
+                      <span className="text-[9px] font-mono text-slate-500">{log.timestamp || '-'}</span>
                     </div>
-                    <pre className="text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words font-mono">{log.message}</pre>
+                    <pre className="text-[11px] leading-tight text-slate-200 whitespace-pre-wrap break-words font-mono">{log.message}</pre>
                   </div>
                 ))
               )}

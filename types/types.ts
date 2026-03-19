@@ -496,6 +496,15 @@ export interface EnvTemplate {
     parse_error?: string | null;
     parse_status?: 'success' | 'error' | 'stale';
     content_hash?: string;
+    web_port_presets?: Array<{
+      name?: string;
+      port: number;
+      protocol?: 'http' | 'https';
+      description?: string;
+      path?: string;
+      websocket_enabled?: boolean;
+      tls_enabled?: boolean;
+    }>;
   };
 }
 

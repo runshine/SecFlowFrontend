@@ -63,6 +63,16 @@ interface TreeNode {
   modified?: string;
 }
 
+interface WebPortPreset {
+  name: string;
+  port: number;
+  protocol: 'http' | 'https';
+  description?: string;
+  path?: string;
+  websocket_enabled?: boolean;
+  tls_enabled?: boolean;
+}
+
 export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const { notify, confirm, prompt, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
@@ -112,8 +122,11 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     description: '',
     type: 'yaml' as 'yaml' | 'archive',
     content: '',
-    visibility: 'shared' as 'shared' | 'private'
+    visibility: 'shared' as 'shared' | 'private',
+    web_port_presets: [] as WebPortPreset[]
   });
+  const [detailWebPortPresets, setDetailWebPortPresets] = useState<WebPortPreset[]>([]);
+  const [savingWebPortPresets, setSavingWebPortPresets] = useState(false);
 
   // Parsed Compose States
   const [parsedCompose, setParsedCompose] = useState<any>(null);
@@ -220,12 +233,33 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
+  const normalizeWebPortPresets = (raw: any): WebPortPreset[] => {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((item: any): WebPortPreset => {
+        const protocol: 'http' | 'https' =
+          String(item?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http';
+        return {
+          name: String(item?.name || '').trim(),
+          port: Number(item?.port || 0),
+          protocol,
+          description: String(item?.description || '').trim(),
+          path: String(item?.path || '/').trim() || '/',
+          websocket_enabled: item?.websocket_enabled !== false,
+          tls_enabled: item?.tls_enabled !== false,
+        };
+      })
+      .filter((item: WebPortPreset) => Number.isFinite(item.port) && item.port > 0 && item.port <= 65535)
+      .slice(0, 32);
+  };
+
   const viewDetail = async (templateId: number) => {
     setSelectedTemplate(templateId);
     setLoading(true);
     try {
       const detail = await api.environment.getTemplateDetail(templateId);
       setTemplateDetail(detail);
+      setDetailWebPortPresets(normalizeWebPortPresets(detail?.metadata?.web_port_presets || []));
       setViewMode('detail');
       setExpandedFolders(new Set(['root']));
 
@@ -697,6 +731,36 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
+  const addUploadWebPortPreset = () => {
+    setNewTemplate((prev) => ({
+      ...prev,
+      web_port_presets: [
+        ...(prev.web_port_presets || []),
+        { name: '', port: 80, protocol: 'http', description: '', path: '/', websocket_enabled: true, tls_enabled: false }
+      ]
+    }));
+  };
+
+  const saveDetailWebPortPresets = async () => {
+    if (!templateDetail?.id) return;
+    if (!canManageTemplate(templateDetail)) {
+      notify('仅模板拥有者可更新预制Web端口', 'warning');
+      return;
+    }
+    setSavingWebPortPresets(true);
+    try {
+      const normalized = normalizeWebPortPresets(detailWebPortPresets);
+      await api.environment.updateTemplateBasic(templateDetail.id, { web_port_presets: normalized });
+      notify('预制Web端口已更新', 'success');
+      await viewDetail(templateDetail.id);
+      await loadTemplates();
+    } catch (err: any) {
+      notify(err?.message || '更新预制Web端口失败', 'error');
+    } finally {
+      setSavingWebPortPresets(false);
+    }
+  };
+
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
@@ -708,6 +772,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       formData.append('description', newTemplate.description);
       formData.append('type', newTemplate.type);
       formData.append('visibility', newTemplate.visibility);
+      formData.append('web_port_presets', JSON.stringify(normalizeWebPortPresets(newTemplate.web_port_presets || [])));
 
       if (uploadTab === 'file') {
         const file = selectedUploadFile || fileInputRef.current?.files?.[0];
@@ -731,7 +796,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   const resetUploadForm = () => {
-    setNewTemplate({ name: '', description: '', type: 'yaml', content: '', visibility: 'shared' });
+    setNewTemplate({ name: '', description: '', type: 'yaml', content: '', visibility: 'shared', web_port_presets: [] });
     setUploadError(null);
     setSelectedUploadFile(null);
     setIsDragOverUpload(false);
@@ -784,6 +849,9 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     t.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     t.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const getTemplateWebPortPresets = (template: EnvTemplate): WebPortPreset[] =>
+    normalizeWebPortPresets(template?.metadata?.web_port_presets || []);
 
   const renderDeployModal = () => (
     isDeployModalOpen && (
@@ -1075,6 +1143,111 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           </div>
         )}
 
+        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-black text-slate-800">预制 Ingress 端口</h4>
+              <p className="text-xs text-slate-500 mt-1">用于服务详情页快速创建 HTTP/HTTPS Ingress 转发</p>
+            </div>
+            {canManageCurrentTemplate && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDetailWebPortPresets(prev => [...prev, { name: '', port: 80, protocol: 'http', description: '', path: '/', websocket_enabled: true, tls_enabled: false }])}
+                  className="px-3 py-2 text-xs font-black rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200"
+                >
+                  新增端口
+                </button>
+                <button
+                  onClick={saveDetailWebPortPresets}
+                  disabled={savingWebPortPresets}
+                  className="px-3 py-2 text-xs font-black rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {savingWebPortPresets ? '保存中...' : '保存预设'}
+                </button>
+              </div>
+            )}
+          </div>
+          {(detailWebPortPresets || []).length === 0 && (
+            <p className="text-xs text-slate-400">暂无预制Web端口，支持在此维护，服务管理中可一键使用。</p>
+          )}
+          <div className="space-y-2">
+            {(detailWebPortPresets || []).map((preset, idx) => (
+              <div key={`detail-port-${idx}`} className="border border-slate-200 rounded-xl p-2 space-y-2">
+                <div className="grid grid-cols-12 gap-2 items-center">
+                  <input
+                    value={preset.name || ''}
+                    onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, name: e.target.value } : p))}
+                    disabled={!canManageCurrentTemplate}
+                    placeholder="名称"
+                    className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                  />
+                  <input
+                    value={preset.port || 0}
+                    onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, port: Number(e.target.value || 0) } : p))}
+                    disabled={!canManageCurrentTemplate}
+                    type="number"
+                    min={1}
+                    max={65535}
+                    placeholder="端口"
+                    className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                  />
+                  <select
+                    value={preset.protocol || 'http'}
+                    onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https' } : p))}
+                    disabled={!canManageCurrentTemplate}
+                    className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+                  >
+                    <option value="http">HTTP</option>
+                    <option value="https">HTTPS</option>
+                  </select>
+                  <input
+                    value={preset.path || '/'}
+                    onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, path: e.target.value } : p))}
+                    disabled={!canManageCurrentTemplate}
+                    placeholder="Path"
+                    className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                  />
+                  <input
+                    value={preset.description || ''}
+                    onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, description: e.target.value } : p))}
+                    disabled={!canManageCurrentTemplate}
+                    placeholder="说明"
+                    className="col-span-3 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                  />
+                  {canManageCurrentTemplate && (
+                    <button
+                      onClick={() => setDetailWebPortPresets(prev => prev.filter((_, i) => i !== idx))}
+                      className="col-span-1 px-2 py-2 text-xs font-black rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
+                    >
+                      删除
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 px-1">
+                  <label className="text-xs text-slate-600 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={preset.websocket_enabled !== false}
+                      onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, websocket_enabled: e.target.checked } : p))}
+                      disabled={!canManageCurrentTemplate}
+                    />
+                    启用 WebSocket
+                  </label>
+                  <label className="text-xs text-slate-600 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={preset.tls_enabled !== false}
+                      onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, tls_enabled: e.target.checked } : p))}
+                      disabled={!canManageCurrentTemplate}
+                    />
+                    默认启用 TLS
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* YAML 类型 - 直接展示 ComposeViewer */}
         {templateDetail.type === 'yaml' && (
           <div className="space-y-8">
@@ -1361,6 +1534,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
               const compose = parsedData?.parsed_compose as ParsedCompose | undefined;
               const composeServices = Object.values((compose?.services || {}) as Record<string, any>) as any[];
               const totalPorts = composeServices.reduce((acc: number, s: any) => acc + (s.ports?.length || 0), 0);
+              const cardWebPortPresets = getTemplateWebPortPresets(t);
               const canManageCard = canManageTemplate(t);
               const canCopyCard = canCopyTemplate(t);
 
@@ -1485,6 +1659,22 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                         <span className="text-xs">正在解析模板...</span>
                       </div>
                     ) : null}
+
+                    {cardWebPortPresets.length > 0 && (
+                      <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
+                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">预制 Ingress 端口</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cardWebPortPresets.slice(0, 6).map((preset, idx) => (
+                            <span key={`preset-${t.id}-${idx}`} className="text-[10px] bg-white text-indigo-700 px-2 py-0.5 rounded font-mono border border-indigo-100">
+                              {(preset.name || 'WEB')}:{preset.port}/{String(preset.protocol || 'http').toUpperCase()}
+                            </span>
+                          ))}
+                          {cardWebPortPresets.length > 6 && (
+                            <span className="text-[10px] text-slate-500">+{cardWebPortPresets.length - 6} 更多</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Card Footer */}
@@ -1692,6 +1882,114 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                       私有模板
                     </button>
                   </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-slate-600 uppercase tracking-widest">
+                      预制 Ingress 端口（可选）
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addUploadWebPortPreset}
+                      className="px-2.5 py-1.5 text-[11px] font-black rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    >
+                      新增端口
+                    </button>
+                  </div>
+                  {(newTemplate.web_port_presets || []).length === 0 && (
+                    <p className="text-xs text-slate-400">可定义模板常用的Web端口，后续服务详情可一键创建Ingress转发。</p>
+                  )}
+                  {(newTemplate.web_port_presets || []).map((preset, idx) => (
+                    <div key={`upload-port-${idx}`} className="border border-slate-200 rounded-xl p-2 space-y-2">
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <input
+                          value={preset.name || ''}
+                          onChange={(e) => setNewTemplate(prev => ({
+                            ...prev,
+                            web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, name: e.target.value } : p)
+                          }))}
+                          placeholder="名称"
+                          className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                        />
+                        <input
+                          value={preset.port || 0}
+                          onChange={(e) => setNewTemplate(prev => ({
+                            ...prev,
+                            web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, port: Number(e.target.value || 0) } : p)
+                          }))}
+                          type="number"
+                          min={1}
+                          max={65535}
+                          placeholder="端口"
+                          className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                        />
+                        <select
+                          value={preset.protocol || 'http'}
+                          onChange={(e) => setNewTemplate(prev => ({
+                            ...prev,
+                            web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https' } : p)
+                          }))}
+                          className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+                        >
+                          <option value="http">HTTP</option>
+                          <option value="https">HTTPS</option>
+                        </select>
+                        <input
+                          value={preset.path || '/'}
+                          onChange={(e) => setNewTemplate(prev => ({
+                            ...prev,
+                            web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, path: e.target.value } : p)
+                          }))}
+                          placeholder="Path"
+                          className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                        />
+                        <input
+                          value={preset.description || ''}
+                          onChange={(e) => setNewTemplate(prev => ({
+                            ...prev,
+                            web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, description: e.target.value } : p)
+                          }))}
+                          placeholder="说明"
+                          className="col-span-3 px-2 py-2 text-xs border border-slate-200 rounded-lg"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setNewTemplate(prev => ({
+                            ...prev,
+                            web_port_presets: prev.web_port_presets.filter((_, i) => i !== idx)
+                          }))}
+                          className="col-span-1 px-2 py-2 text-xs font-black rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
+                        >
+                          删除
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-4 px-1">
+                        <label className="text-xs text-slate-600 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={preset.websocket_enabled !== false}
+                            onChange={(e) => setNewTemplate(prev => ({
+                              ...prev,
+                              web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, websocket_enabled: e.target.checked } : p)
+                            }))}
+                          />
+                          启用 WebSocket
+                        </label>
+                        <label className="text-xs text-slate-600 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={preset.tls_enabled !== false}
+                            onChange={(e) => setNewTemplate(prev => ({
+                              ...prev,
+                              web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, tls_enabled: e.target.checked } : p)
+                            }))}
+                          />
+                          默认启用 TLS
+                        </label>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* File Upload or Editor */}

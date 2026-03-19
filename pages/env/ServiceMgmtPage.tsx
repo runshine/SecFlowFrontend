@@ -12,11 +12,15 @@ import {
   Square,
   Trash2,
   CheckSquare,
+  TerminalSquare,
+  X,
+  FileText,
 } from 'lucide-react';
-import { AgentService } from '../../types/types';
+import { Agent, AgentService, EnvTemplate } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useUiFeedback } from '../../components/UiFeedback';
+import { XTerminal } from '../../components/XTerminal';
 
 type BatchAction = 'start' | 'stop' | 'delete';
 
@@ -28,7 +32,45 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   const [searchTerm, setSearchTerm] = useState('');
   const [nodeFilter, setNodeFilter] = useState('all');
   const [templateFilter, setTemplateFilter] = useState('all');
-  const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
+  const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set<string>());
+  const [selectedService, setSelectedService] = useState<AgentService | null>(null);
+  const [serviceDetail, setServiceDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [serviceLogs, setServiceLogs] = useState('');
+  const [serviceFiles, setServiceFiles] = useState<any[]>([]);
+  const [execContainer, setExecContainer] = useState('');
+  const [execCommand, setExecCommand] = useState('sh -lc "ps -ef | head -n 20"');
+  const [execOutput, setExecOutput] = useState('');
+  const [execLoading, setExecLoading] = useState(false);
+  const [terminalWs, setTerminalWs] = useState<WebSocket | null>(null);
+  const [terminalConnected, setTerminalConnected] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [templateWebPortPresets, setTemplateWebPortPresets] = useState<any[]>([]);
+  const [ingressRoutes, setIngressRoutes] = useState<any[]>([]);
+  const [ingressLoading, setIngressLoading] = useState(false);
+  const [ingressCreating, setIngressCreating] = useState(false);
+  const [ingressTargetPort, setIngressTargetPort] = useState<number>(0);
+  const [ingressProtocol, setIngressProtocol] = useState<'http' | 'https'>('http');
+  const [ingressPath, setIngressPath] = useState('/');
+  const [ingressHostPrefix, setIngressHostPrefix] = useState('');
+  const [ingressWebsocketEnabled, setIngressWebsocketEnabled] = useState(true);
+  const [globalIngressLoading, setGlobalIngressLoading] = useState(false);
+  const [globalIngressItems, setGlobalIngressItems] = useState<any[]>([]);
+  const [globalIngressStats, setGlobalIngressStats] = useState<any>({});
+  const [selectedIngressRouteIds, setSelectedIngressRouteIds] = useState<Set<string>>(new Set<string>());
+  const [globalIngressActionLoading, setGlobalIngressActionLoading] = useState(false);
+  const [deployModalOpen, setDeployModalOpen] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [deployAgentsLoading, setDeployAgentsLoading] = useState(false);
+  const [deployTemplatesLoading, setDeployTemplatesLoading] = useState(false);
+  const [deployAgents, setDeployAgents] = useState<Agent[]>([]);
+  const [deployTemplates, setDeployTemplates] = useState<EnvTemplate[]>([]);
+  const [deployAgentSearch, setDeployAgentSearch] = useState('');
+  const [selectedDeployAgentKeys, setSelectedDeployAgentKeys] = useState<Set<string>>(new Set<string>());
+  const [selectedDeployTemplateIds, setSelectedDeployTemplateIds] = useState<Set<number>>(new Set<number>());
+  const [deployServiceSuffix, setDeployServiceSuffix] = useState('');
+  const [deployPerNodeCount, setDeployPerNodeCount] = useState(1);
+  const [deployExtraParamsText, setDeployExtraParamsText] = useState('');
 
   useEffect(() => {
     if (projectId) {
@@ -36,17 +78,71 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   }, [projectId]);
 
+  useEffect(() => {
+    return () => {
+      if (terminalWs) terminalWs.close();
+    };
+  }, [terminalWs]);
+
   const loadAllServices = async () => {
     if (!projectId) return;
     setLoading(true);
     try {
       const data = await api.environment.getGlobalServices(projectId, { per_page: 2000 });
       setAllServices(data?.items || []);
-      setSelectedServiceIds(new Set());
+      setSelectedServiceIds(new Set<string>());
+      await loadGlobalIngress();
     } catch (err) {
       console.error('Failed to load global services', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openDeployModal = async () => {
+    if (!projectId) {
+      notify('请先选择项目后再部署', 'warning');
+      return;
+    }
+    setDeployModalOpen(true);
+    setDeployAgentSearch('');
+    setSelectedDeployAgentKeys(new Set<string>());
+    setSelectedDeployTemplateIds(new Set<number>());
+    setDeployServiceSuffix('');
+    setDeployPerNodeCount(1);
+    setDeployExtraParamsText('');
+    setDeployAgentsLoading(true);
+    setDeployTemplatesLoading(true);
+    try {
+      const [agentData, templateData] = await Promise.all([
+        api.environment.getAgents(projectId, { per_page: 2000 }),
+        api.environment.getTemplates(1, 2000),
+      ]);
+      setDeployAgents(agentData?.agents || []);
+      setDeployTemplates(templateData?.templates || []);
+    } catch (err) {
+      console.error('Load deploy modal data failed', err);
+      notify('加载部署数据失败', 'error');
+    } finally {
+      setDeployAgentsLoading(false);
+      setDeployTemplatesLoading(false);
+    }
+  };
+
+  const loadGlobalIngress = async () => {
+    if (!projectId) return;
+    setGlobalIngressLoading(true);
+    try {
+      const data = await api.environment.getGlobalIngress(projectId, { include_deleted: false });
+      setGlobalIngressItems(data?.items || []);
+      setGlobalIngressStats(data?.stats || {});
+      setSelectedIngressRouteIds(new Set<string>());
+    } catch (err) {
+      console.error('Failed to load global ingress', err);
+      setGlobalIngressItems([]);
+      setGlobalIngressStats({});
+    } finally {
+      setGlobalIngressLoading(false);
     }
   };
 
@@ -161,6 +257,459 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     await applyBatchAction('delete', targets);
   };
 
+  const toggleSelectIngress = (routeId: string) => {
+    setSelectedIngressRouteIds((prev) => {
+      const next = new Set<string>(prev);
+      if (next.has(routeId)) next.delete(routeId);
+      else next.add(routeId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllIngress = () => {
+    if (globalIngressItems.length === 0) return;
+    setSelectedIngressRouteIds((prev) => {
+      const next = new Set<string>(prev);
+      const allSelected = globalIngressItems.every((item) => next.has(item.route_id));
+      if (allSelected) {
+        globalIngressItems.forEach((item) => next.delete(item.route_id));
+      } else {
+        globalIngressItems.forEach((item) => next.add(item.route_id));
+      }
+      return next;
+    });
+  };
+
+  const deleteSelectedIngress = async () => {
+    if (!projectId || selectedIngressRouteIds.size === 0) return;
+    const ok = await confirm({
+      title: '批量删除Ingress',
+      message: `确认删除选中的 ${selectedIngressRouteIds.size} 条Ingress路由？`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return;
+    setGlobalIngressActionLoading(true);
+    try {
+      const routeIds = Array.from(selectedIngressRouteIds.values()) as string[];
+      const result = await api.environment.deleteGlobalIngressBatch(projectId, routeIds);
+      notify(`删除完成：成功 ${result?.deleted ?? 0}，失败 ${(result?.failed || []).length}`, (result?.failed || []).length > 0 ? 'warning' : 'success');
+      await loadGlobalIngress();
+    } catch (err: any) {
+      notify(err?.message || '批量删除Ingress失败', 'error');
+    } finally {
+      setGlobalIngressActionLoading(false);
+    }
+  };
+
+  const cleanupStaleIngress = async () => {
+    if (!projectId) return;
+    const ok = await confirm({
+      title: '清理无效Ingress',
+      message: '确认一键删除所有不在位服务关联的Ingress？',
+      confirmText: '执行清理',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return;
+    setGlobalIngressActionLoading(true);
+    try {
+      const result = await api.environment.cleanupStaleGlobalIngress(projectId, false);
+      notify(`清理完成：删除 ${result?.deleted ?? 0} 条，失败 ${(result?.failed || []).length}`, (result?.failed || []).length > 0 ? 'warning' : 'success');
+      await loadGlobalIngress();
+    } catch (err: any) {
+      notify(err?.message || '清理无效Ingress失败', 'error');
+    } finally {
+      setGlobalIngressActionLoading(false);
+    }
+  };
+
+  const clearAllIngress = async () => {
+    if (!projectId) return;
+    const ok = await confirm({
+      title: '清空全部Ingress',
+      message: '确认清空当前项目下全部Ingress路由？此操作不可恢复。',
+      confirmText: '确认清空',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return;
+    setGlobalIngressActionLoading(true);
+    try {
+      const result = await api.environment.clearAllGlobalIngress(projectId, false);
+      notify(`清空完成：删除 ${result?.deleted ?? 0} 条，失败 ${(result?.failed || []).length}`, (result?.failed || []).length > 0 ? 'warning' : 'success');
+      await loadGlobalIngress();
+    } catch (err: any) {
+      notify(err?.message || '清空Ingress失败', 'error');
+    } finally {
+      setGlobalIngressActionLoading(false);
+    }
+  };
+
+  const resolveContainers = (detail: any): string[] => {
+    const raw = detail?.real_status?.containers || [];
+    if (!Array.isArray(raw)) return [];
+    const names = raw
+      .map((item: any) => item?.Service || item?.service || item?.Name || item?.name)
+      .filter((v: any) => typeof v === 'string' && v.trim().length > 0)
+      .map((v: string) => v.trim());
+    return Array.from(new Set(names));
+  };
+
+  const detectServicePorts = (svc: AgentService): number[] => {
+    const result = new Set<number>();
+    const ports = svc?.ports || {};
+    Object.values(ports).forEach((raw) => {
+      const text = String(raw || '').trim();
+      if (!text) return;
+      const candidates = text.split(/[,:/]/).map((x) => Number(x.trim())).filter((n) => Number.isFinite(n) && n > 0 && n <= 65535);
+      candidates.forEach((n) => result.add(n));
+    });
+    return Array.from(result.values()).sort((a, b) => a - b);
+  };
+
+  const normalizeNamePart = (value: string, maxLen = 32): string =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, maxLen);
+
+  const buildDeployServiceName = (templateName: string, agentKey: string, index: number): string => {
+    const tpl = normalizeNamePart(templateName, 28) || 'service';
+    const agent = normalizeNamePart(agentKey, 10) || 'agent';
+    const suffix = normalizeNamePart(deployServiceSuffix, 16);
+    const idx = deployPerNodeCount > 1 ? `-${index + 1}` : '';
+    const suffixPart = suffix ? `-${suffix}` : '';
+    return `${tpl}-${agent}${suffixPart}${idx}`.slice(0, 63);
+  };
+
+  const filteredDeployAgents = useMemo(() => {
+    const q = deployAgentSearch.trim().toLowerCase();
+    return deployAgents.filter((a) => {
+      const hitSearch = !q
+        || (a.hostname || '').toLowerCase().includes(q)
+        || (a.ip_address || '').toLowerCase().includes(q)
+        || (a.key || '').toLowerCase().includes(q);
+      return hitSearch;
+    });
+  }, [deployAgents, deployAgentSearch]);
+
+  const toggleDeployAgent = (agentKey: string) => {
+    setSelectedDeployAgentKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(agentKey)) next.delete(agentKey);
+      else next.add(agentKey);
+      return next;
+    });
+  };
+
+  const toggleAllDeployAgents = () => {
+    setSelectedDeployAgentKeys((prev) => {
+      const next = new Set(prev);
+      const allSelected = filteredDeployAgents.length > 0 && filteredDeployAgents.every((a) => next.has(a.key));
+      if (allSelected) {
+        filteredDeployAgents.forEach((a) => next.delete(a.key));
+      } else {
+        filteredDeployAgents.forEach((a) => {
+          if (a.status === 'online') next.add(a.key);
+        });
+      }
+      return next;
+    });
+  };
+
+  const toggleDeployTemplate = (templateId: number) => {
+    setSelectedDeployTemplateIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(templateId)) next.delete(templateId);
+      else next.add(templateId);
+      return next;
+    });
+  };
+
+  const executeBatchDeployFromModal = async () => {
+    if (!projectId) return;
+    if (selectedDeployAgentKeys.size === 0) {
+      notify('请至少选择一个在线节点', 'warning');
+      return;
+    }
+    if (selectedDeployTemplateIds.size === 0) {
+      notify('请至少选择一个模板', 'warning');
+      return;
+    }
+
+    let extraParams: any = undefined;
+    if (deployExtraParamsText.trim()) {
+      try {
+        extraParams = JSON.parse(deployExtraParamsText);
+      } catch {
+        notify('额外参数不是合法 JSON', 'warning');
+        return;
+      }
+    }
+
+    setDeploying(true);
+    try {
+      const templateIdSet = new Set(selectedDeployTemplateIds);
+      const chosenTemplates = deployTemplates.filter((t) => templateIdSet.has(Number(t.id)));
+      const templateById = new Map<number, EnvTemplate>();
+      chosenTemplates.forEach((t) => templateById.set(Number(t.id), t));
+      const agentKeys = Array.from(selectedDeployAgentKeys.values()) as string[];
+
+      const serviceNameMap = new Map<string, Set<string>>();
+      await Promise.all(
+        agentKeys.map(async (agentKey) => {
+          try {
+            const data = await api.environment.getAgentServices(agentKey);
+            const names = new Set<string>((data?.services || []).map((svc) => svc.name));
+            serviceNameMap.set(agentKey, names);
+          } catch {
+            serviceNameMap.set(agentKey, new Set<string>());
+          }
+        })
+      );
+
+      const deployments: Array<{ service_name: string; agent_key: string; template_name: string; extra_params?: any }> = [];
+      let duplicateCount = 0;
+
+      for (const agentKey of agentKeys) {
+        const existing = serviceNameMap.get(agentKey) || new Set<string>();
+        for (const templateId of selectedDeployTemplateIds) {
+          const tpl = templateById.get(Number(templateId));
+          if (!tpl) continue;
+          for (let i = 0; i < deployPerNodeCount; i += 1) {
+            const serviceName = buildDeployServiceName(tpl.name, agentKey, i);
+            if (existing.has(serviceName)) {
+              duplicateCount += 1;
+              continue;
+            }
+            deployments.push({
+              service_name: serviceName,
+              agent_key: agentKey,
+              template_name: tpl.name,
+              ...(extraParams ? { extra_params: extraParams } : {}),
+            });
+            existing.add(serviceName);
+          }
+        }
+      }
+
+      if (deployments.length === 0) {
+        notify(`检测到全部为重复部署，已跳过 ${duplicateCount} 项`, 'warning');
+        return;
+      }
+
+      const result = await api.environment.deployBatch({
+        project_id: projectId,
+        deployments,
+      });
+      const successCount = Number(result?.success_count || 0);
+      const failedCount = Number(result?.failed_count || 0);
+      const level = failedCount > 0 ? 'warning' : 'success';
+      notify(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}，跳过重复 ${duplicateCount}`, level);
+      setDeployModalOpen(false);
+      await loadAllServices();
+    } catch (err: any) {
+      notify(err?.message || '批量部署失败', 'error');
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  const loadIngressRoutesForService = async (svc: AgentService) => {
+    if (!svc.agent_key || !projectId) return;
+    setIngressLoading(true);
+    try {
+      const resp = await api.environment.listAgentIngressRoutes(svc.agent_key, projectId);
+      const all = resp?.items || [];
+      const filtered = all.filter((r: any) => {
+        const metaService = String(r?.metadata?.service_name || '').trim();
+        return metaService === svc.name || String(r?.service_name || '').includes(svc.name);
+      });
+      setIngressRoutes(filtered);
+    } catch {
+      setIngressRoutes([]);
+    } finally {
+      setIngressLoading(false);
+    }
+  };
+
+  const createServiceIngress = async () => {
+    if (!selectedService?.agent_key || !projectId || !ingressTargetPort) return;
+    setIngressCreating(true);
+    try {
+      const route = await api.environment.createAgentIngressRoute(selectedService.agent_key, {
+        project_id: projectId,
+        target_port: Number(ingressTargetPort),
+        service_port: Number(ingressTargetPort),
+        websocket_enabled: ingressWebsocketEnabled,
+        tls_enabled: ingressProtocol === 'https',
+        host_prefix: ingressHostPrefix?.trim() || `${selectedService.name}-${ingressTargetPort}`,
+        path: ingressPath?.trim() || '/',
+        metadata: {
+          source: 'service-mgmt',
+          service_name: selectedService.name,
+          template_id: selectedService.template_id,
+          template_name: selectedService.template_name,
+          protocol: ingressProtocol
+        }
+      });
+      notify(`Ingress创建成功: ${route?.host || ''}`, 'success');
+      await loadIngressRoutesForService(selectedService);
+      await loadGlobalIngress();
+    } catch (err: any) {
+      notify(err?.message || '创建Ingress失败', 'error');
+    } finally {
+      setIngressCreating(false);
+    }
+  };
+
+  const loadServiceLogs = async (svc: AgentService) => {
+    if (!svc.agent_key) return;
+    try {
+      const res = await api.environment.getAgentServiceLogs(svc.agent_key, svc.name, 300);
+      setServiceLogs(res?.logs || res?.error || '');
+    } catch (err: any) {
+      setServiceLogs(`日志加载失败: ${err?.message || err}`);
+    }
+  };
+
+  const loadServiceFiles = async (svc: AgentService) => {
+    if (!svc.agent_key) return;
+    try {
+      const res = await api.environment.getAgentServiceFiles(svc.agent_key, svc.name);
+      setServiceFiles(res?.files || []);
+    } catch {
+      setServiceFiles([]);
+    }
+  };
+
+  const openServiceDetail = async (svc: AgentService) => {
+    if (!svc.agent_key) {
+      notify('服务缺少agent_key，无法查看详情', 'warning');
+      return;
+    }
+    setSelectedService(svc);
+    setDetailLoading(true);
+    setServiceDetail(null);
+    setServiceLogs('');
+    setServiceFiles([]);
+    setExecOutput('');
+    setTemplateWebPortPresets([]);
+    setIngressRoutes([]);
+    try {
+      const detail = await api.environment.getAgentServiceDetail(svc.agent_key, svc.name);
+      setServiceDetail(detail);
+      const containerList = resolveContainers(detail);
+      setExecContainer(containerList[0] || svc.name);
+      const detected = detectServicePorts(svc);
+      setIngressTargetPort(detected[0] || 80);
+      setIngressProtocol('http');
+      setIngressPath('/');
+      setIngressHostPrefix(`${svc.name}-${detected[0] || 80}`);
+      setIngressWebsocketEnabled(true);
+
+      if (typeof svc.template_id === 'number') {
+        try {
+          const tpl = await api.environment.getTemplateDetail(svc.template_id);
+          const presets = Array.isArray(tpl?.metadata?.web_port_presets) ? tpl.metadata.web_port_presets : [];
+          setTemplateWebPortPresets(presets);
+          if (presets.length > 0) {
+            const first = presets[0];
+            const p = Number(first?.port || 0);
+            if (p > 0) {
+              setIngressTargetPort(p);
+              setIngressProtocol(String(first?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http');
+              setIngressPath(String(first?.path || '/'));
+              setIngressWebsocketEnabled(first?.websocket_enabled !== false);
+              setIngressHostPrefix(`${svc.name}-${p}`);
+            }
+          }
+        } catch {
+          setTemplateWebPortPresets([]);
+        }
+      }
+
+      await loadIngressRoutesForService(svc);
+      await Promise.all([loadServiceLogs(svc), loadServiceFiles(svc)]);
+    } catch (err) {
+      notify('加载服务详情失败', 'error');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeServiceDetail = () => {
+    if (terminalWs) {
+      terminalWs.close();
+      setTerminalWs(null);
+    }
+    setTerminalConnected(false);
+    setTerminalOpen(false);
+    setSelectedService(null);
+    setServiceDetail(null);
+    setTemplateWebPortPresets([]);
+    setIngressRoutes([]);
+  };
+
+  const executeServiceCommand = async () => {
+    if (!selectedService?.agent_key) return;
+    if (!execContainer.trim() || !execCommand.trim()) {
+      notify('请输入容器和命令', 'warning');
+      return;
+    }
+    setExecLoading(true);
+    try {
+      const res = await api.environment.execAgentServiceCommand(selectedService.agent_key, selectedService.name, {
+        container: execContainer.trim(),
+        command: execCommand.trim(),
+      });
+      setExecOutput(res?.output || res?.error || '');
+    } catch (err: any) {
+      setExecOutput(`执行失败: ${err?.message || err}`);
+    } finally {
+      setExecLoading(false);
+    }
+  };
+
+  const openServiceTerminal = async () => {
+    if (!selectedService?.agent_key) return;
+    try {
+      if (terminalWs) {
+        terminalWs.close();
+        setTerminalWs(null);
+      }
+
+      const conn = await api.environment.getAgentServiceExecWsConnection(
+        selectedService.agent_key,
+        selectedService.name,
+        {
+          project_id: projectId,
+          container: execContainer.trim(),
+          shell: '/bin/sh',
+        }
+      );
+
+      const wsUrl = conn?.ws_url;
+      if (!wsUrl) {
+        notify('未获取到终端连接地址', 'error');
+        return;
+      }
+
+      const ws = new WebSocket(wsUrl);
+      ws.onopen = () => setTerminalConnected(true);
+      ws.onclose = () => setTerminalConnected(false);
+      ws.onerror = () => setTerminalConnected(false);
+      setTerminalWs(ws);
+      setTerminalOpen(true);
+    } catch (err: any) {
+      notify(`打开终端失败: ${err?.message || err}`, 'error');
+    }
+  };
+
   if (loading && projectId) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-20 animate-in fade-in">
@@ -180,13 +729,17 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         </div>
         <div className="flex gap-4">
           <button
-            onClick={loadAllServices}
+            onClick={() => void loadAllServices()}
             disabled={!projectId}
             className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
           >
             <RefreshCw size={20} />
           </button>
-          <button disabled className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-slate-900/10 opacity-60">
+          <button
+            onClick={() => void openDeployModal()}
+            disabled={!projectId}
+            className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-slate-900/10 disabled:opacity-60"
+          >
             <Plus size={18} /> 部署新服务
           </button>
         </div>
@@ -302,6 +855,93 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         </div>
       </div>
 
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-black text-slate-700">Ingress 路由管理</p>
+          <span className="text-[11px] text-slate-500">总计 {globalIngressStats?.total || 0} · 就绪 {globalIngressStats?.ready || 0} · 无效 {globalIngressStats?.stale_service_ingress || 0}</span>
+          <button onClick={loadGlobalIngress} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-black hover:bg-slate-200">刷新</button>
+          <button
+            onClick={toggleSelectAllIngress}
+            disabled={globalIngressItems.length === 0}
+            className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-black hover:bg-slate-200 disabled:opacity-50"
+          >
+            全选
+          </button>
+          <button
+            onClick={deleteSelectedIngress}
+            disabled={globalIngressActionLoading || selectedIngressRouteIds.size === 0}
+            className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-black hover:bg-rose-700 disabled:opacity-50"
+          >
+            批量删除
+          </button>
+          <button
+            onClick={cleanupStaleIngress}
+            disabled={globalIngressActionLoading}
+            className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-black hover:bg-amber-700 disabled:opacity-50"
+          >
+            一键清理无效
+          </button>
+          <button
+            onClick={clearAllIngress}
+            disabled={globalIngressActionLoading}
+            className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-black hover:bg-slate-800 disabled:opacity-50"
+          >
+            清空全部Ingress
+          </button>
+          <span className="text-[11px] text-slate-500 ml-auto">已选 {selectedIngressRouteIds.size}</span>
+        </div>
+        <div className="border border-slate-100 rounded-xl overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50">
+              <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="px-3 py-2">选</th>
+                <th className="px-3 py-2">Host/Path</th>
+                <th className="px-3 py-2">节点</th>
+                <th className="px-3 py-2">关联服务</th>
+                <th className="px-3 py-2">端口/协议</th>
+                <th className="px-3 py-2">状态</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {globalIngressLoading && (
+                <tr><td colSpan={6} className="px-3 py-8 text-center text-xs text-slate-400">加载Ingress中...</td></tr>
+              )}
+              {!globalIngressLoading && globalIngressItems.length === 0 && (
+                <tr><td colSpan={6} className="px-3 py-8 text-center text-xs text-slate-400">暂无Ingress路由</td></tr>
+              )}
+              {!globalIngressLoading && globalIngressItems.map((item) => (
+                <tr key={item.route_id} className="hover:bg-slate-50">
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedIngressRouteIds.has(item.route_id)}
+                      onChange={() => toggleSelectIngress(item.route_id)}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="text-xs font-mono text-slate-700 truncate max-w-[360px]">{item.host}{item.path}</div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="text-xs text-slate-600">{item.agent_key}</div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="text-xs text-slate-700">{item.associated_service_name || '-'}</div>
+                    {!item.service_exists && <div className="text-[10px] text-amber-600 font-black">服务不在位</div>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="text-xs text-slate-700">{item.target_port} / {item.tls_enabled ? 'HTTPS' : 'HTTP'}</div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <StatusBadge status={item.status || (item.is_stale_service_ingress ? 'error' : 'ready')} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-slate-50/50 border-b border-slate-100">
@@ -324,11 +964,18 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                       type="checkbox"
                       checked={selectedServiceIds.has(rowId)}
                       onChange={() => toggleSelectService(svc)}
+                      onClick={(e) => e.stopPropagation()}
                       className="w-4 h-4 accent-blue-600"
                     />
                   </td>
                   <td className="px-6 py-5">
-                    <span className="text-sm font-black text-slate-700">{svc.name}</span>
+                    <button
+                      onClick={() => void openServiceDetail(svc)}
+                      className="text-sm font-black text-slate-700 hover:text-blue-600 transition-colors"
+                      title="查看服务详情"
+                    >
+                      {svc.name}
+                    </button>
                   </td>
                   <td className="px-6 py-5">
                     <div className="text-xs font-mono text-slate-600">
@@ -374,6 +1021,394 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         </table>
       </div>
     </div>
+    {selectedService && (
+      <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm p-6 flex items-center justify-center" onClick={closeServiceDetail}>
+        <div className="w-full max-w-6xl h-[84vh] bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">服务详情</p>
+              <h3 className="text-lg font-black text-slate-800 mt-1">
+                {selectedService.name}
+                <span className="ml-3 text-xs text-slate-400 font-mono">{selectedService.agent_hostname || selectedService.agent_key}</span>
+              </h3>
+            </div>
+            <button onClick={closeServiceDetail} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <X size={16} />
+            </button>
+          </div>
+
+          {detailLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="animate-spin text-blue-600" />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-auto p-5 space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 lg:col-span-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">服务状态</p>
+                    <StatusBadge status={serviceDetail?.real_status?.status || selectedService.status} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="text-slate-500">启用状态</div><div className="font-bold text-slate-700">{serviceDetail?.enabled ? 'enabled' : 'disabled'}</div>
+                    <div className="text-slate-500">容器数量</div><div className="font-bold text-slate-700">{serviceDetail?.real_status?.total ?? 0}</div>
+                    <div className="text-slate-500">运行中</div><div className="font-bold text-slate-700">{serviceDetail?.real_status?.running ?? 0}</div>
+                    <div className="text-slate-500">模板</div><div className="font-bold text-slate-700">{selectedService.template_name || '-'}</div>
+                  </div>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-2">快速操作</p>
+                  <div className="space-y-2">
+                    <button onClick={() => void loadServiceLogs(selectedService)} className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-100">刷新日志</button>
+                    <button onClick={() => void loadServiceFiles(selectedService)} className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-100">刷新文件列表</button>
+                    <button onClick={openServiceTerminal} className="w-full px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 flex items-center justify-center gap-1">
+                      <TerminalSquare size={14} /> 打开实时终端
+                    </button>
+                    <div className="text-[10px] text-slate-500">终端状态: {terminalConnected ? '已连接' : '未连接'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">动态 Ingress 转发（HTTP/HTTPS）</p>
+                  <button
+                    onClick={() => selectedService && loadIngressRoutesForService(selectedService)}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-700"
+                  >
+                    刷新路由
+                  </button>
+                </div>
+
+                {templateWebPortPresets.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-slate-600">模板预制端口（快速创建）</p>
+                    <div className="flex flex-wrap gap-2">
+                      {templateWebPortPresets.map((preset: any, idx: number) => (
+                        <button
+                          key={`preset-${idx}`}
+                          onClick={() => {
+                            const port = Number(preset?.port || 0);
+                            if (!port) return;
+                            const protocol = String(preset?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http';
+                            setIngressTargetPort(port);
+                            setIngressProtocol(protocol as 'http' | 'https');
+                            setIngressPath(String(preset?.path || '/'));
+                            setIngressWebsocketEnabled(preset?.websocket_enabled !== false);
+                            setIngressHostPrefix(`${selectedService?.name || 'svc'}-${port}`);
+                          }}
+                          className="px-3 py-2 rounded-xl border border-blue-100 bg-blue-50 text-blue-700 text-xs font-black hover:bg-blue-100"
+                        >
+                          {preset?.name || 'WEB'} · {preset?.port}/{String(preset?.protocol || 'http').toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                  <input
+                    value={ingressTargetPort || ''}
+                    onChange={(e) => setIngressTargetPort(Number(e.target.value || 0))}
+                    type="number"
+                    min={1}
+                    max={65535}
+                    placeholder="目标端口"
+                    className="md:col-span-1 px-3 py-2 text-xs border border-slate-200 rounded-xl"
+                  />
+                  <select
+                    value={ingressProtocol}
+                    onChange={(e) => setIngressProtocol(e.target.value === 'https' ? 'https' : 'http')}
+                    className="md:col-span-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
+                  >
+                    <option value="http">HTTP</option>
+                    <option value="https">HTTPS</option>
+                  </select>
+                  <input
+                    value={ingressPath}
+                    onChange={(e) => setIngressPath(e.target.value)}
+                    placeholder="Path (默认 /)"
+                    className="md:col-span-1 px-3 py-2 text-xs border border-slate-200 rounded-xl"
+                  />
+                  <input
+                    value={ingressHostPrefix}
+                    onChange={(e) => setIngressHostPrefix(e.target.value)}
+                    placeholder="Host 前缀"
+                    className="md:col-span-2 px-3 py-2 text-xs border border-slate-200 rounded-xl"
+                  />
+                  <button
+                    onClick={createServiceIngress}
+                    disabled={ingressCreating || !ingressTargetPort}
+                    className="md:col-span-1 px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {ingressCreating ? '创建中...' : '创建转发'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-5 text-xs">
+                  <label className="flex items-center gap-2 text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={ingressWebsocketEnabled}
+                      onChange={(e) => setIngressWebsocketEnabled(e.target.checked)}
+                    />
+                    启用 WebSocket
+                  </label>
+                  <span className="text-slate-400">HTTPS 将自动启用 TLS（使用集群默认TLS Secret）</span>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-600">当前服务转发路由</p>
+                  {ingressLoading && <p className="text-xs text-slate-400">加载中...</p>}
+                  {!ingressLoading && ingressRoutes.length === 0 && <p className="text-xs text-slate-400">暂无路由</p>}
+                  {!ingressLoading && ingressRoutes.map((route: any) => (
+                    <div key={route.route_id} className="text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+                      <span className="font-mono text-slate-700 truncate">{route.host}{route.path} → {route.target_port} ({route.tls_enabled ? 'HTTPS' : 'HTTP'})</span>
+                      {route.access_url && (
+                        <a href={route.access_url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline">打开</a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-slate-950 text-slate-100 rounded-2xl border border-slate-800 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">服务日志</p>
+                    <button onClick={() => void loadServiceLogs(selectedService)} className="text-[10px] px-2 py-1 rounded-lg bg-slate-800 text-slate-300">刷新</button>
+                  </div>
+                  <pre className="text-[11px] leading-tight font-mono whitespace-pre-wrap break-words h-64 overflow-auto">{serviceLogs || '暂无日志输出'}</pre>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">服务文件</p>
+                    <button onClick={() => void loadServiceFiles(selectedService)} className="text-[10px] px-2 py-1 rounded-lg bg-slate-100 text-slate-700">刷新</button>
+                  </div>
+                  <div className="h-64 overflow-auto divide-y divide-slate-100">
+                    {serviceFiles.length === 0 && (
+                      <p className="text-xs text-slate-400 py-3">暂无文件信息</p>
+                    )}
+                    {serviceFiles.map((f: any) => (
+                      <div key={`${f.path || f.name}`} className="py-2 text-xs flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText size={12} className="text-slate-400" />
+                          <span className="font-mono text-slate-700 truncate">{f.path || f.name}</span>
+                        </div>
+                        <span className="text-slate-400">{f.type || (f.is_dir ? 'dir' : 'file')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">容器命令执行 (REST)</p>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+                  <input
+                    value={execContainer}
+                    onChange={(e) => setExecContainer(e.target.value)}
+                    placeholder="容器名"
+                    className="px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10"
+                  />
+                  <input
+                    value={execCommand}
+                    onChange={(e) => setExecCommand(e.target.value)}
+                    placeholder="命令"
+                    className="px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10 lg:col-span-2"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => void executeServiceCommand()}
+                    disabled={execLoading}
+                    className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {execLoading ? '执行中...' : '执行命令'}
+                  </button>
+                </div>
+                <pre className="bg-slate-950 text-slate-100 rounded-xl p-3 text-[11px] leading-tight font-mono whitespace-pre-wrap break-words min-h-24">{execOutput || '暂无执行结果'}</pre>
+              </div>
+            </div>
+          )}
+
+          {terminalOpen && (
+            <div className="border-t border-slate-100 h-[36vh] bg-slate-950">
+              <XTerminal
+                ws={terminalWs}
+                connected={terminalConnected}
+                podName={`${selectedService.name}:${execContainer || 'default'}`}
+                onClose={() => {
+                  if (terminalWs) terminalWs.close();
+                  setTerminalWs(null);
+                  setTerminalConnected(false);
+                  setTerminalOpen(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+    {deployModalOpen && (
+      <div
+        className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-sm p-6 flex items-center justify-center"
+        onClick={() => setDeployModalOpen(false)}
+      >
+        <div
+          className="w-full max-w-6xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">批量部署新服务</p>
+              <h3 className="text-lg font-black text-slate-800 mt-1">模板 × 节点批量部署</h3>
+            </div>
+            <button onClick={() => setDeployModalOpen(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <input
+                value={deployServiceSuffix}
+                onChange={(e) => setDeployServiceSuffix(e.target.value)}
+                placeholder="可选：服务名后缀，如 v2"
+                className="px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10"
+              />
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={deployPerNodeCount}
+                onChange={(e) => setDeployPerNodeCount(Math.max(1, Math.min(20, Number(e.target.value || 1))))}
+                placeholder="每节点每模板实例数"
+                className="px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10"
+              />
+              <input
+                value={deployAgentSearch}
+                onChange={(e) => setDeployAgentSearch(e.target.value)}
+                placeholder="过滤节点: 主机名 / IP / Key"
+                className="px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10"
+              />
+            </div>
+
+            <textarea
+              value={deployExtraParamsText}
+              onChange={(e) => setDeployExtraParamsText(e.target.value)}
+              placeholder='可选：额外参数 JSON，例如 {"env":{"DEBUG":"1"}}'
+              className="w-full min-h-24 px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:ring-2 ring-blue-500/10 font-mono"
+            />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                  <p className="text-xs font-black text-slate-700">选择模板</p>
+                  <button
+                    onClick={() => {
+                      if (selectedDeployTemplateIds.size === deployTemplates.length && deployTemplates.length > 0) {
+                        setSelectedDeployTemplateIds(new Set<number>());
+                      } else {
+                        setSelectedDeployTemplateIds(new Set<number>(deployTemplates.map((t) => Number(t.id))));
+                      }
+                    }}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700"
+                  >
+                    {selectedDeployTemplateIds.size === deployTemplates.length && deployTemplates.length > 0 ? '取消全选' : '全选'}
+                  </button>
+                </div>
+                <div className="max-h-72 overflow-auto divide-y divide-slate-100">
+                  {deployTemplatesLoading && (
+                    <div className="px-4 py-10 text-center text-xs text-slate-400">模板加载中...</div>
+                  )}
+                  {!deployTemplatesLoading && deployTemplates.length === 0 && (
+                    <div className="px-4 py-10 text-center text-xs text-slate-400">暂无可用模板</div>
+                  )}
+                  {!deployTemplatesLoading && deployTemplates.map((tpl) => {
+                    const id = Number(tpl.id);
+                    return (
+                      <label key={`deploy-tpl-${id}`} className="px-4 py-2 flex items-start gap-2 hover:bg-slate-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedDeployTemplateIds.has(id)}
+                          onChange={() => toggleDeployTemplate(id)}
+                          className="mt-0.5 w-4 h-4 accent-blue-600"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-800 truncate">#{id} {tpl.name}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{tpl.description || '-'}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                  <p className="text-xs font-black text-slate-700">选择节点（仅在线可选）</p>
+                  <button
+                    onClick={toggleAllDeployAgents}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-700"
+                  >
+                    全选筛选结果
+                  </button>
+                </div>
+                <div className="max-h-72 overflow-auto divide-y divide-slate-100">
+                  {deployAgentsLoading && (
+                    <div className="px-4 py-10 text-center text-xs text-slate-400">节点加载中...</div>
+                  )}
+                  {!deployAgentsLoading && filteredDeployAgents.length === 0 && (
+                    <div className="px-4 py-10 text-center text-xs text-slate-400">暂无匹配节点</div>
+                  )}
+                  {!deployAgentsLoading && filteredDeployAgents.map((agent) => {
+                    const online = agent.status === 'online';
+                    return (
+                      <label key={`deploy-agent-${agent.key}`} className={`px-4 py-2 flex items-start gap-2 ${online ? 'hover:bg-slate-50 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+                        <input
+                          type="checkbox"
+                          disabled={!online}
+                          checked={selectedDeployAgentKeys.has(agent.key)}
+                          onChange={() => toggleDeployAgent(agent.key)}
+                          className="mt-0.5 w-4 h-4 accent-blue-600"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-800 truncate">{agent.hostname || agent.key}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{agent.ip_address} · {agent.key}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500">
+              预计提交任务数: {selectedDeployTemplateIds.size} 模板 × {selectedDeployAgentKeys.size} 节点 × {deployPerNodeCount} 实例 = {selectedDeployTemplateIds.size * selectedDeployAgentKeys.size * deployPerNodeCount}
+            </div>
+          </div>
+
+          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+            <button
+              onClick={() => setDeployModalOpen(false)}
+              disabled={deploying}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => void executeBatchDeployFromModal()}
+              disabled={deploying}
+              className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {deploying ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              提交批量部署
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     {feedbackNodes}
     </>
   );

@@ -319,7 +319,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                       </button>
                     )}
 
-                    {['initialized', 'stopped', 'failed', 'succeeded'].includes(instance.status) && (
+                    {['unready', 'ready'].includes(instance.status) && (
                       <button onClick={() => {
                         setUninitId(instance.id);
                         setIsUninitModalOpen(true);
@@ -327,16 +327,30 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                         <RotateCcw size={16} />
                       </button>
                     )}
-                    
-                    {['initialized', 'stopped'].includes(instance.status) && (
+
+                    {['pending', 'unready', 'ready'].includes(instance.status) && (
                       <button onClick={() => handleStart(instance.id)} title="启动" className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all">
                         <Play size={16} />
                       </button>
                     )}
-                    
-                    {instance.status === 'running' && (
+
+                    {['unready', 'ready'].includes(instance.status) && (
                       <button onClick={() => handleStop(instance.id)} title="停止" className="p-3 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all">
                         <StopCircle size={16} />
+                      </button>
+                    )}
+
+                    {['unready', 'ready'].includes(instance.status) && instance.run_mode === 'persistent' && instance.is_active && (
+                      <button onClick={async () => {
+                        try {
+                          await api.workflow.triggerInstance(instance.id);
+                          loadInstances();
+                          alert("触发执行成功");
+                        } catch (e: any) {
+                          alert("触发执行失败: " + e.message);
+                        }
+                      }} title="触发执行" className="p-3 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-600 hover:text-white transition-all">
+                        <Zap size={16} />
                       </button>
                     )}
 

@@ -150,6 +150,10 @@ export const workflowApi = {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${id}`, { method: 'DELETE', headers: getHeaders() });
     return handleResponse(response);
   },
+  triggerInstance: async (id: string) => {
+    const response = await fetch(`${API_BASE}/api/workflow/trigger/${id}`, { method: 'POST', headers: getHeaders() });
+    return handleResponse(response);
+  },
   // --- Workflow Nodes & Edges ---
   createNode: async (instanceId: string, payload: any) => {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes`, {

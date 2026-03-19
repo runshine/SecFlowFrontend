@@ -28,6 +28,7 @@ const nodeColor = (status: WorkflowStatus) => {
     case 'pending': return '#f59e0b';
     case 'stopped': return '#64748b';
     case 'ready': return '#10b981';
+    case 'unready': return '#f97316';
     default: return '#cbd5e1';
   }
 };
@@ -1336,12 +1337,52 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 <RefreshCw size={16} /> 同步状态
               </button>
 
-              {['initialized', 'stopped', 'failed', 'succeeded'].includes(instance?.status || '') && (
-                <button 
+              {['unready', 'ready'].includes(instance?.status || '') && (
+                <button
                   onClick={() => setIsUninitModalOpen(true)}
                   className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all shadow-sm"
                 >
                   <RotateCcw size={16} /> 反初始化
+                </button>
+              )}
+
+              {['pending', 'unready', 'ready'].includes(instance?.status || '') && (
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      await api.workflow.startInstance(instanceId);
+                      await loadInstance();
+                      showToast("启动成功", "success");
+                    } catch (e: any) {
+                      showToast("启动失败: " + e.message, "error");
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-xl transition-all shadow-lg shadow-green-500/20"
+                >
+                  <Play size={16} /> 启动
+                </button>
+              )}
+
+              {['unready', 'ready'].includes(instance?.status || '') && instance?.run_mode === 'persistent' && instance?.is_active && (
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      await api.workflow.triggerInstance(instanceId);
+                      await loadInstance();
+                      showToast("触发执行成功", "success");
+                    } catch (e: any) {
+                      showToast("触发执行失败: " + e.message, "error");
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-all shadow-lg shadow-cyan-500/20"
+                >
+                  <Zap size={16} /> 触发执行
                 </button>
               )}
 

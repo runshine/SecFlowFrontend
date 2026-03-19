@@ -97,6 +97,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   const [selectedAgentKeys, setSelectedAgentKeys] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [isCleaning, setIsCleaning] = useState(false);
+  const [refreshingAgents, setRefreshingAgents] = useState(false);
   const [forceSyncing, setForceSyncing] = useState(false);
   const [syncScope, setSyncScope] = useState<'project' | 'stale' | 'agent'>('stale');
   const [targetAgentKey, setTargetAgentKey] = useState('');
@@ -159,6 +160,25 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
       console.error("Failed to load agents", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshAgents = async () => {
+    if (!projectId || refreshingAgents) return;
+    setRefreshingAgents(true);
+    try {
+      await api.environment.refreshAgents();
+      await Promise.all([
+        loadData(),
+        loadSyncHistory(),
+        loadGlobalAgentIngress()
+      ]);
+      notify('Agent 节点列表已刷新', 'success');
+    } catch (err: any) {
+      console.error('Failed to refresh agents', err);
+      notify(`刷新 Agent 节点失败: ${err?.message || 'unknown error'}`, 'error');
+    } finally {
+      setRefreshingAgents(false);
     }
   };
 
@@ -363,7 +383,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
 
     setIsCleaning(true);
     try {
-      const result = await api.environment.cleanupAgents(projectId, false, true);
+      const result = await api.environment.cleanupAgents(projectId, false, true, true);
       const k8s = result?.k8s_cleanup || {};
       const cleaned = Number(result?.cleanup_info?.cleaned_count || 0);
       const k8sDeleted = (k8s?.details || []).reduce((sum: number, d: any) => sum + Number(d?.deleted_ingress_routes || 0), 0);
@@ -721,11 +741,11 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
         </div>
         <div className="flex gap-4">
           <button 
-            onClick={loadData}
-            disabled={!projectId}
+            onClick={handleRefreshAgents}
+            disabled={!projectId || refreshingAgents}
             className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm group active:scale-95 disabled:opacity-50"
           >
-            <RefreshCw size={20} className={loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
+            <RefreshCw size={20} className={(loading || refreshingAgents) ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
           </button>
           <button
             onClick={handleCleanupOfflineWithK8s}

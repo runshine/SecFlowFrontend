@@ -47,6 +47,17 @@ interface AgentDetailPageProps {
   onBack: () => void;
 }
 
+const buildRandomIngressPrefix = (base: string) => {
+  const normalized = String(base || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 28) || 'route';
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  return `${normalized}-${randomPart}`;
+};
+
 export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, projectId, onBack }) => {
   const { notify, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
@@ -195,7 +206,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       await api.environment.createAgentIngressRoute(agentKey, {
         project_id: projectId,
         target_port: targetPort,
-        host_prefix: `${agentKey}-${targetPort}`,
+        host_prefix: buildRandomIngressPrefix(`${agentKey}-${targetPort}`),
         websocket_enabled: websocketEnabled,
         force_recreate: true,
         metadata: {

@@ -41,11 +41,11 @@ export const environmentApi = {
     handleResponse(await fetch(`${API_BASE}/api/agent/agents/stats?project_id=${projectId}`, { headers: getHeaders() })),
   getAgentDetail: async (key: string, projectId: string): Promise<Agent> => 
     handleResponse(await fetch(`${API_BASE}/api/agent/agents/${key}?project_id=${projectId}`, { headers: getHeaders() })),
-  cleanupAgents: async (projectId: string, dryRun = false, cleanupK8sResources = true): Promise<any> => 
+  cleanupAgents: async (projectId: string, dryRun = false, cleanupK8sResources = true, force = false): Promise<any> => 
     handleResponse(await fetch(`${API_BASE}/api/agent/agents/cleanup`, { 
       method: 'POST', 
       headers: getHeaders(), 
-      body: JSON.stringify({ project_id: projectId, dry_run: dryRun, cleanup_k8s_resources: cleanupK8sResources }) 
+      body: JSON.stringify({ project_id: projectId, dry_run: dryRun, cleanup_k8s_resources: cleanupK8sResources, force }) 
     })),
   refreshAgents: async () => 
     handleResponse(await fetch(`${API_BASE}/api/agent/agents/refresh`, { method: 'POST', headers: getHeaders() })),

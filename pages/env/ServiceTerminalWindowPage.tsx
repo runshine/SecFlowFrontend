@@ -50,6 +50,7 @@ const parseQuery = () => {
     serviceName: q.get('service_name') || '',
     container: q.get('container') || '',
     shell: q.get('shell') || '/bin/bash',
+    fallbackShell: q.get('fallback_shell') || '/bin/sh',
     mode: (q.get('mode') === 'attach' ? 'attach' : 'shell') as TerminalMode,
   };
 };
@@ -62,6 +63,7 @@ export const ServiceTerminalWindowPage: React.FC = () => {
   const [container] = useState(initial.container);
   const [mode, setMode] = useState<TerminalMode>(initial.mode);
   const [shell, setShell] = useState(initial.shell || '/bin/bash');
+  const [fallbackShell] = useState(initial.fallbackShell || '/bin/sh');
   const [terminalWs, setTerminalWs] = useState<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -121,7 +123,7 @@ export const ServiceTerminalWindowPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const connectTerminal = async (nextMode = mode) => {
+  const connectTerminal = async (nextMode = mode, requestedShell = shell, allowFallback = true) => {
     if (!agentKey || !serviceName) {
       setError('缺少必要参数：agent_key/service_name');
       return;
@@ -136,7 +138,7 @@ export const ServiceTerminalWindowPage: React.FC = () => {
       const conn = await api.environment.getAgentServiceExecWsConnection(agentKey, serviceName, {
         project_id: projectId || undefined,
         container: container || undefined,
-        shell: (shell || '/bin/bash').trim() || '/bin/bash',
+        shell: (requestedShell || '/bin/bash').trim() || '/bin/bash',
         mode: nextMode,
       });
       setConnectionInfo(conn || null);
@@ -223,6 +225,14 @@ export const ServiceTerminalWindowPage: React.FC = () => {
       setConnected(true);
       setTerminalWs(connectedWs);
     } catch (err: any) {
+      const currentShell = (requestedShell || '/bin/bash').trim() || '/bin/bash';
+      const fallback = (fallbackShell || '/bin/sh').trim() || '/bin/sh';
+      if (nextMode === 'shell' && allowFallback && currentShell !== fallback) {
+        setError(`终端连接失败，正在回退到 ${fallback} ...`);
+        setShell(fallback);
+        await connectTerminal(nextMode, fallback, false);
+        return;
+      }
       setError(err?.message || '终端连接失败');
     } finally {
       setConnecting(false);

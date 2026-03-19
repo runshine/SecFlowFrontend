@@ -22,6 +22,17 @@ import { useUiFeedback } from '../../components/UiFeedback';
 
 type BatchAction = 'start' | 'stop' | 'delete';
 
+const buildRandomIngressPrefix = (base: string) => {
+  const normalized = String(base || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 28) || 'route';
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  return `${normalized}-${randomPart}`;
+};
+
 export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => {
   const { notify, confirm, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
@@ -594,7 +605,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         service_port: Number(ingressTargetPort),
         websocket_enabled: ingressWebsocketEnabled,
         tls_enabled: ingressProtocol === 'https',
-        host_prefix: ingressHostPrefix?.trim() || `${selectedService.name}-${ingressTargetPort}`,
+        host_prefix: ingressHostPrefix?.trim() || buildRandomIngressPrefix(`${selectedService.name}-${ingressTargetPort}`),
         path: ingressPath?.trim() || '/',
         metadata: {
           source: 'service-mgmt',
@@ -610,6 +621,30 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
       await loadGlobalIngress();
     } catch (err: any) {
       notify(err?.message || '创建Ingress失败', 'error');
+    } finally {
+      setIngressCreating(false);
+    }
+  };
+
+  const deleteServiceIngressRoute = async (routeId: string) => {
+    if (!selectedService?.agent_key || !projectId) return;
+    const ok = await confirm({
+      title: '删除转发路由',
+      message: '确认删除这条 Ingress 转发路由？',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setIngressCreating(true);
+    try {
+      await api.environment.deleteAgentIngressRoute(selectedService.agent_key, routeId, projectId);
+      notify('转发路由已删除', 'success');
+      await loadIngressRoutesForService(selectedService);
+      await loadGlobalIngress();
+    } catch (err: any) {
+      notify(err?.message || '删除Ingress路由失败', 'error');
     } finally {
       setIngressCreating(false);
     }
@@ -648,7 +683,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
       setIngressTargetPort(detected[0] || 80);
       setIngressProtocol('http');
       setIngressPath('/');
-      setIngressHostPrefix(`${svc.name}-${detected[0] || 80}`);
+      setIngressHostPrefix(buildRandomIngressPrefix(`${svc.name}-${detected[0] || 80}`));
       setIngressWebsocketEnabled(true);
 
       if (typeof svc.template_id === 'number') {
@@ -664,7 +699,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
               setIngressProtocol(String(first?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http');
               setIngressPath(String(first?.path || '/'));
               setIngressWebsocketEnabled(first?.websocket_enabled !== false);
-              setIngressHostPrefix(`${svc.name}-${p}`);
+              setIngressHostPrefix(buildRandomIngressPrefix(`${svc.name}-${p}`));
             }
           }
         } catch {
@@ -691,28 +726,50 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     setIngressRoutes([]);
   };
 
-  const openServiceTerminalWindow = (mode: 'attach' | 'shell') => {
-    if (!selectedService?.agent_key) return;
-    if (selectedService?.is_stale) {
+  const openTerminalWindowForService = (
+    svc: AgentService,
+    options: {
+      mode?: 'attach' | 'shell';
+      container?: string;
+      shell?: string;
+      fallbackShell?: string;
+    } = {}
+  ) => {
+    if (!svc?.agent_key) return;
+    if (svc?.is_stale) {
       notify('该服务状态已过期（stale），请先刷新服务发现并确认服务仍在线', 'warning');
       return;
     }
-    if (!serviceDetail) {
-      notify(serviceDetailError || '当前服务详情未加载成功，无法建立终端连接', 'error');
-      return;
-    }
+    const mode = options.mode || 'shell';
+    const shellValue = (options.shell || '/bin/bash').trim() || '/bin/bash';
+    const fallbackShellValue = (options.fallbackShell || '/bin/sh').trim() || '/bin/sh';
     const params = new URLSearchParams({
       service_terminal: '1',
       project_id: projectId,
-      agent_key: selectedService.agent_key,
-      service_name: selectedService.name,
-      container: execContainer.trim() || '',
+      agent_key: svc.agent_key,
+      service_name: svc.name,
+      container: (options.container || '').trim() || '',
       mode,
-      shell: (terminalShell || '/bin/bash').trim() || '/bin/bash',
+      shell: shellValue,
+      fallback_shell: fallbackShellValue,
     });
     const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     const win = window.open(url, '_blank', 'noopener,noreferrer');
     if (!win) notify('浏览器拦截了新窗口，请允许弹窗后重试', 'warning');
+  };
+
+  const openServiceTerminalWindow = (mode: 'attach' | 'shell') => {
+    if (!selectedService?.agent_key) return;
+    if (!serviceDetail) {
+      notify(serviceDetailError || '当前服务详情未加载成功，无法建立终端连接', 'error');
+      return;
+    }
+    openTerminalWindowForService(selectedService, {
+      mode,
+      container: execContainer.trim() || '',
+      shell: terminalShell,
+      fallbackShell: '/bin/sh',
+    });
   };
 
   const terminalDisabled = !serviceDetail || !!selectedService?.is_stale;
@@ -855,9 +912,24 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                   </td>
                   <td className="px-3 py-2">
                     <div className="text-xs font-mono text-slate-700 truncate max-w-[360px]">{item.host}{item.path}</div>
+                    {item.access_url && (
+                      <div className="mt-1">
+                        <a
+                          href={item.access_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-[11px] hover:bg-blue-100"
+                        >
+                          打开
+                        </a>
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="text-xs text-slate-600">{item.agent_key}</div>
+                    <div className="text-xs text-slate-700 font-semibold">
+                      {agentByKey.get(item.agent_key)?.hostname || item.agent_hostname || item.agent_key}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono">{item.agent_key}</div>
                   </td>
                   <td className="px-3 py-2">
                     <div className="text-xs text-slate-700">{item.associated_service_name || '-'}</div>
@@ -991,13 +1063,29 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                     />
                   </td>
                   <td className="px-6 py-5">
-                    <button
-                      onClick={() => void openServiceDetail(svc)}
-                      className="text-sm font-black text-slate-700 hover:text-blue-600 transition-colors"
-                      title="查看服务详情"
-                    >
-                      {svc.name}
-                    </button>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <button
+                        onClick={() => void openServiceDetail(svc)}
+                        className="text-sm font-black text-slate-700 hover:text-blue-600 transition-colors truncate"
+                        title="查看服务详情"
+                      >
+                        {svc.name}
+                      </button>
+                      <button
+                        onClick={() => openTerminalWindowForService(svc, {
+                          mode: 'shell',
+                          container: '',
+                          shell: '/bin/bash',
+                          fallbackShell: '/bin/sh',
+                        })}
+                        disabled={!svc.agent_key || !!svc.is_stale}
+                        title={svc.is_stale ? '服务状态已过期（stale），请先刷新服务发现' : '新窗口打开终端（默认 /bin/bash，失败回退 /bin/sh）'}
+                        className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-[10px] font-black hover:bg-blue-100 disabled:opacity-50"
+                      >
+                        <TerminalSquare size={12} />
+                        终端
+                      </button>
+                    </div>
                   </td>
                   <td className="px-6 py-5">
                     <div className="text-xs font-mono text-slate-600">
@@ -1188,7 +1276,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                             setIngressProtocol(protocol as 'http' | 'https');
                             setIngressPath(String(preset?.path || '/'));
                             setIngressWebsocketEnabled(preset?.websocket_enabled !== false);
-                            setIngressHostPrefix(`${selectedService?.name || 'svc'}-${port}`);
+                            setIngressHostPrefix(buildRandomIngressPrefix(`${selectedService?.name || 'svc'}-${port}`));
                           }}
                           className="px-3 py-2 rounded-xl border border-blue-100 bg-blue-50 text-blue-700 text-xs font-black hover:bg-blue-100"
                         >
@@ -1256,9 +1344,17 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                   {!ingressLoading && ingressRoutes.map((route: any) => (
                     <div key={route.route_id} className="text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
                       <span className="font-mono text-slate-700 truncate">{route.host}{route.path} → {route.target_port} ({route.tls_enabled ? 'HTTPS' : 'HTTP'})</span>
-                      {route.access_url && (
-                        <a href={route.access_url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline">打开</a>
-                      )}
+                      <div className="flex items-center gap-3 shrink-0">
+                        {route.access_url && (
+                          <a href={route.access_url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline">打开</a>
+                        )}
+                        <button
+                          onClick={() => void deleteServiceIngressRoute(route.route_id)}
+                          className="text-rose-600 font-bold hover:underline"
+                        >
+                          删除
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

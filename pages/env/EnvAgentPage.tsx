@@ -525,6 +525,16 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     a.ip_address.includes(searchTerm)
   );
 
+  const agentNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    agents.forEach((a) => {
+      if (a?.key) {
+        map.set(a.key, a.hostname || a.key);
+      }
+    });
+    return map;
+  }, [agents]);
+
   const getPermissionInfo = (agent: Agent) => {
     if (typeof agent.is_allowed === 'boolean') {
       return agent.is_allowed
@@ -911,7 +921,8 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                       <div className="text-xs font-mono text-slate-700 truncate max-w-[360px]">{item.host}{item.path}</div>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="text-xs text-slate-700">{item.agent_key || '-'}</div>
+                      <div className="text-xs font-bold text-slate-700">{agentNameMap.get(item.agent_key || '') || item.agent_key || '-'}</div>
+                      <div className="text-[10px] font-mono text-slate-400">{item.agent_key || '-'}</div>
                       <div className={`text-[10px] font-black ${item.agent_online ? 'text-green-600' : 'text-amber-600'}`}>
                         {item.agent_online ? '节点在线' : '节点离线/无效'}
                       </div>

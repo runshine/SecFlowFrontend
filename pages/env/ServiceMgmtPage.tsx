@@ -19,6 +19,7 @@ import { Agent, AgentService, EnvTemplate } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useUiFeedback } from '../../components/UiFeedback';
+import { openServiceTerminalWindow as openServiceTerminalWindowPopup } from './serviceTerminal';
 
 type BatchAction = 'start' | 'stop' | 'delete';
 
@@ -741,20 +742,14 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
       return;
     }
     const mode = options.mode || 'shell';
-    const shellValue = (options.shell || '/bin/bash').trim() || '/bin/bash';
-    const fallbackShellValue = (options.fallbackShell || '/bin/sh').trim() || '/bin/sh';
-    const params = new URLSearchParams({
-      service_terminal: '1',
-      project_id: projectId,
-      agent_key: svc.agent_key,
-      service_name: svc.name,
-      container: (options.container || '').trim() || '',
+    const win = openServiceTerminalWindowPopup({
+      projectId,
+      service: svc,
       mode,
-      shell: shellValue,
-      fallback_shell: fallbackShellValue,
+      container: options.container || '',
+      shell: options.shell || '/bin/bash',
+      fallbackShell: options.fallbackShell || '/bin/sh',
     });
-    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-    const win = window.open(url, '_blank', 'noopener,noreferrer');
     if (!win) notify('浏览器拦截了新窗口，请允许弹窗后重试', 'warning');
   };
 

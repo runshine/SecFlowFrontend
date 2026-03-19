@@ -166,7 +166,6 @@ export const XTerminal: React.FC<XTerminalProps> = ({
     const handleOpen = () => {
       if (xtermRef.current) {
         xtermRef.current.clear();
-        xtermRef.current.write('\x1b[32m✓ 已连接到容器终端\x1b[0m\r\n\r\n');
         xtermRef.current.focus();
         // 发送初始终端大小
         const { rows, cols } = xtermRef.current;

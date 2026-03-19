@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, Plug, PlugZap, TerminalSquare } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, ChevronDown, ChevronRight, Loader2, Plug, PlugZap, TerminalSquare } from 'lucide-react';
 import { api } from '../../api/api';
 import { XTerminal } from '../../components/XTerminal';
 
@@ -70,6 +70,7 @@ export const ServiceTerminalWindowPage: React.FC = () => {
   const [error, setError] = useState('');
   const [connectionInfo, setConnectionInfo] = useState<any>(null);
   const [showConnectionDetails, setShowConnectionDetails] = useState(false);
+  const connectAttemptRef = useRef(0);
 
   const connectionTargets = useMemo(() => {
     if (!connectionInfo) return [];
@@ -124,6 +125,9 @@ export const ServiceTerminalWindowPage: React.FC = () => {
   }, []);
 
   const connectTerminal = async (nextMode = mode, requestedShell = shell, allowFallback = true) => {
+    const attemptId = Date.now() + Math.random();
+    connectAttemptRef.current = attemptId;
+
     if (!agentKey || !serviceName) {
       setError('缺少必要参数：agent_key/service_name');
       return;
@@ -201,7 +205,9 @@ export const ServiceTerminalWindowPage: React.FC = () => {
         }
 
         if (index < candidates.length - 1) {
-          setError(`主终端地址握手失败，正在回退到安全通道: ${candidates[index + 1]}`);
+          if (connectAttemptRef.current === attemptId) {
+            setError(`主终端地址握手失败，正在回退到安全通道: ${candidates[index + 1]}`);
+          }
         }
       }
 
@@ -209,8 +215,17 @@ export const ServiceTerminalWindowPage: React.FC = () => {
         throw new Error(lastCloseMessage || '终端握手失败');
       }
 
-      connectedWs.onopen = () => setConnected(true);
+      if (connectAttemptRef.current === attemptId) {
+        setError('');
+      }
+
+      connectedWs.onopen = () => {
+        if (connectAttemptRef.current !== attemptId) return;
+        setConnected(true);
+        setError('');
+      };
       connectedWs.onclose = (evt) => {
+        if (connectAttemptRef.current !== attemptId) return;
         setConnected(false);
         const reason = evt?.reason ? `, reason=${evt.reason}` : '';
         setError(
@@ -219,39 +234,75 @@ export const ServiceTerminalWindowPage: React.FC = () => {
         );
       };
       connectedWs.onerror = () => {
+        if (connectAttemptRef.current !== attemptId) return;
         setConnected(false);
         setError('终端连接发生网络错误，请检查 ingress、HTTPS/WSS 与浏览器控制台错误信息。');
       };
-      setConnected(true);
-      setTerminalWs(connectedWs);
+      if (connectAttemptRef.current === attemptId) {
+        setConnected(true);
+        setError('');
+        setTerminalWs(connectedWs);
+      } else {
+        connectedWs.close();
+      }
     } catch (err: any) {
       const currentShell = (requestedShell || '/bin/bash').trim() || '/bin/bash';
       const fallback = (fallbackShell || '/bin/sh').trim() || '/bin/sh';
       if (nextMode === 'shell' && allowFallback && currentShell !== fallback) {
-        setError(`终端连接失败，正在回退到 ${fallback} ...`);
+        if (connectAttemptRef.current === attemptId) {
+          setError(`终端连接失败，正在回退到 ${fallback} ...`);
+        }
         setShell(fallback);
         await connectTerminal(nextMode, fallback, false);
         return;
       }
-      setError(err?.message || '终端连接失败');
+      if (connectAttemptRef.current === attemptId) {
+        setError(err?.message || '终端连接失败');
+      }
     } finally {
-      setConnecting(false);
+      if (connectAttemptRef.current === attemptId) {
+        setConnecting(false);
+      }
     }
   };
 
   return (
     <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col">
-      <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/95 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/95 flex items-start gap-3">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
           <TerminalSquare size={16} className="text-blue-400" />
-          <p className="text-sm font-black truncate">{serviceName || 'Service Terminal'}</p>
-          <span className="text-[11px] text-slate-400 font-mono truncate">{agentKey}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2 min-w-0">
+              <p className="text-sm font-black leading-5 break-all">{serviceName || 'Service Terminal'}</p>
+              <span className="text-[10px] text-slate-400 font-mono leading-4 break-all max-w-[180px]">
+                {agentKey}
+              </span>
+            </div>
+            {connectionInfo ? (
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowConnectionDetails((prev) => !prev)}
+                  className="max-w-full flex items-center gap-2 text-left rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 hover:bg-slate-950/70 transition-colors"
+                >
+                  <span className="text-[10px] text-slate-200 font-bold shrink-0">连接详情</span>
+                  <span className="text-[10px] text-slate-400 truncate">
+                    {connectionTargets.find((item) => item.active)?.label || '当前连接'}
+                    {connectionInfo?.ws_url ? `: ${connectionInfo.ws_url}` : ''}
+                  </span>
+                  <span className="shrink-0 text-slate-400">
+                    {showConnectionDetails ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <select
           value={mode}
           onChange={(e) => setMode(e.target.value === 'attach' ? 'attach' : 'shell')}
-          className="px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-100"
+          className="px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-100 shrink-0"
         >
           <option value="attach">Attach 模式</option>
           <option value="shell">新建 Shell</option>
@@ -262,13 +313,13 @@ export const ServiceTerminalWindowPage: React.FC = () => {
           onChange={(e) => setShell(e.target.value)}
           placeholder="/bin/bash 或 /bin/sh"
           disabled={mode === 'attach'}
-          className="px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-100 w-52 disabled:opacity-50"
+          className="px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-100 w-40 xl:w-48 shrink-0 disabled:opacity-50"
         />
 
         <button
           onClick={() => void connectTerminal(mode)}
           disabled={connecting}
-          className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-black hover:bg-blue-500 disabled:opacity-60 flex items-center gap-2"
+          className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-black hover:bg-blue-500 disabled:opacity-60 flex items-center gap-2 shrink-0"
         >
           {connecting ? <Loader2 size={13} className="animate-spin" /> : <Plug size={13} />}
           连接
@@ -280,67 +331,57 @@ export const ServiceTerminalWindowPage: React.FC = () => {
             setTerminalWs(null);
             setConnected(false);
           }}
-          className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-xs font-black hover:bg-slate-700 flex items-center gap-2"
+          className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 text-xs font-black hover:bg-slate-700 flex items-center gap-2 shrink-0"
         >
           <PlugZap size={13} />
           断开
         </button>
 
-        <span className={`ml-auto text-[11px] font-bold ${connected ? 'text-emerald-400' : 'text-amber-400'}`}>
-          {connected ? '已连接' : (connecting ? '连接中...' : '未连接')}
-        </span>
+        <div className="ml-auto shrink-0 flex items-center justify-end min-w-[150px]">
+          {connected ? (
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400">
+              <CheckCircle2 size={13} />
+              <span>已连接到容器终端</span>
+            </div>
+          ) : (
+            <span className={`text-[11px] font-bold ${connecting ? 'text-blue-300' : 'text-amber-400'}`}>
+              {connecting ? '连接中...' : '未连接'}
+            </span>
+          )}
+        </div>
       </div>
 
       {error ? (
         <div className="px-4 py-2 text-xs bg-rose-500/10 text-rose-300 border-b border-rose-500/20">{error}</div>
       ) : null}
 
-      {connectionInfo ? (
+      {connectionInfo && showConnectionDetails ? (
         <div className="px-4 py-2 text-[11px] bg-slate-900 border-b border-slate-800 text-slate-300">
-          <button
-            type="button"
-            onClick={() => setShowConnectionDetails((prev) => !prev)}
-            className="w-full flex items-center justify-between gap-3 text-left rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 hover:bg-slate-950/70 transition-colors"
-          >
-            <div className="min-w-0">
-              <div className="text-slate-200 font-bold">连接详情</div>
-              <div className="text-slate-400 truncate">
-                {connectionTargets.find((item) => item.active)?.label || '当前连接'}
-                {connectionInfo?.ws_url ? `: ${connectionInfo.ws_url}` : ''}
-              </div>
-            </div>
-            <div className="shrink-0 text-slate-400">
-              {showConnectionDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </div>
-          </button>
-
-          {showConnectionDetails ? (
-            <div className="mt-2 space-y-2">
-              <div className="grid gap-2">
-                {connectionTargets.map((item) => (
-                  <div
-                    key={`${item.key}-${item.url}`}
-                    className={`rounded-lg border px-3 py-2 ${
-                      item.active
-                        ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-200'
-                        : 'border-slate-700 bg-slate-950/70 text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold">{item.label}</span>
-                      {item.active ? (
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-400/20 text-emerald-300 text-[10px] font-black">
-                          当前连接
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="font-mono break-all">{item.url}</div>
+          <div className="space-y-2">
+            <div className="grid gap-2">
+              {connectionTargets.map((item) => (
+                <div
+                  key={`${item.key}-${item.url}`}
+                  className={`rounded-lg border px-3 py-2 ${
+                    item.active
+                      ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-200'
+                      : 'border-slate-700 bg-slate-950/70 text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold">{item.label}</span>
+                    {item.active ? (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-400/20 text-emerald-300 text-[10px] font-black">
+                        当前连接
+                      </span>
+                    ) : null}
                   </div>
-                ))}
-              </div>
-              {connectionInfo?.note ? <div className="text-amber-300">{connectionInfo.note}</div> : null}
+                  <div className="font-mono break-all">{item.url}</div>
+                </div>
+              ))}
             </div>
-          ) : null}
+            {connectionInfo?.note ? <div className="text-amber-300">{connectionInfo.note}</div> : null}
+          </div>
         </div>
       ) : null}
 

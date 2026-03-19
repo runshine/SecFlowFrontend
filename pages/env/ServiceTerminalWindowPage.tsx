@@ -5,6 +5,43 @@ import { XTerminal } from '../../components/XTerminal';
 
 type TerminalMode = 'attach' | 'shell';
 
+const isIpHost = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+
+const buildWsCandidates = (rawUrl: string): string[] => {
+  try {
+    const parsed = new URL(rawUrl, window.location.href);
+    const candidates: string[] = [];
+    const seen = new Set<string>();
+
+    const pushCandidate = (value: string) => {
+      if (!seen.has(value)) {
+        seen.add(value);
+        candidates.push(value);
+      }
+    };
+
+    pushCandidate(parsed.toString());
+
+    const sameHost = parsed.host === window.location.host;
+    const publicDomainHost =
+      !!parsed.hostname &&
+      !isIpHost(parsed.hostname) &&
+      parsed.hostname !== 'localhost' &&
+      !parsed.hostname.endsWith('.local');
+
+    // 对外域名经 ingress 暴露时，WS 往往只在 TLS 入口上稳定可用。
+    if (parsed.protocol === 'ws:' && (window.location.protocol === 'https:' || sameHost || publicDomainHost)) {
+      const secure = new URL(parsed.toString());
+      secure.protocol = 'wss:';
+      pushCandidate(secure.toString());
+    }
+
+    return candidates;
+  } catch {
+    return [rawUrl];
+  }
+};
+
 const parseQuery = () => {
   const q = new URLSearchParams(window.location.search);
   return {
@@ -68,25 +105,81 @@ export const ServiceTerminalWindowPage: React.FC = () => {
         throw new Error('当前策略禁止浏览器直连Agent，请使用平台中转通道（Ingress WS/WSS）。');
       }
 
-      if (window.location.protocol === 'https:' && wsUrl.startsWith('ws://')) {
-        throw new Error('当前是HTTPS页面，但返回了ws://地址。请检查平台中转通道是否输出wss地址。');
+      const candidates = buildWsCandidates(wsUrl);
+      let connectedWs: WebSocket | null = null;
+      let lastCloseMessage = '';
+
+      for (let index = 0; index < candidates.length; index += 1) {
+        const candidate = candidates[index];
+        const ws = await new Promise<WebSocket>((resolve, reject) => {
+          const sock = new WebSocket(candidate);
+          let settled = false;
+
+          const cleanup = () => {
+            sock.onopen = null;
+            sock.onerror = null;
+            sock.onclose = null;
+          };
+
+          sock.onopen = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve(sock);
+          };
+
+          sock.onerror = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            try { sock.close(); } catch {}
+            reject(new Error(`WebSocket握手失败: ${candidate}`));
+          };
+
+          sock.onclose = (evt) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            const reason = evt?.reason ? `, reason=${evt.reason}` : '';
+            reject(new Error(`WebSocket握手失败: ${candidate}, code=${evt?.code ?? 'unknown'}${reason}`));
+          };
+        }).catch((err) => {
+          lastCloseMessage = err instanceof Error ? err.message : String(err || '');
+          return null;
+        });
+
+        if (ws) {
+          connectedWs = ws;
+          if (candidate !== wsUrl) {
+            setConnectionInfo((prev: any) => prev ? { ...prev, ws_url: candidate, ws_url_original: wsUrl } : prev);
+          }
+          break;
+        }
+
+        if (index < candidates.length - 1) {
+          setError(`主终端地址握手失败，正在回退到安全通道: ${candidates[index + 1]}`);
+        }
       }
 
-      const ws = new WebSocket(wsUrl);
-      ws.onopen = () => setConnected(true);
-      ws.onclose = (evt) => {
+      if (!connectedWs) {
+        throw new Error(lastCloseMessage || '终端握手失败');
+      }
+
+      connectedWs.onopen = () => setConnected(true);
+      connectedWs.onclose = (evt) => {
         setConnected(false);
         const reason = evt?.reason ? `, reason=${evt.reason}` : '';
         setError(
           `终端连接关闭: code=${evt?.code ?? 'unknown'}${reason}. ` +
-          `可能原因: 1) agent/容器重启; 2) 浏览器/代理主动断开; 3) 非HTTPS页面直连ws网络波动。`
+          `可能原因: 1) agent/容器重启; 2) 浏览器/代理主动断开; 3) ingress/HTTPS与WS协议不一致。`
         );
       };
-      ws.onerror = () => {
+      connectedWs.onerror = () => {
         setConnected(false);
-        setError('终端连接发生网络错误，请检查 agent 可达性、端口/ingress 与浏览器控制台错误信息。');
+        setError('终端连接发生网络错误，请检查 ingress、HTTPS/WSS 与浏览器控制台错误信息。');
       };
-      setTerminalWs(ws);
+      setConnected(true);
+      setTerminalWs(connectedWs);
     } catch (err: any) {
       setError(err?.message || '终端连接失败');
     } finally {

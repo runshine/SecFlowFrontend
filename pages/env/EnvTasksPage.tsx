@@ -16,8 +16,10 @@ import {
 import { AsyncTask, TaskLog } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
+import { useUiFeedback } from '../../components/UiFeedback';
 
 export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => {
+  const { notify, confirm, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<AsyncTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AsyncTask | null>(null);
@@ -53,19 +55,28 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
       const data = await api.environment.getTaskLogs(task.id, projectId);
       setLogs(data?.log || []);
     } catch (err) {
-      alert("获取日志失败");
+      notify("获取日志失败", 'error');
     } finally {
       setLogLoading(false);
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (!projectId || !confirm("确认删除该任务记录？")) return;
+    if (!projectId) return;
+    const okToDelete = await confirm({
+      title: '删除任务记录',
+      message: '确认删除该任务记录？',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!okToDelete) return;
     try {
       await api.environment.deleteTask(taskId, projectId);
       loadTasks();
+      notify('任务记录已删除', 'success');
     } catch (err) {
-      alert("删除失败");
+      notify("删除失败", 'error');
     }
   };
 
@@ -84,6 +95,7 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   };
 
   return (
+    <>
     <div className="p-10 space-y-10 animate-in fade-in duration-500 pb-24">
       <div className="flex justify-between items-end">
         <div>
@@ -260,5 +272,7 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
         </div>
       )}
     </div>
+    {feedbackNodes}
+    </>
   );
 };

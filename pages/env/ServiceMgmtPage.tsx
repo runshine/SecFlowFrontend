@@ -16,10 +16,12 @@ import {
 import { AgentService } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
+import { useUiFeedback } from '../../components/UiFeedback';
 
 type BatchAction = 'start' | 'stop' | 'delete';
 
 export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => {
+  const { notify, confirm, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [allServices, setAllServices] = useState<AgentService[]>([]);
@@ -111,7 +113,14 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   const applyBatchAction = async (action: BatchAction, targets: AgentService[]) => {
     if (!projectId || targets.length === 0) return;
     const actionText = action === 'start' ? '启动' : action === 'stop' ? '停止' : '删除';
-    if (!window.confirm(`确认批量${actionText} ${targets.length} 个服务实例？`)) return;
+    const okToContinue = await confirm({
+      title: `批量${actionText}服务`,
+      message: `确认批量${actionText} ${targets.length} 个服务实例？`,
+      confirmText: '确认执行',
+      cancelText: '取消',
+      danger: action === 'delete',
+    });
+    if (!okToContinue) return;
 
     setActionLoading(true);
     let ok = 0;
@@ -136,7 +145,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
           fail += 1;
         }
       }
-      alert(`批量${actionText}完成：成功 ${ok}，失败 ${fail}`);
+      notify(`批量${actionText}完成：成功 ${ok}，失败 ${fail}`, fail > 0 ? 'warning' : 'success');
       await loadAllServices();
     } finally {
       setActionLoading(false);
@@ -145,7 +154,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   const handleDeleteByTemplate = async () => {
     if (templateFilter === 'all') {
-      alert('请先选择模板过滤条件');
+      notify('请先选择模板过滤条件', 'warning');
       return;
     }
     const targets = filteredServices.filter((svc) => (svc.template_name || '') === templateFilter);
@@ -162,6 +171,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   }
 
   return (
+    <>
     <div className="p-10 space-y-8 animate-in fade-in duration-500 pb-24">
       <div className="flex justify-between items-end">
         <div>
@@ -364,5 +374,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         </table>
       </div>
     </div>
+    {feedbackNodes}
+    </>
   );
 };

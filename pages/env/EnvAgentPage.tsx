@@ -24,6 +24,7 @@ import {
 import { Agent, EnvTemplate } from '../../types/types';
 import { api } from '../../api/api';
 import { AgentDetailPage } from './AgentDetailPage';
+import { useUiFeedback } from '../../components/UiFeedback';
 
 interface SyncHistoryItem {
   sync_id: string;
@@ -44,6 +45,16 @@ interface SyncHistoryItem {
     error?: string;
     status_code?: number;
   }>;
+}
+
+interface SyncResultItem {
+  ok?: boolean;
+  agent_key?: string;
+  reason?: string;
+  reason_code?: string;
+  status_code?: number;
+  seen?: number;
+  upserted?: number;
 }
 
 // Specialized Live Indicator Component
@@ -77,6 +88,7 @@ const LiveIndicator: React.FC<{ status: string }> = ({ status }) => {
 };
 
 export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => {
+  const { notify, confirm, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,14 +179,28 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
-  const handleCleanup = async () => {
-    if (!confirm("确认清理当前项目下掉线超过 5 分钟的 Agent？")) return;
+  const handleCleanupOfflineWithK8s = async () => {
+    if (!projectId) return;
+    const okToCleanup = await confirm({
+      title: '一键清空下线节点',
+      message: '确认清空当前项目下线 Agent，并同步删除关联 K8S 资源（如动态 Ingress）？',
+      confirmText: '确认清空',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!okToCleanup) return;
+
     setIsCleaning(true);
     try {
-      await api.environment.cleanupAgents(projectId);
-      loadData();
-    } catch (err) {
-      alert("清理失败");
+      const result = await api.environment.cleanupAgents(projectId, false, true);
+      const k8s = result?.k8s_cleanup || {};
+      const cleaned = Number(result?.cleanup_info?.cleaned_count || 0);
+      const k8sDeleted = (k8s?.details || []).reduce((sum: number, d: any) => sum + Number(d?.deleted_ingress_routes || 0), 0);
+      notify(`已清理下线 Agent ${cleaned} 个，删除 Ingress 路由 ${k8sDeleted} 条`, 'success');
+      await loadData();
+      await loadSyncHistory();
+    } catch (err: any) {
+      notify(`清空下线节点失败: ${err?.message || 'unknown error'}`, 'error');
     } finally {
       setIsCleaning(false);
     }
@@ -194,45 +220,72 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           : `确认强制同步 Agent ${targetAgentKey || '(未填写)'} 的服务状态？`;
 
     if (syncScope === 'agent' && selectedKeys.length === 0 && !targetAgentKey.trim()) {
-      alert('单Agent模式下，请选择节点或填写 Agent Key');
+      notify('单Agent模式下，请选择节点或填写 Agent Key', 'warning');
       return;
     }
-    if (!window.confirm(confirmText)) return;
+    const okToSync = await confirm({
+      title: '强制同步服务状态',
+      message: confirmText,
+      confirmText: '确认同步',
+      cancelText: '取消',
+    });
+    if (!okToSync) return;
 
     setForceSyncing(true);
     try {
+      const buildFailureText = (results: SyncResultItem[]) => {
+        const failed = (results || []).filter(r => !r?.ok);
+        if (failed.length === 0) return '';
+        return failed
+          .slice(0, 3)
+          .map((r) => `${(r.agent_key || 'unknown').slice(0, 12)}: ${r.reason || r.reason_code || `status_${r.status_code || 'unknown'}`}`)
+          .join(' | ');
+      };
+
       if (syncScope === 'agent') {
         const targets = selectedKeys.length > 0 ? selectedKeys : [targetAgentKey.trim()];
         let ok = 0;
         let fail = 0;
+        const failedReasons: string[] = [];
         for (const key of targets) {
           try {
             const res = await api.environment.syncGlobalServices({ agent_key: key });
-            if (res?.status === 'ok' || res?.result?.ok) ok += 1;
-            else fail += 1;
-          } catch {
+            if (res?.status === 'ok' || res?.result?.ok) {
+              ok += 1;
+            } else {
+              fail += 1;
+              const rr = res?.result || {};
+              failedReasons.push(`${key.slice(0, 12)}: ${rr.reason || rr.reason_code || rr.message || '未知错误'}`);
+            }
+          } catch (e: any) {
             fail += 1;
+            failedReasons.push(`${key.slice(0, 12)}: ${e?.message || 'unknown error'}`);
           }
         }
-        setLastSyncMessage(`单Agent同步完成：成功 ${ok}，失败 ${fail}`);
+        const failText = failedReasons.slice(0, 3).join(' | ');
+        const summary = `单Agent同步完成：成功 ${ok}，失败 ${fail}${failText ? `；失败原因：${failText}` : ''}`;
+        setLastSyncMessage(summary);
+        notify(summary, fail > 0 ? 'warning' : 'success');
       } else if (syncScope === 'project') {
         const result = await api.environment.syncGlobalServices({ project_id: projectId, stale_only: false });
-        if (result?.total !== undefined) {
-          setLastSyncMessage(`项目全量同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
-        } else {
-          setLastSyncMessage(result?.message || '已触发项目全量同步');
-        }
+        const reasons = buildFailureText((result?.results || []) as SyncResultItem[]);
+        const summary = result?.total !== undefined
+          ? `项目全量同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}${reasons ? `；失败原因：${reasons}` : ''}`
+          : (result?.message || '已触发项目全量同步');
+        setLastSyncMessage(summary);
+        notify(summary, (result?.fail_count || 0) > 0 ? 'warning' : 'success');
       } else {
         const result = await api.environment.syncGlobalServices({ project_id: projectId, stale_only: true });
-        if (result?.total !== undefined) {
-          setLastSyncMessage(`异常节点同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}`);
-        } else {
-          setLastSyncMessage(result?.message || '已触发异常节点同步');
-        }
+        const reasons = buildFailureText((result?.results || []) as SyncResultItem[]);
+        const summary = result?.total !== undefined
+          ? `异常节点同步完成：总计 ${result.total}，成功 ${result.ok_count || 0}，失败 ${result.fail_count || 0}${reasons ? `；失败原因：${reasons}` : ''}`
+          : (result?.message || '已触发异常节点同步');
+        setLastSyncMessage(summary);
+        notify(summary, (result?.fail_count || 0) > 0 ? 'warning' : 'success');
       }
       await loadSyncHistory();
     } catch (err: any) {
-      alert(`强制同步失败: ${err?.message || 'unknown error'}`);
+      notify(`强制同步失败: ${err?.message || 'unknown error'}`, 'error');
     } finally {
       setForceSyncing(false);
     }
@@ -272,11 +325,11 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } else {
-        alert('复制失败，请手动复制命令');
+        notify('复制失败，请手动复制命令', 'warning');
       }
     } catch (err) {
       console.error('execCommand copy failed:', err);
-      alert('复制失败，请手动复制命令');
+      notify('复制失败，请手动复制命令', 'warning');
     } finally {
       document.body.removeChild(textArea);
     }
@@ -344,7 +397,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
       setTemplates(all);
     } catch (err) {
       console.error('Failed to load templates', err);
-      alert('获取模板列表失败');
+      notify('获取模板列表失败', 'error');
     } finally {
       setTemplatesLoading(false);
     }
@@ -352,11 +405,11 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
 
   const openBatchDeployModal = async () => {
     if (!projectId) {
-      alert('请先选择项目');
+      notify('请先选择项目', 'warning');
       return;
     }
     if (selectedAgentKeys.size === 0) {
-      alert('请先选择至少一个 Agent');
+      notify('请先选择至少一个 Agent', 'warning');
       return;
     }
     setTemplateSearch('');
@@ -447,15 +500,15 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
       }
 
       if (duplicateCount > 0) {
-        alert(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}，跳过重复 ${duplicateCount}`);
+        notify(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}，跳过重复 ${duplicateCount}`, failedCount > 0 ? 'warning' : 'success');
       } else {
-        alert(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}`);
+        notify(`批量部署已提交：成功 ${successCount}，失败 ${failedCount}`, failedCount > 0 ? 'warning' : 'success');
       }
       setIsBatchDeployModalOpen(false);
       setSelectedTemplateNames(new Set());
     } catch (err) {
       console.error('Batch deploy failed', err);
-      alert('批量部署失败');
+      notify('批量部署失败', 'error');
     } finally {
       setDeployingBatch(false);
     }
@@ -466,6 +519,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
   }
 
   return (
+    <>
     <div className="p-10 space-y-10 animate-in fade-in duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
       {!projectId && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-100 text-amber-700 rounded-2xl text-xs font-bold flex items-center gap-3">
@@ -492,13 +546,13 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
           >
             <RefreshCw size={20} className={loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
           </button>
-          <button 
-            onClick={handleCleanup}
+          <button
+            onClick={handleCleanupOfflineWithK8s}
             disabled={isCleaning || !projectId}
-            className="bg-red-50 text-red-600 px-6 py-4 rounded-2xl font-black flex items-center gap-2 hover:bg-red-600 hover:text-white transition-all shadow-sm disabled:opacity-50"
+            className="bg-rose-600 text-white px-6 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-rose-500/20 hover:bg-rose-700 transition-all active:scale-95 disabled:opacity-50"
           >
             {isCleaning ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-            清理无效节点
+            一键清空下线节点
           </button>
           <button
             onClick={openBatchDeployModal}
@@ -1077,5 +1131,7 @@ export const EnvAgentPage: React.FC<{ projectId: string }> = ({ projectId }) => 
         </div>
       )}
     </div>
+    {feedbackNodes}
+    </>
   );
 };

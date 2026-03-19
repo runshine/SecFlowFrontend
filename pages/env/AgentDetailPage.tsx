@@ -39,6 +39,7 @@ import {
 import { Agent, AgentService, AsyncTask, DaemonAgentInfo, DaemonService, EnvTemplate, AgentTtydConnectionInfo, AgentIngressRouteInfo } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
+import { useUiFeedback } from '../../components/UiFeedback';
 
 interface AgentDetailPageProps {
   agentKey: string;
@@ -47,6 +48,7 @@ interface AgentDetailPageProps {
 }
 
 export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, projectId, onBack }) => {
+  const { notify, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [services, setServices] = useState<AgentService[]>([]);
@@ -125,9 +127,9 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   const handleDeepHealthCheck = async () => {
     try {
       const health = await api.environment.getAgentHealth(agentKey);
-      alert(JSON.stringify(health, null, 2));
+      notify(JSON.stringify(health, null, 2), 'info', '健康检查结果');
     } catch (err) {
-      alert("健康检查失败");
+      notify("健康检查失败", 'error');
     }
   };
 
@@ -201,7 +203,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
     } catch (err) {
       console.error('Failed to create ingress route', err);
       const message = err instanceof Error ? err.message : '创建Ingress路由失败';
-      alert(message || '创建Ingress路由失败');
+      notify(message || '创建Ingress路由失败', 'error');
     }
   };
 
@@ -211,7 +213,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       await loadIngressRoutes();
     } catch (err) {
       console.error('Failed to delete ingress route', err);
-      alert('删除Ingress路由失败');
+      notify('删除Ingress路由失败', 'error');
     }
   };
 
@@ -228,12 +230,13 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
 
       if (result?.code === 0) {
         await loadDaemonServices();
+        notify('操作已提交', 'success');
       } else {
-        alert(`操作失败: ${result?.message || '未知错误'}`);
+        notify(`操作失败: ${result?.message || '未知错误'}`, 'error');
       }
     } catch (err) {
       console.error(`Failed to ${action} daemon service`, err);
-      alert(`操作失败: ${err}`);
+      notify(`操作失败: ${err}`, 'error');
     }
   };
 
@@ -270,7 +273,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       setTemplates(all);
     } catch (err) {
       console.error('Failed to load templates', err);
-      alert('获取模板列表失败');
+      notify('获取模板列表失败', 'error');
     } finally {
       setTemplatesLoading(false);
     }
@@ -342,7 +345,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       });
 
       if (deployments.length === 0) {
-        alert('检测到全部为重复部署，未提交任务');
+        notify('检测到全部为重复部署，未提交任务', 'warning');
         return;
       }
 
@@ -351,16 +354,16 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
         deployments,
       });
       if (skippedTemplates.length > 0) {
-        alert(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}，跳过重复 ${skippedTemplates.length}`);
+        notify(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}，跳过重复 ${skippedTemplates.length}`, (result.failed_count || 0) > 0 ? 'warning' : 'success');
       } else {
-        alert(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}`);
+        notify(`批量部署已提交：成功 ${result.success_count || 0}，失败 ${result.failed_count || 0}`, (result.failed_count || 0) > 0 ? 'warning' : 'success');
       }
       setIsBatchDeployModalOpen(false);
       setSelectedTemplateNames(new Set());
       loadAllData();
     } catch (err) {
       console.error('Batch deploy failed', err);
-      alert('批量部署失败');
+      notify('批量部署失败', 'error');
     } finally {
       setDeployingBatch(false);
     }
@@ -416,6 +419,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   const daemonInfo = daemonAgentInfo || agent.daemon_info;
 
   return (
+    <>
     <div className="p-10 space-y-8 animate-in slide-in-from-right duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -1334,5 +1338,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
         </div>
       )}
     </div>
+    {feedbackNodes}
+    </>
   );
 };

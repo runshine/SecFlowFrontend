@@ -51,6 +51,7 @@ import { api } from '../../api/api';
 import { API_BASE, getHeaders } from '../../api/base';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ComposeViewer } from '../../components/ComposeViewer';
+import { useUiFeedback } from '../../components/UiFeedback';
 
 // Helper to build tree from flat paths
 interface TreeNode {
@@ -63,6 +64,7 @@ interface TreeNode {
 }
 
 export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) => {
+  const { notify, confirm, prompt, feedbackNodes } = useUiFeedback();
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<EnvTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
@@ -236,7 +238,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         setYamlFileContent('');
       }
     } catch (err) {
-      alert("获取模版详情失败");
+      notify("获取模版详情失败", 'error');
     } finally {
       setLoading(false);
     }
@@ -300,11 +302,11 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     const selectedTemplates = templates.filter((t) => selectedNames.has(String(t.id)));
     const deletable = selectedTemplates.filter(canManageTemplate).map((t) => String(t.id));
     if (deletable.length === 0) {
-      alert("当前选中的模板均无删除权限");
+      notify("当前选中的模板均无删除权限", 'warning');
       return;
     }
     if (deletable.length !== selectedTemplates.length) {
-      alert("部分模板无删除权限，已自动跳过，仅删除可管理模板");
+      notify("部分模板无删除权限，已自动跳过，仅删除可管理模板", 'warning');
     }
     setDeleteConfirm({ show: true, names: deletable });
   };
@@ -322,7 +324,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       }
       await loadTemplates();
     } catch (err) {
-      alert("批量删除部分或全部失败");
+      notify("批量删除部分或全部失败", 'error');
     } finally {
       setIsDeleting(false);
     }
@@ -330,7 +332,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   const openDeployModal = async () => {
     if (!projectId) {
-      alert("请先选择一个项目空间");
+      notify("请先选择一个项目空间", 'warning');
       return;
     }
     setDeploySource('batch');
@@ -342,7 +344,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       const data = await api.environment.getAgents(projectId, { per_page: 2000 });
       setAvailableAgents(data.agents || []);
     } catch (err) {
-      alert("获取 Agent 列表失败");
+      notify("获取 Agent 列表失败", 'error');
     } finally {
       setAgentsLoading(false);
     }
@@ -350,7 +352,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   const openDetailDeployModal = async () => {
     if (!projectId) {
-      alert("请先选择一个项目空间");
+      notify("请先选择一个项目空间", 'warning');
       return;
     }
     if (!selectedTemplate) return;
@@ -364,7 +366,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       const data = await api.environment.getAgents(projectId, { per_page: 2000 });
       setAvailableAgents(data.agents || []);
     } catch (err) {
-      alert("获取 Agent 列表失败");
+      notify("获取 Agent 列表失败", 'error');
     } finally {
       setAgentsLoading(false);
     }
@@ -435,9 +437,9 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       }
 
       if (duplicateCount > 0 || failedCount > 0) {
-        alert(`已提交 ${successCount} 个任务，跳过重复 ${duplicateCount}，失败 ${failedCount}`);
+        notify(`已提交 ${successCount} 个任务，跳过重复 ${duplicateCount}，失败 ${failedCount}`, failedCount > 0 ? 'warning' : 'success');
       } else {
-        alert(`已成功提交 ${successCount} 个异步部署任务`);
+        notify(`已成功提交 ${successCount} 个异步部署任务`, 'success');
       }
       setIsDeployModalOpen(false);
 
@@ -446,7 +448,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         setSelectedNames(new Set());
       }
     } catch (err) {
-      alert("部署过程中发生错误");
+      notify("部署过程中发生错误", 'error');
     } finally {
       setDeploying(false);
     }
@@ -489,7 +491,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       setEditingFile({ path, content: res.content });
       setIsEditorOpen(true);
     } catch (err) {
-      alert("无法读取文件内容");
+      notify("无法读取文件内容", 'error');
     } finally {
       setLoading(false);
     }
@@ -504,7 +506,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       setEditingFile(null);
       viewDetail(selectedTemplate);
     } catch (err) {
-      alert("保存失败");
+      notify("保存失败", 'error');
     } finally {
       setIsSavingFile(false);
     }
@@ -528,7 +530,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      alert("下载失败");
+      notify("下载失败", 'error');
     }
   };
 
@@ -555,13 +557,19 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      alert("下载文件失败");
+      notify("下载文件失败", 'error');
     }
   };
 
   const handleDeleteFile = async (filePath: string) => {
     if (!selectedTemplate) return;
-    const confirmed = window.confirm(`确认删除文件 "${filePath}" 吗？此操作无法撤销。`);
+    const confirmed = await confirm({
+      title: '删除文件',
+      message: `确认删除文件 "${filePath}" 吗？此操作无法撤销。`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
     if (!confirmed) return;
 
     setLoading(true);
@@ -573,7 +581,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       }
       await viewDetail(selectedTemplate);
     } catch (err: any) {
-      alert(err?.message || "删除文件失败");
+      notify(err?.message || "删除文件失败", 'error');
     } finally {
       setLoading(false);
     }
@@ -581,7 +589,13 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
 
   const handleDeleteDirectory = async (dirPath: string) => {
     if (!selectedTemplate) return;
-    const confirmed = window.confirm(`确认删除目录 "${dirPath}" 吗？`);
+    const confirmed = await confirm({
+      title: '删除目录',
+      message: `确认删除目录 "${dirPath}" 吗？`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
     if (!confirmed) return;
 
     setLoading(true);
@@ -591,16 +605,22 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     } catch (err: any) {
       const message = err?.message || '';
       if (message.includes('force=true') || message.includes('目录不为空')) {
-        const forceConfirmed = window.confirm(`目录 "${dirPath}" 非空。是否强制删除（包含全部子文件）？`);
+        const forceConfirmed = await confirm({
+          title: '目录非空',
+          message: `目录 "${dirPath}" 非空。是否强制删除（包含全部子文件）？`,
+          confirmText: '强制删除',
+          cancelText: '取消',
+          danger: true,
+        });
         if (!forceConfirmed) return;
         try {
           await api.environment.deleteTemplateDirectory(selectedTemplate, dirPath, true);
           await viewDetail(selectedTemplate);
         } catch (forceErr: any) {
-          alert(forceErr?.message || "强制删除目录失败");
+          notify(forceErr?.message || "强制删除目录失败", 'error');
         }
       } else {
-        alert(message || "删除目录失败");
+        notify(message || "删除目录失败", 'error');
       }
     } finally {
       setLoading(false);
@@ -612,7 +632,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     const templateId = Number(name);
     const template = templates.find((t) => t.id === templateId) || templateDetail;
     if (!canManageTemplate(template)) {
-      alert("仅模板拥有者可删除");
+      notify("仅模板拥有者可删除", 'warning');
       return;
     }
     setDeleteConfirm({ show: true, names: [String(templateId)] });
@@ -622,39 +642,58 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     e?.stopPropagation();
     const source = templates.find((t) => t.id === sourceTemplateId) || templateDetail;
     if (!canCopyTemplate(source)) {
-      alert("无权限复制该模板");
+      notify("无权限复制该模板", 'warning');
       return;
     }
     const sourceName = source?.name || `template-${sourceTemplateId}`;
     const defaultName = `${sourceName}-copy-${Date.now().toString(36).slice(-4)}`;
-    const targetName = window.prompt("请输入新模板名称", defaultName)?.trim();
+    const targetName = (await prompt({
+      title: '复制模板',
+      message: '请输入新模板名称',
+      defaultValue: defaultName,
+      placeholder: '新模板名称',
+      confirmText: '继续',
+      cancelText: '取消',
+    }))?.trim();
     if (!targetName) return;
-    const visibility = window.confirm("是否将复制模板设置为共享模板？\n点击“取消”将创建为私有模板。")
+    const visibility = (await confirm({
+      title: '模板可见性',
+      message: '是否将复制模板设置为共享模板？',
+      confirmText: '共享模板',
+      cancelText: '私有模板',
+    }))
       ? 'shared'
       : 'private';
     try {
       await api.environment.copyTemplate(sourceTemplateId, { target_name: targetName, visibility });
-      alert(`复制成功：${targetName}`);
+      notify(`复制成功：${targetName}`, 'success');
       await loadTemplates();
     } catch (err: any) {
-      alert(err?.message || "复制模板失败");
+      notify(err?.message || "复制模板失败", 'error');
     }
   };
 
   const handleRenameTemplate = async (template: any) => {
     if (!template?.id) return;
     if (!canManageTemplate(template)) {
-      alert("仅模板拥有者可修改模板名称");
+      notify("仅模板拥有者可修改模板名称", 'warning');
       return;
     }
-    const nextName = window.prompt("请输入新的模板名称", template.name)?.trim();
+    const nextName = (await prompt({
+      title: '修改模板名称',
+      message: '请输入新的模板名称',
+      defaultValue: template.name,
+      placeholder: '模板名称',
+      confirmText: '保存',
+      cancelText: '取消',
+    }))?.trim();
     if (!nextName || nextName === template.name) return;
     try {
       await api.environment.updateTemplateBasic(template.id, { name: nextName });
       await loadTemplates();
       await viewDetail(template.id);
     } catch (err: any) {
-      alert(err?.message || "修改模板名称失败");
+      notify(err?.message || "修改模板名称失败", 'error');
     }
   };
 
@@ -949,6 +988,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     const canManageCurrentTemplate = canManageTemplate(templateDetail);
     const canCopyCurrentTemplate = canCopyTemplate(templateDetail);
     return (
+      <>
       <div className="p-10 space-y-8 animate-in slide-in-from-right duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
         {/* Detail Header with Top Right Actions */}
         <div className="flex flex-col md:flex-row justify-between items-start gap-6 bg-white/50 backdrop-blur-md p-8 rounded-[3rem] border border-white shadow-sm">
@@ -1242,10 +1282,13 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
         )}
         {renderDeployModal()}
       </div>
+      {feedbackNodes}
+      </>
     );
   }
 
   return (
+    <>
     <div className="p-10 space-y-10 animate-in fade-in duration-300 pb-24 h-full overflow-y-auto custom-scrollbar">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
@@ -1858,5 +1901,7 @@ spec:
         </div>
       )}
     </div>
+    {feedbackNodes}
+    </>
   );
 };

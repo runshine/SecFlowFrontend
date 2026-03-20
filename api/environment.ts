@@ -67,10 +67,12 @@ export const environmentApi = {
         name?: string;
         port: number;
         protocol?: 'http' | 'https';
+        backend_protocol?: 'http' | 'https';
         description?: string;
         path?: string;
         websocket_enabled?: boolean;
         tls_enabled?: boolean;
+        ingress_tls_enabled?: boolean;
       }>;
     }
   ): Promise<any> =>
@@ -86,10 +88,12 @@ export const environmentApi = {
       name?: string;
       port: number;
       protocol?: 'http' | 'https';
+      backend_protocol?: 'http' | 'https';
       description?: string;
       path?: string;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      ingress_tls_enabled?: boolean;
     }>;
     permissions?: { can_manage?: boolean };
   }> =>
@@ -100,10 +104,12 @@ export const environmentApi = {
       name?: string;
       port: number;
       protocol?: 'http' | 'https';
+      backend_protocol?: 'http' | 'https';
       description?: string;
       path?: string;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      ingress_tls_enabled?: boolean;
     }>
   ): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/web-ports`, {
@@ -403,6 +409,7 @@ export const environmentApi = {
       service_port?: number;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      backend_protocol?: 'http' | 'https';
       force_recreate?: boolean;
       metadata?: Record<string, any>;
     }

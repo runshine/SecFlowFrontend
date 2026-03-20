@@ -58,7 +58,8 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
   const [ingressLoading, setIngressLoading] = useState(false);
   const [ingressCreating, setIngressCreating] = useState(false);
   const [ingressTargetPort, setIngressTargetPort] = useState<number>(0);
-  const [ingressProtocol, setIngressProtocol] = useState<'http' | 'https'>('http');
+  const [ingressTlsEnabled, setIngressTlsEnabled] = useState(true);
+  const [backendProtocol, setBackendProtocol] = useState<'http' | 'https'>('http');
   const [ingressPath, setIngressPath] = useState('/');
   const [ingressHostPrefix, setIngressHostPrefix] = useState('');
   const [ingressWebsocketEnabled, setIngressWebsocketEnabled] = useState(true);
@@ -605,7 +606,8 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
         target_port: Number(ingressTargetPort),
         service_port: Number(ingressTargetPort),
         websocket_enabled: ingressWebsocketEnabled,
-        tls_enabled: ingressProtocol === 'https',
+        tls_enabled: ingressTlsEnabled,
+        backend_protocol: backendProtocol,
         host_prefix: ingressHostPrefix?.trim() || buildRandomIngressPrefix(`${selectedService.name}-${ingressTargetPort}`),
         path: ingressPath?.trim() || '/',
         metadata: {
@@ -614,7 +616,9 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
           service_name: selectedService.name,
           template_id: selectedService.template_id,
           template_name: selectedService.template_name,
-          protocol: ingressProtocol
+          protocol: backendProtocol,
+          backend_protocol: backendProtocol,
+          ingress_tls_enabled: ingressTlsEnabled
         }
       });
       notify(`Ingress创建成功: ${route?.host || ''}`, 'success');
@@ -682,7 +686,8 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
       setExecContainer(containerList[0] || svc.name);
       const detected = detectServicePorts(svc);
       setIngressTargetPort(detected[0] || 80);
-      setIngressProtocol('http');
+      setIngressTlsEnabled(true);
+      setBackendProtocol('http');
       setIngressPath('/');
       setIngressHostPrefix(buildRandomIngressPrefix(`${svc.name}-${detected[0] || 80}`));
       setIngressWebsocketEnabled(true);
@@ -697,7 +702,8 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
             const p = Number(first?.port || 0);
             if (p > 0) {
               setIngressTargetPort(p);
-              setIngressProtocol(String(first?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http');
+              setIngressTlsEnabled(first?.ingress_tls_enabled !== undefined ? first?.ingress_tls_enabled !== false : first?.tls_enabled !== false);
+              setBackendProtocol(String(first?.backend_protocol || first?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http');
               setIngressPath(String(first?.path || '/'));
               setIngressWebsocketEnabled(first?.websocket_enabled !== false);
               setIngressHostPrefix(buildRandomIngressPrefix(`${svc.name}-${p}`));
@@ -931,7 +937,9 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                     {!item.service_exists && <div className="text-[10px] text-amber-600 font-black">服务不在位</div>}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="text-xs text-slate-700">{item.target_port} / {item.tls_enabled ? 'HTTPS' : 'HTTP'}</div>
+                    <div className="text-xs text-slate-700">
+                      {item.target_port} / Ingress {item.tls_enabled ? 'HTTPS' : 'HTTP'} / 后端 {String(item.backend_protocol || 'http').toUpperCase()}
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     <StatusBadge status={item.status || (item.is_stale_service_ingress ? 'error' : 'ready')} />
@@ -1266,23 +1274,24 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                           onClick={() => {
                             const port = Number(preset?.port || 0);
                             if (!port) return;
-                            const protocol = String(preset?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http';
+                            const protocol = String(preset?.backend_protocol || preset?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http';
                             setIngressTargetPort(port);
-                            setIngressProtocol(protocol as 'http' | 'https');
+                            setIngressTlsEnabled(preset?.ingress_tls_enabled !== undefined ? preset?.ingress_tls_enabled !== false : preset?.tls_enabled !== false);
+                            setBackendProtocol(protocol as 'http' | 'https');
                             setIngressPath(String(preset?.path || '/'));
                             setIngressWebsocketEnabled(preset?.websocket_enabled !== false);
                             setIngressHostPrefix(buildRandomIngressPrefix(`${selectedService?.name || 'svc'}-${port}`));
                           }}
                           className="px-3 py-2 rounded-xl border border-blue-100 bg-blue-50 text-blue-700 text-xs font-black hover:bg-blue-100"
                         >
-                          {preset?.name || 'WEB'} · {preset?.port}/{String(preset?.protocol || 'http').toUpperCase()}
+                          {preset?.name || 'WEB'} · {preset?.port} · 后端{String(preset?.backend_protocol || preset?.protocol || 'http').toUpperCase()} · Ingress{(preset?.ingress_tls_enabled ?? preset?.tls_enabled) !== false ? 'HTTPS' : 'HTTP'}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
                   <input
                     value={ingressTargetPort || ''}
                     onChange={(e) => setIngressTargetPort(Number(e.target.value || 0))}
@@ -1293,12 +1302,20 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                     className="md:col-span-1 px-3 py-2 text-xs border border-slate-200 rounded-xl"
                   />
                   <select
-                    value={ingressProtocol}
-                    onChange={(e) => setIngressProtocol(e.target.value === 'https' ? 'https' : 'http')}
+                    value={ingressTlsEnabled ? 'https' : 'http'}
+                    onChange={(e) => setIngressTlsEnabled(e.target.value === 'https')}
                     className="md:col-span-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
                   >
-                    <option value="http">HTTP</option>
-                    <option value="https">HTTPS</option>
+                    <option value="https">Ingress HTTPS</option>
+                    <option value="http">Ingress HTTP</option>
+                  </select>
+                  <select
+                    value={backendProtocol}
+                    onChange={(e) => setBackendProtocol(e.target.value === 'https' ? 'https' : 'http')}
+                    className="md:col-span-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white"
+                  >
+                    <option value="http">后端 HTTP</option>
+                    <option value="https">后端 HTTPS</option>
                   </select>
                   <input
                     value={ingressPath}
@@ -1329,7 +1346,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                     />
                     启用 WebSocket
                   </label>
-                  <span className="text-slate-400">HTTPS 将自动启用 TLS（使用集群默认TLS Secret）</span>
+                  <span className="text-slate-400">Ingress HTTPS 控制外部访问证书；后端 HTTP/HTTPS 控制 Nginx 回源协议</span>
                 </div>
 
                 <div className="space-y-1">
@@ -1338,7 +1355,9 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                   {!ingressLoading && ingressRoutes.length === 0 && <p className="text-xs text-slate-400">暂无路由</p>}
                   {!ingressLoading && ingressRoutes.map((route: any) => (
                     <div key={route.route_id} className="text-xs bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
-                      <span className="font-mono text-slate-700 truncate">{route.host}{route.path} → {route.target_port} ({route.tls_enabled ? 'HTTPS' : 'HTTP'})</span>
+                      <span className="font-mono text-slate-700 truncate">
+                        {route.host}{route.path} → {route.target_port} (Ingress {route.tls_enabled ? 'HTTPS' : 'HTTP'} / 后端 {String(route.backend_protocol || 'http').toUpperCase()})
+                      </span>
                       <div className="flex items-center gap-3 shrink-0">
                         {route.access_url && (
                           <a href={route.access_url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline">打开</a>

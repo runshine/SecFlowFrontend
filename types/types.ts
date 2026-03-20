@@ -500,10 +500,12 @@ export interface EnvTemplate {
       name?: string;
       port: number;
       protocol?: 'http' | 'https';
+      backend_protocol?: 'http' | 'https';
       description?: string;
       path?: string;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      ingress_tls_enabled?: boolean;
     }>;
   };
 }
@@ -818,6 +820,7 @@ export interface AgentIngressRouteInfo {
   service_name: string;
   tls_enabled: boolean;
   tls_secret_name?: string | null;
+  backend_protocol?: 'http' | 'https' | null;
   websocket_enabled: boolean;
   status: string;
   access_url?: string | null;

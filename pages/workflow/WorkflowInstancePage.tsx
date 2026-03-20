@@ -256,7 +256,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                 </td>
                 <td className="px-6 py-6">
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shadow-inner transition-all ${instance.status === 'running' ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-100 text-slate-400'}`}>
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shadow-inner transition-all ${(instance.status || '').toLowerCase() === 'running' ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-100 text-slate-400'}`}>
                       <Activity size={22} />
                     </div>
                     <div>
@@ -305,7 +305,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                       <RefreshCw size={16} />
                     </button>
 
-                    {instance.status === 'pending' && (
+                    {(instance.status || '').toLowerCase() === 'pending' && (
                       <button onClick={async () => {
                         try {
                           await api.workflow.initializeInstance(instance.id);
@@ -319,7 +319,7 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                       </button>
                     )}
 
-                    {['unready', 'ready'].includes(instance.status) && (
+                    {['unready', 'ready'].includes((instance.status || '').toLowerCase()) && (
                       <button onClick={() => {
                         setUninitId(instance.id);
                         setIsUninitModalOpen(true);
@@ -328,19 +328,19 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                       </button>
                     )}
 
-                    {['pending', 'unready', 'ready'].includes(instance.status) && (
+                    {(instance.status || '').toLowerCase() === 'pending' && (
                       <button onClick={() => handleStart(instance.id)} title="启动" className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all">
                         <Play size={16} />
                       </button>
                     )}
 
-                    {['unready', 'ready'].includes(instance.status) && (
+                    {['unready', 'ready'].includes((instance.status || '').toLowerCase()) && (
                       <button onClick={() => handleStop(instance.id)} title="停止" className="p-3 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all">
                         <StopCircle size={16} />
                       </button>
                     )}
 
-                    {['unready', 'ready'].includes(instance.status) && instance.run_mode === 'persistent' && instance.is_active && (
+                    {['unready', 'ready'].includes((instance.status || '').toLowerCase()) && instance.run_mode === 'persistent' && instance.is_active && (
                       <button onClick={async () => {
                         try {
                           await api.workflow.triggerInstance(instance.id);

@@ -1259,6 +1259,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     );
   }
 
+  const workflowStatus = (instance?.status || '').toLowerCase();
+
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-in fade-in duration-500">
       {/* Header */}
@@ -1300,7 +1302,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             </>
           ) : (
             <>
-              {instance?.status === 'pending' && (
+              {workflowStatus === 'pending' && (
                 <button 
                   onClick={async () => {
                     try {
@@ -1337,7 +1339,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 <RefreshCw size={16} /> 同步状态
               </button>
 
-              {['unready', 'ready'].includes(instance?.status || '') && (
+              {['unready', 'ready'].includes(workflowStatus) && (
                 <button
                   onClick={() => setIsUninitModalOpen(true)}
                   className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-all shadow-sm"
@@ -1346,7 +1348,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 </button>
               )}
 
-              {['pending', 'unready', 'ready'].includes(instance?.status || '') && (
+              {workflowStatus === 'pending' && (
                 <button
                   onClick={async () => {
                     try {
@@ -1366,7 +1368,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 </button>
               )}
 
-              {['unready', 'ready'].includes(instance?.status || '') && instance?.run_mode === 'persistent' && instance?.is_active && (
+              {['unready', 'ready'].includes(workflowStatus) && instance?.run_mode === 'persistent' && instance?.is_active && (
                 <button
                   onClick={async () => {
                     try {
@@ -1386,7 +1388,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 </button>
               )}
 
-              {instance?.status === 'pending' && (
+              {workflowStatus === 'pending' && (
                 <button 
                   onClick={() => {
                     setInitialNodes(nodes);

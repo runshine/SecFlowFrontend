@@ -10,6 +10,7 @@ import { deployScriptApi } from './deployScript';
 import { workflowApi } from './workflow';
 import { k8sApi } from './k8s';
 import { adminApi } from './admin';
+import { vulnApi } from './vuln';
 
 export const api = {
   auth: authApi,
@@ -22,5 +23,6 @@ export const api = {
   deployScript: deployScriptApi,
   workflow: workflowApi,
   k8s: k8sApi,
-  admin: adminApi
+  admin: adminApi,
+  vuln: vulnApi
 };

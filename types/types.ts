@@ -688,7 +688,7 @@ export type ViewType =
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
-  | 'security-assessment'
+  | 'security-assessment' | 'vuln-engine'
   | 'sys-settings' | 'change-password'
   | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online' | 'user-mgmt-machine'
   | 'org-mgmt-departments' | 'org-mgmt-members' | 'org-mgmt-projects';

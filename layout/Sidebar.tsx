@@ -239,6 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'pentest-report', label: '报告', icon: <FileText size={14} /> }
         ]} />
         <SidebarItem id="security-assessment" label="安全评估" icon={<ClipboardCheck size={20} />} disabled={!hasSelectedProject} />
+        <SidebarItem id="vuln-engine" label="漏洞引擎" icon={<Cpu size={20} />} disabled={!hasSelectedProject} />
       </div>
     </nav>
   );

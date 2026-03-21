@@ -294,7 +294,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
           } else if (action === 'stop') {
             await api.environment.stopAgentService(agentKey, svc.name);
           } else {
-            await api.environment.deleteAgentService(agentKey, svc.name);
+            await api.environment.deleteAgentService(agentKey, svc.name, projectId);
           }
           ok += 1;
         } catch {

@@ -47,19 +47,33 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
     }
   };
 
-  const openLogViewer = async (task: AsyncTask) => {
+  const openTaskDetail = async (task: AsyncTask) => {
     if (!projectId) return;
     setSelectedTask(task);
     setLogLoading(true);
     setLogs([]);
     try {
-      const data = await api.environment.getTaskLogs(task.id, projectId);
+      const [detail, data] = await Promise.all([
+        api.environment.getTaskDetail(task.id, projectId),
+        api.environment.getTaskLogs(task.id, projectId),
+      ]);
+      setSelectedTask(detail || task);
       setLogs(data?.log || []);
     } catch (err) {
-      notify("获取日志失败", 'error');
+      notify("获取任务详情失败", 'error');
     } finally {
       setLogLoading(false);
     }
+  };
+
+  const renderTaskTime = (timeStr: string | undefined) => {
+    const info = formatTaskTime(timeStr);
+    return (
+      <>
+        <div className="text-slate-200 font-mono text-xs">{info.date}</div>
+        <div className="text-slate-500 font-mono text-[11px]">{info.time}</div>
+      </>
+    );
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -187,7 +201,13 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                           <Workflow size={18} />
                         </div>
                         <div>
-                          <p className="text-sm font-black text-slate-800">{t.service_name || 'Unknown'}</p>
+                          <button
+                            onClick={() => void openTaskDetail(t)}
+                            className="text-sm font-black text-slate-800 hover:text-blue-600 transition-colors text-left"
+                            title="查看任务详情"
+                          >
+                            {t.service_name || 'Unknown'}
+                          </button>
                           <p className="text-[10px] font-mono text-slate-400 tracking-tighter">ID: {t.id}</p>
                         </div>
                       </div>
@@ -219,9 +239,9 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
                       <div className="flex items-center justify-end gap-2">
                          <StatusBadge status={t.status} />
                          <button 
-                           onClick={() => openLogViewer(t)}
+                           onClick={() => void openTaskDetail(t)}
                            className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                           title="查看实时执行日志"
+                           title="查看任务详情与实时执行日志"
                          >
                            <Terminal size={18} />
                          </button>
@@ -276,7 +296,49 @@ export const EnvTasksPage: React.FC<{ projectId: string }> = ({ projectId }) => 
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto p-4 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-auto p-4 space-y-4 custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">任务类型</div>
+                  <div className="mt-1 text-sm font-bold text-slate-100">{selectedTask.type || '-'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">任务状态</div>
+                  <div className="mt-2"><StatusBadge status={selectedTask.status} /></div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">目标节点</div>
+                  <div className="mt-1 text-sm font-mono text-slate-100 break-all">{selectedTask.agent_key || '-'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">执行进度</div>
+                  <div className="mt-1 text-sm font-bold text-slate-100">{selectedTask.progress || 0}%</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">创建时间</div>
+                  <div className="mt-1">{renderTaskTime(selectedTask.created_at || selectedTask.create_time)}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">开始时间</div>
+                  <div className="mt-1">{renderTaskTime(selectedTask.started_at)}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">完成时间</div>
+                  <div className="mt-1">{renderTaskTime(selectedTask.completed_at)}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">日志条数</div>
+                  <div className="mt-1 text-sm font-bold text-slate-100">{selectedTask.log_count ?? logs.length}</div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-3">
+                <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase">任务消息</div>
+                <div className="mt-1 text-xs leading-relaxed text-slate-200 whitespace-pre-wrap break-words">
+                  {selectedTask.message || '暂无任务消息'}
+                </div>
+              </div>
+
               {logLoading ? (
                 <div className="h-full flex items-center justify-center">
                   <Loader2 className="animate-spin text-blue-500" />

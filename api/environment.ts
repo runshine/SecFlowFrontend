@@ -9,6 +9,12 @@ const normalizeTask = (raw: any): AsyncTask => ({
   progress: typeof raw?.progress === 'number' ? raw.progress : Number(raw?.progress || 0),
   create_time: raw?.create_time || raw?.created_at || '',
   agent_key: raw?.agent_key || '',
+  project_id: raw?.project_id || '',
+  message: raw?.message || '',
+  created_at: raw?.created_at || raw?.create_time || '',
+  started_at: raw?.started_at || '',
+  completed_at: raw?.completed_at || '',
+  log_count: typeof raw?.log_count === 'number' ? raw.log_count : Number(raw?.log_count || 0),
 });
 
 const normalizeTaskLog = (raw: any): TaskLog => ({

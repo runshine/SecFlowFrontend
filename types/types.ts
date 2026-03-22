@@ -528,6 +528,12 @@ export interface AsyncTask {
   progress: number;
   create_time: string;
   agent_key: string;
+  project_id?: string;
+  message?: string;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  log_count?: number;
 }
 
 export interface TaskLog {

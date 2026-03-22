@@ -682,8 +682,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     try {
       const detail = await api.environment.getAgentServiceDetail(svc.agent_key, svc.name);
       setServiceDetail(detail);
-      const containerList = resolveContainers(detail);
-      setExecContainer(containerList[0] || svc.name);
+      setExecContainer('');
       const detected = detectServicePorts(svc);
       setIngressTargetPort(detected[0] || 80);
       setIngressTlsEnabled(true);
@@ -1200,9 +1199,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
                       onChange={(e) => setExecContainer(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
                     >
-                      {resolveContainers(serviceDetail).length === 0 && (
-                        <option value="">自动选择容器</option>
-                      )}
+                      <option value="">自动选择容器</option>
                       {resolveContainers(serviceDetail).map((name) => (
                         <option key={name} value={name}>{name}</option>
                       ))}

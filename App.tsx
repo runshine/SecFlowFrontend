@@ -45,6 +45,7 @@ import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
 import { ExecutionWorkPlatformPage } from './pages/pentest/ExecutionWorkPlatformPage';
 import { SecMateNGPage } from './pages/pentest/SecMateNGPage';
 import { ReportsPage } from './pages/pentest/ReportsPage';
+import { VulnEnginePage } from './pages/pentest/VulnEnginePage';
 
 // User & Auth Pages
 import { UserMgmtPage } from './pages/user/UserMgmtPage';
@@ -69,7 +70,8 @@ const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'pentest-risk', 'pentest-system', 'pentest-threat', 'pentest-orch',
   'pentest-exec-code', 'pentest-exec-work', 'pentest-exec-secmate',
   'pentest-report',
-  'security-assessment'
+  'security-assessment',
+  'vuln-engine'
 ]);
 
 const App: React.FC = () => {
@@ -374,6 +376,7 @@ const App: React.FC = () => {
       case 'pentest-exec-secmate': return <SecMateNGPage projectId={selectedProjectId} />;
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
+      case 'vuln-engine': return <VulnEnginePage projectId={selectedProjectId} />;
 
       // Admin Pages
       case 'sys-settings': return <WorkflowPlaceholder title="系统设置" icon={<Settings />} />;

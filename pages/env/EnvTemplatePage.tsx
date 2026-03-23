@@ -67,10 +67,12 @@ interface WebPortPreset {
   name: string;
   port: number;
   protocol: 'http' | 'https';
+  backend_protocol: 'http' | 'https';
   description?: string;
   path?: string;
   websocket_enabled?: boolean;
   tls_enabled?: boolean;
+  ingress_tls_enabled?: boolean;
 }
 
 export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -271,16 +273,23 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     if (!Array.isArray(raw)) return [];
     return raw
       .map((item: any): WebPortPreset => {
-        const protocol: 'http' | 'https' =
-          String(item?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http';
+        const backendProtocol: 'http' | 'https' =
+          String(item?.backend_protocol || item?.protocol || 'http').toLowerCase() === 'https' ? 'https' : 'http';
+        const ingressTlsEnabled = item?.ingress_tls_enabled !== undefined
+          ? item?.ingress_tls_enabled !== false
+          : item?.tls_enabled !== undefined
+            ? item?.tls_enabled !== false
+            : true;
         return {
           name: String(item?.name || '').trim(),
           port: Number(item?.port || 0),
-          protocol,
+          protocol: backendProtocol,
+          backend_protocol: backendProtocol,
           description: String(item?.description || '').trim(),
           path: String(item?.path || '/').trim() || '/',
           websocket_enabled: item?.websocket_enabled !== false,
-          tls_enabled: item?.tls_enabled !== false,
+          tls_enabled: ingressTlsEnabled,
+          ingress_tls_enabled: ingressTlsEnabled,
         };
       })
       .filter((item: WebPortPreset) => Number.isFinite(item.port) && item.port > 0 && item.port <= 65535)
@@ -806,7 +815,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       ...prev,
       web_port_presets: [
         ...(prev.web_port_presets || []),
-        { name: '', port: 80, protocol: 'http', description: '', path: '/', websocket_enabled: true, tls_enabled: false }
+        { name: '', port: 80, protocol: 'http', backend_protocol: 'http', description: '', path: '/', websocket_enabled: true, tls_enabled: true, ingress_tls_enabled: true }
       ]
     }));
   };
@@ -1217,12 +1226,12 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
           <div className="flex items-center justify-between">
             <div>
               <h4 className="text-sm font-black text-slate-800">WEB端口</h4>
-              <p className="text-xs text-slate-500 mt-1">用于服务详情页快速创建 HTTP/HTTPS 转发</p>
+              <p className="text-xs text-slate-500 mt-1">分别预设 Ingress 访问协议与后端服务协议，用于服务详情页快速创建转发</p>
             </div>
             {canManageCurrentTemplate && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setDetailWebPortPresets(prev => [...prev, { name: '', port: 80, protocol: 'http', description: '', path: '/', websocket_enabled: true, tls_enabled: false }])}
+                  onClick={() => setDetailWebPortPresets(prev => [...prev, { name: '', port: 80, protocol: 'http', backend_protocol: 'http', description: '', path: '/', websocket_enabled: true, tls_enabled: true, ingress_tls_enabled: true }])}
                   className="px-3 py-2 text-xs font-black rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   新增端口
@@ -1262,13 +1271,17 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                     className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
                   />
                   <select
-                    value={preset.protocol || 'http'}
-                    onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https' } : p))}
+                    value={preset.backend_protocol || preset.protocol || 'http'}
+                    onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? {
+                      ...p,
+                      protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https',
+                      backend_protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https'
+                    } : p))}
                     disabled={!canManageCurrentTemplate}
                     className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg bg-white"
                   >
-                    <option value="http">HTTP</option>
-                    <option value="https">HTTPS</option>
+                    <option value="http">后端 HTTP</option>
+                    <option value="https">后端 HTTPS</option>
                   </select>
                   <input
                     value={preset.path || '/'}
@@ -1306,11 +1319,11 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                   <label className="text-xs text-slate-600 flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={preset.tls_enabled !== false}
-                      onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, tls_enabled: e.target.checked } : p))}
+                      checked={(preset.ingress_tls_enabled ?? preset.tls_enabled) !== false}
+                      onChange={(e) => setDetailWebPortPresets(prev => prev.map((p, i) => i === idx ? { ...p, tls_enabled: e.target.checked, ingress_tls_enabled: e.target.checked } : p))}
                       disabled={!canManageCurrentTemplate}
                     />
-                    默认启用 TLS
+                    Ingress 启用 HTTPS
                   </label>
                 </div>
               </div>
@@ -1733,7 +1746,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                         <div className="flex flex-wrap gap-1.5">
                           {cardWebPortPresets.slice(0, 6).map((preset, idx) => (
                             <span key={`preset-${t.id}-${idx}`} className="text-[10px] bg-white text-indigo-700 px-2 py-0.5 rounded font-mono border border-indigo-100">
-                              {(preset.name || 'WEB')}:{preset.port}/{String(preset.protocol || 'http').toUpperCase()}
+                              {(preset.name || 'WEB')}:{preset.port}/后端{String(preset.backend_protocol || preset.protocol || 'http').toUpperCase()}/Ingress{(preset.ingress_tls_enabled ?? preset.tls_enabled) !== false ? 'HTTPS' : 'HTTP'}
                             </span>
                           ))}
                           {cardWebPortPresets.length > 6 && (
@@ -1965,7 +1978,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                     </button>
                   </div>
                   {(newTemplate.web_port_presets || []).length === 0 && (
-                    <p className="text-xs text-slate-400">可定义模板常用的WEB端口，后续服务详情可一键创建HTTP/HTTPS转发。</p>
+                    <p className="text-xs text-slate-400">可分别定义 Ingress 访问协议与后端服务协议，后续服务详情可一键创建转发。</p>
                   )}
                   {(newTemplate.web_port_presets || []).map((preset, idx) => (
                     <div key={`upload-port-${idx}`} className="border border-slate-200 rounded-xl p-2 space-y-2">
@@ -1992,15 +2005,19 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                           className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg"
                         />
                         <select
-                          value={preset.protocol || 'http'}
+                          value={preset.backend_protocol || preset.protocol || 'http'}
                           onChange={(e) => setNewTemplate(prev => ({
                             ...prev,
-                            web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https' } : p)
+                            web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? {
+                              ...p,
+                              protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https',
+                              backend_protocol: (e.target.value === 'https' ? 'https' : 'http') as 'http' | 'https'
+                            } : p)
                           }))}
                           className="col-span-2 px-2 py-2 text-xs border border-slate-200 rounded-lg bg-white"
                         >
-                          <option value="http">HTTP</option>
-                          <option value="https">HTTPS</option>
+                          <option value="http">后端 HTTP</option>
+                          <option value="https">后端 HTTPS</option>
                         </select>
                         <input
                           value={preset.path || '/'}
@@ -2046,13 +2063,13 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                         <label className="text-xs text-slate-600 flex items-center gap-2">
                           <input
                             type="checkbox"
-                            checked={preset.tls_enabled !== false}
+                            checked={(preset.ingress_tls_enabled ?? preset.tls_enabled) !== false}
                             onChange={(e) => setNewTemplate(prev => ({
                               ...prev,
-                              web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, tls_enabled: e.target.checked } : p)
+                              web_port_presets: prev.web_port_presets.map((p, i) => i === idx ? { ...p, tls_enabled: e.target.checked, ingress_tls_enabled: e.target.checked } : p)
                             }))}
                           />
-                          默认启用 TLS
+                          Ingress 启用 HTTPS
                         </label>
                       </div>
                     </div>

@@ -9,6 +9,12 @@ const normalizeTask = (raw: any): AsyncTask => ({
   progress: typeof raw?.progress === 'number' ? raw.progress : Number(raw?.progress || 0),
   create_time: raw?.create_time || raw?.created_at || '',
   agent_key: raw?.agent_key || '',
+  project_id: raw?.project_id || '',
+  message: raw?.message || '',
+  created_at: raw?.created_at || raw?.create_time || '',
+  started_at: raw?.started_at || '',
+  completed_at: raw?.completed_at || '',
+  log_count: typeof raw?.log_count === 'number' ? raw.log_count : Number(raw?.log_count || 0),
 });
 
 const normalizeTaskLog = (raw: any): TaskLog => ({
@@ -67,10 +73,12 @@ export const environmentApi = {
         name?: string;
         port: number;
         protocol?: 'http' | 'https';
+        backend_protocol?: 'http' | 'https';
         description?: string;
         path?: string;
         websocket_enabled?: boolean;
         tls_enabled?: boolean;
+        ingress_tls_enabled?: boolean;
       }>;
     }
   ): Promise<any> =>
@@ -86,10 +94,12 @@ export const environmentApi = {
       name?: string;
       port: number;
       protocol?: 'http' | 'https';
+      backend_protocol?: 'http' | 'https';
       description?: string;
       path?: string;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      ingress_tls_enabled?: boolean;
     }>;
     permissions?: { can_manage?: boolean };
   }> =>
@@ -100,10 +110,12 @@ export const environmentApi = {
       name?: string;
       port: number;
       protocol?: 'http' | 'https';
+      backend_protocol?: 'http' | 'https';
       description?: string;
       path?: string;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      ingress_tls_enabled?: boolean;
     }>
   ): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/templates/id/${templateId}/web-ports`, {
@@ -340,8 +352,8 @@ export const environmentApi = {
       headers: getHeaders(),
       body: JSON.stringify({})
     })),
-  deleteAgentService: async (key: string, serviceName: string): Promise<any> =>
-    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}`, {
+  deleteAgentService: async (key: string, serviceName: string, projectId?: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/agent/${key}/services/${encodeURIComponent(serviceName)}${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`, {
       method: 'DELETE',
       headers: getHeaders()
     })),
@@ -403,6 +415,7 @@ export const environmentApi = {
       service_port?: number;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      backend_protocol?: 'http' | 'https';
       force_recreate?: boolean;
       metadata?: Record<string, any>;
     }

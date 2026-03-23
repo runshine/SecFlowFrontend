@@ -541,10 +541,12 @@ export interface EnvTemplate {
       name?: string;
       port: number;
       protocol?: 'http' | 'https';
+      backend_protocol?: 'http' | 'https';
       description?: string;
       path?: string;
       websocket_enabled?: boolean;
       tls_enabled?: boolean;
+      ingress_tls_enabled?: boolean;
     }>;
   };
 }
@@ -567,6 +569,12 @@ export interface AsyncTask {
   progress: number;
   create_time: string;
   agent_key: string;
+  project_id?: string;
+  message?: string;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  log_count?: number;
 }
 
 export interface TaskLog {
@@ -727,7 +735,7 @@ export type ViewType =
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-instance-logs' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
-  | 'security-assessment'
+  | 'security-assessment' | 'vuln-engine'
   | 'sys-settings' | 'change-password'
   | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online' | 'user-mgmt-machine'
   | 'org-mgmt-departments' | 'org-mgmt-members' | 'org-mgmt-projects';
@@ -859,6 +867,7 @@ export interface AgentIngressRouteInfo {
   service_name: string;
   tls_enabled: boolean;
   tls_secret_name?: string | null;
+  backend_protocol?: 'http' | 'https' | null;
   websocket_enabled: boolean;
   status: string;
   access_url?: string | null;

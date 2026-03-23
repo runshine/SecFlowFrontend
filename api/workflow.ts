@@ -1,6 +1,6 @@
 
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, WorkflowStatus, AppWorkflow, AppWorkflowLogs, IngressController } from '../types/types';
+import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, AppWorkflow, AppWorkflowLogs, IngressController, WorkflowInstanceNodeLogListResponse } from '../types/types';
 
 export const workflowApi = {
   /**
@@ -194,6 +194,18 @@ export const workflowApi = {
   getNodeLogs: async (instanceId: string, nodeId: string, params: { tail_lines?: number; container?: string; previous?: boolean; timestamp?: boolean } = {}): Promise<{ logs: string }> => {
     const query = new URLSearchParams(params as any).toString();
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes/${nodeId}/logs?${query}`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+  getInstanceNodeLogs: async (
+    instanceId: string,
+    params: { node_id?: string; page?: number; page_size?: number } = {}
+  ): Promise<WorkflowInstanceNodeLogListResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params.node_id) queryParams.set('node_id', params.node_id);
+    if (params.page) queryParams.set('page', String(params.page));
+    if (params.page_size) queryParams.set('page_size', String(params.page_size));
+    const query = queryParams.toString();
+    const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/logs?${query}`, { headers: getHeaders() });
     return handleResponse(response);
   },
 

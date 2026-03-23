@@ -255,6 +255,47 @@ export interface AppWorkflowLogs {
   previous: boolean;
 }
 
+export interface WorkflowInstanceStoredLogPayload {
+  task_id?: string;
+  pod_name?: string;
+  container?: string;
+  logs?: string;
+  fetched_at?: string;
+  tail_lines?: number;
+  previous?: boolean;
+  status_when_fetched?: string;
+}
+
+export interface WorkflowInstanceNodeLogRecord {
+  id: string;
+  task_id?: string;
+  node_id: string;
+  node_name?: string;
+  instance_id: string;
+  project_id: string;
+  node_type: NodeType;
+  k8s_resource_name?: string;
+  k8s_resource_type?: string;
+  status: string;
+  started_at?: string;
+  finished_at?: string;
+  duration_seconds?: number;
+  message?: string;
+  init_logs?: WorkflowInstanceStoredLogPayload;
+  execution_logs?: WorkflowInstanceStoredLogPayload;
+  log_updated_at?: string;
+  metadata?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WorkflowInstanceNodeLogListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: WorkflowInstanceNodeLogRecord[];
+}
+
 export interface IngressController {
   name: string;
   namespace: string;
@@ -683,7 +724,7 @@ export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
-  | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
+  | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-instance-logs' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment'

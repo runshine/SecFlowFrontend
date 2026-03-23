@@ -1,11 +1,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
-import { WorkflowInstance, WorkflowStatus } from '../../types/types';
+import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw, FileText } from 'lucide-react';
+import { WorkflowInstance } from '../../types/types';
 import { api } from '../../api/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
-export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDetail: (id: string) => void }> = ({ projectId, onNavigateToDetail }) => {
+export const WorkflowInstancePage: React.FC<{
+  projectId: string;
+  onNavigateToDetail: (id: string) => void;
+  onNavigateToLogs: (id: string) => void;
+}> = ({ projectId, onNavigateToDetail, onNavigateToLogs }) => {
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -298,6 +302,9 @@ export const WorkflowInstancePage: React.FC<{ projectId: string, onNavigateToDet
                 </td>
                 <td className="px-8 py-6 text-right">
                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onClick={() => onNavigateToLogs(instance.id)} title="查看日志" className="p-3 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-600 hover:text-white transition-all">
+                      <FileText size={16} />
+                    </button>
                     <button onClick={() => onNavigateToDetail(instance.id)} title="查看详情" className="p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all">
                       <Search size={16} />
                     </button>

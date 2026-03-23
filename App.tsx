@@ -32,6 +32,7 @@ import { ServiceTerminalWindowPage } from './pages/env/ServiceTerminalWindowPage
 // Workflow Pages
 import { WorkflowInstancePage } from './pages/workflow/WorkflowInstancePage';
 import { WorkflowInstanceDetailPage } from './pages/workflow/WorkflowInstanceDetailPage';
+import { WorkflowInstanceLogsPage } from './pages/workflow/WorkflowInstanceLogsPage';
 import { JobTemplatePage } from './pages/workflow/JobTemplatePage';
 import { JobTemplateDetailPage } from './pages/workflow/JobTemplateDetailPage';
 import { AppTemplatePage } from './pages/workflow/AppTemplatePage';
@@ -63,7 +64,7 @@ const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'workflow-apps', 'workflow-app-detail',
   'workflow-app-instances', 'workflow-app-instance-detail',
   'workflow-jobs', 'workflow-job-detail',
-  'workflow-instances', 'workflow-instance-detail',
+  'workflow-instances', 'workflow-instance-detail', 'workflow-instance-logs',
   'engine-validation',
   'pentest-risk', 'pentest-system', 'pentest-threat', 'pentest-orch',
   'pentest-exec-code', 'pentest-exec-work', 'pentest-exec-secmate',
@@ -353,8 +354,9 @@ const App: React.FC = () => {
       case 'env-tasks': return <EnvTasksPage projectId={selectedProjectId} />;
 
       // Workflow Management
-      case 'workflow-instances': return <WorkflowInstancePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveInstanceId(id); setCurrentView('workflow-instance-detail'); }} />;
+      case 'workflow-instances': return <WorkflowInstancePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveInstanceId(id); setCurrentView('workflow-instance-detail'); }} onNavigateToLogs={(id) => { setActiveInstanceId(id); setCurrentView('workflow-instance-logs'); }} />;
       case 'workflow-instance-detail': return <WorkflowInstanceDetailPage instanceId={activeInstanceId} onBack={() => setCurrentView('workflow-instances')} />;
+      case 'workflow-instance-logs': return <WorkflowInstanceLogsPage instanceId={activeInstanceId} onBack={() => setCurrentView('workflow-instances')} />;
       case 'workflow-jobs': return <JobTemplatePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveJobTemplateId(id); setCurrentView('workflow-job-detail'); }} />;
       case 'workflow-job-detail': return <JobTemplateDetailPage templateId={activeJobTemplateId} onBack={() => setCurrentView('workflow-jobs')} />;
       case 'workflow-apps': return <AppTemplatePage projectId={selectedProjectId} onNavigateToDetail={(id) => { setActiveAppTemplateId(id); setCurrentView('workflow-app-detail'); }} />;

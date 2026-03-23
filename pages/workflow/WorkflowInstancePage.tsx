@@ -347,7 +347,7 @@ export const WorkflowInstancePage: React.FC<{
                       </button>
                     )}
 
-                    {['unready', 'ready'].includes((instance.status || '').toLowerCase()) && instance.run_mode === 'persistent' && instance.is_active && (
+                    {['unready', 'ready'].includes((instance.status || '').toLowerCase()) && (instance.run_mode === 'once' || instance.is_active) && (
                       <button onClick={async () => {
                         try {
                           await api.workflow.triggerInstance(instance.id);

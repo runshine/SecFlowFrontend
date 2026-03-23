@@ -151,7 +151,7 @@ export const workflowApi = {
     return handleResponse(response);
   },
   triggerInstance: async (id: string) => {
-    const response = await fetch(`${API_BASE}/api/workflow/trigger/${id}`, { method: 'POST', headers: getHeaders() });
+    const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${id}/trigger`, { method: 'POST', headers: getHeaders() });
     return handleResponse(response);
   },
   // --- Workflow Nodes & Edges ---

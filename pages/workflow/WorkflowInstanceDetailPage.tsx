@@ -1368,7 +1368,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                 </button>
               )}
 
-              {['unready', 'ready'].includes(workflowStatus) && instance?.run_mode === 'persistent' && instance?.is_active && (
+              {['unready', 'ready'].includes(workflowStatus) && (instance?.run_mode === 'once' || instance?.is_active) && (
                 <button
                   onClick={async () => {
                     try {

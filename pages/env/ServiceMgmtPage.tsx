@@ -583,11 +583,16 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
     if (!svc.agent_key || !projectId) return;
     setIngressLoading(true);
     try {
-      const resp = await api.environment.listAgentIngressRoutes(svc.agent_key, projectId);
+      const resp = await api.environment.getGlobalIngress(projectId);
       const all = resp?.items || [];
       const filtered = all.filter((r: any) => {
-        const metaService = String(r?.metadata?.service_name || '').trim();
-        return metaService === svc.name || String(r?.service_name || '').includes(svc.name);
+        const metaService = String(
+          r?.metadata?.service_name ||
+          r?.metadata?.associated_service_name ||
+          r?.associated_service_name ||
+          ''
+        ).trim();
+        return metaService === svc.name;
       });
       setIngressRoutes(filtered);
     } catch {
@@ -644,7 +649,7 @@ export const ServiceMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) 
 
     setIngressCreating(true);
     try {
-      await api.environment.deleteAgentIngressRoute(selectedService.agent_key, routeId, projectId);
+      await api.environment.deleteGlobalIngressBatch(projectId, [routeId]);
       notify('转发路由已删除', 'success');
       await loadIngressRoutesForService(selectedService);
       await loadGlobalIngress();

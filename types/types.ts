@@ -20,7 +20,7 @@ export interface UserInfo {
 // --- Workflow Service Types ---
 
 export type WorkflowStatus = 'pending' | 'unready' | 'ready' | 'running' | 'succeeded' | 'failed' | 'stopped';
-export type AppWorkflowStatus = 'pending' | 'initializing' | 'initialized' | 'running' | 'succeeded' | 'failed' | 'stopped';
+export type AppWorkflowStatus = 'pending' | 'unready' | 'ready';
 export type AppNodeStatus = 'pending' | 'not_ready' | 'ready' | 'stopped' | 'failed';
 export type TemplateScope = 'global' | 'project';
 export type NodeType = 'app' | 'job';
@@ -212,11 +212,20 @@ export interface AppWorkflowNode {
   template_id: string;
   status: AppNodeStatus;
   k8s_resource_name?: string;
+  k8s_resource_type?: string;
   service_name?: string;
   message?: string;
   env_vars?: Array<{ name: string; value: string }>;
   volume_mounts?: VolumeMount[];
   resources?: ResourceRequirements;
+  timeout_seconds?: number;
+  create_service?: boolean;
+  service_ports?: ServicePort[];
+  service_type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+  create_ingress?: boolean;
+  ingress_type?: string;
+  ingress_host?: string;
+  ingress_ip?: string;
   started_at?: string;
   finished_at?: string;
   created_at: string;
@@ -240,6 +249,8 @@ export interface AppWorkflow {
   env_vars?: Array<{ name: string; value: string }>;
   volume_mounts?: VolumeMount[];
   resources?: ResourceRequirements;
+  create_service?: boolean;
+  create_ingress?: boolean;
   ingress_type?: string;
   ingress_host?: string;
   ingress_ip?: string;
@@ -260,6 +271,71 @@ export interface AppWorkflowLogs {
   logs: string;
   container?: string;
   previous: boolean;
+}
+
+export interface DomainBindingRecord {
+  id: string;
+  instance_id: string;
+  node_instance_id: string;
+  node_id: string;
+  project_id: string;
+  service_name?: string;
+  ingress_name?: string;
+  ingress_type?: string;
+  domain: string;
+  ingress_ip?: string;
+  service_port?: number;
+  target_port?: number;
+  binding_status: string;
+  message?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ServiceAccessInfo {
+  name?: string;
+  type?: string;
+  namespace?: string;
+  cluster_ip?: string;
+  ports?: Array<{
+    name?: string;
+    protocol?: string;
+    port?: number;
+    target_port?: number;
+    node_port?: number;
+  }>;
+  access_urls?: Array<{
+    type: string;
+    url: string;
+    port?: number;
+    host?: string;
+    path?: string;
+    selected_ip?: string;
+    ingress_name?: string;
+    source?: string;
+  }>;
+  ingress_accesses?: Array<{
+    ingress_name?: string;
+    ingress_class_name?: string;
+    host?: string;
+    path?: string;
+    path_type?: string;
+    service_name?: string;
+    service_port?: number;
+    selected_ip?: string;
+    url?: string;
+    source?: string;
+  }>;
+  configured_ingress?: {
+    create_ingress?: boolean;
+    ingress_type?: string;
+    ingress_host?: string;
+    ingress_ip?: string;
+  };
+  domain_bindings?: DomainBindingRecord[];
+  node_id?: string;
+  node_name?: string;
+  error?: string;
 }
 
 export interface WorkflowInstanceStoredLogPayload {

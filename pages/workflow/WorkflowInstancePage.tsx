@@ -13,6 +13,7 @@ export const WorkflowInstancePage: React.FC<{
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   
   // Pagination
   const [page, setPage] = useState(1);
@@ -47,12 +48,14 @@ export const WorkflowInstancePage: React.FC<{
       const interval = setInterval(() => loadInstances(), 10000);
       return () => clearInterval(interval);
     }
-  }, [projectId]);
+  }, [projectId, statusFilter]);
 
   const loadInstances = async () => {
     try {
+      setLoading(true);
       const res = await api.workflow.listInstances({
-        project_id: projectId
+        project_id: projectId,
+        status: statusFilter || undefined
       });
       setInstances((res as any).item || (res as any).items || []);
     } catch (e) {
@@ -229,13 +232,28 @@ export const WorkflowInstancePage: React.FC<{
         </div>
       </div>
 
-      <div className="relative">
+      <div className="flex gap-4">
+        <div className="relative flex-1">
         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
         <input 
           type="text" placeholder="搜索实例名称或 ID..." 
           className="w-full pl-16 pr-8 py-5 bg-white border border-slate-200 rounded-[2rem] text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
           value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
         />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={e => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className="px-5 py-5 bg-white border border-slate-200 rounded-[2rem] text-sm font-medium outline-none focus:ring-4 ring-blue-500/5 transition-all shadow-sm"
+        >
+          <option value="">全部状态</option>
+          <option value="pending">待初始化</option>
+          <option value="unready">未就绪</option>
+          <option value="ready">已就绪</option>
+        </select>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden min-h-[500px]">

@@ -1,6 +1,6 @@
 
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, AppWorkflow, AppWorkflowLogs, IngressController, WorkflowInstanceNodeLogListResponse } from '../types/types';
+import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, AppWorkflow, AppWorkflowLogs, IngressController, WorkflowInstanceNodeLogListResponse, ServiceAccessInfo, DomainBindingRecord } from '../types/types';
 
 export const workflowApi = {
   /**
@@ -90,7 +90,12 @@ export const workflowApi = {
 
   // --- Workflow Instances ---
   listInstances: async (params: { project_id?: string; status?: string; page?: number; page_size?: number } = {}): Promise<{ item: WorkflowInstance[]; total: number }> => {
-    const query = new URLSearchParams(params as any).toString();
+    const queryParams = new URLSearchParams();
+    if (params.project_id) queryParams.set('project_id', params.project_id);
+    if (params.status) queryParams.set('status', params.status);
+    if (params.page) queryParams.set('page', String(params.page));
+    if (params.page_size) queryParams.set('page_size', String(params.page_size));
+    const query = queryParams.toString();
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances?${query}`, { headers: getHeaders() });
     return handleResponse(response);
   },
@@ -232,7 +237,10 @@ export const workflowApi = {
 
   // --- App Workflows ---
   listAppWorkflows: async (params: { project_id?: string; status?: string } = {}): Promise<{ items: AppWorkflow[]; total: number }> => {
-    const query = new URLSearchParams(params as any).toString();
+    const queryParams = new URLSearchParams();
+    if (params.project_id) queryParams.set('project_id', params.project_id);
+    if (params.status) queryParams.set('status', params.status);
+    const query = queryParams.toString();
     const response = await fetch(`${API_BASE}/api/workflow/app-workflows?${query}`, { headers: getHeaders() });
     return handleResponse(response);
   },
@@ -256,8 +264,15 @@ export const workflowApi = {
     });
     return handleResponse(response);
   },
-  initializeAppWorkflow: async (id: string): Promise<any> => {
-    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/initialize`, {
+  initializeAppWorkflow: async (id: string, force: boolean = false): Promise<any> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/initialize?force=${force}`, {
+      method: 'POST',
+      headers: getHeaders()
+    });
+    return handleResponse(response);
+  },
+  uninitializeAppWorkflow: async (id: string): Promise<any> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/uninitialize`, {
       method: 'POST',
       headers: getHeaders()
     });
@@ -293,6 +308,29 @@ export const workflowApi = {
   },
   getAppWorkflowLogs: async (id: string): Promise<AppWorkflowLogs> => {
     const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/logs`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+  getAppWorkflowAccessInfo: async (id: string): Promise<ServiceAccessInfo> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/access-info`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+  listAppWorkflowDomainBindings: async (id: string): Promise<DomainBindingRecord[]> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/domain-bindings`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+  bindAppWorkflowIngress: async (id: string, payload: {
+    create_ingress?: boolean;
+    ingress_type: string;
+    ingress_host: string;
+    ingress_ip: string;
+    path?: string;
+    path_type?: string;
+  }): Promise<AppWorkflow> => {
+    const response = await fetch(`${API_BASE}/api/workflow/app-workflows/${id}/ingress-binding`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload)
+    });
     return handleResponse(response);
   }
 };

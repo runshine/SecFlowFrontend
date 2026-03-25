@@ -1,491 +1,389 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Loader2, Play, Square, RefreshCw, Power, AlertCircle, FileText, Settings, Terminal } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ExternalLink, Globe, Loader2, Play, Power, RefreshCw, RotateCcw, Square, AlertCircle, FileText } from 'lucide-react';
 import { api } from '../../api/api';
-import { AppWorkflow, AppWorkflowStatus } from '../../types/types';
+import { AppWorkflow, AppWorkflowStatus, DomainBindingRecord, IngressController, ServiceAccessInfo } from '../../types/types';
+import { StatusBadge } from '../../components/StatusBadge';
+
+type DetailTab = 'overview' | 'config' | 'access' | 'logs';
 
 export const AppInstanceDetailPage: React.FC<{
-  instanceId: string,
-  onBack: () => void
+  instanceId: string;
+  onBack: () => void;
 }> = ({ instanceId, onBack }) => {
   const [instance, setInstance] = useState<AppWorkflow | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'config' | 'logs'>('info');
-  const [logs, setLogs] = useState<string>('');
-  const [isOperating, setIsOperating] = useState(false);
-  const [isOperatingForce, setIsOperatingForce] = useState(false);
+  const [activeTab, setActiveTab] = useState<DetailTab>('overview');
+  const [logs, setLogs] = useState('');
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [accessInfo, setAccessInfo] = useState<ServiceAccessInfo | null>(null);
+  const [domainBindings, setDomainBindings] = useState<DomainBindingRecord[]>([]);
+  const [loadingAccess, setLoadingAccess] = useState(false);
+  const [controllers, setControllers] = useState<IngressController[]>([]);
+  const [savingBinding, setSavingBinding] = useState(false);
+  const [operation, setOperation] = useState('');
+  const [bindingForm, setBindingForm] = useState({
+    ingress_type: 'nginx',
+    ingress_host: '',
+    ingress_ip: ''
+  });
 
   useEffect(() => {
     loadInstance();
   }, [instanceId]);
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      loadLogs();
+    }
+    if (activeTab === 'access') {
+      loadAccessData();
+    }
+  }, [activeTab, instanceId]);
 
   const loadInstance = async () => {
     setLoading(true);
     try {
       const data = await api.workflow.getAppWorkflow(instanceId);
       setInstance(data);
+      setBindingForm((current) => ({
+        ingress_type: data.ingress_type || current.ingress_type || 'nginx',
+        ingress_host: data.ingress_host || current.ingress_host,
+        ingress_ip: data.ingress_ip || current.ingress_ip
+      }));
     } catch (error) {
       console.error('Failed to load app workflow:', error);
+      setInstance(null);
     } finally {
       setLoading(false);
     }
   };
 
-  // 操作函数
-  const handleInitialize = async (force = false) => {
-    setIsOperating(true);
-    if (force) setIsOperatingForce(true);
-    try {
-      await api.workflow.initializeAppWorkflow(instanceId);
-      await loadInstance();
-    } catch (error: any) {
-      alert(`初始化失败: ${error.message}`);
-    } finally {
-      setIsOperating(false);
-      setIsOperatingForce(false);
-    }
-  };
-
-  const handleStart = async () => {
-    setIsOperating(true);
-    try {
-      await api.workflow.startAppWorkflow(instanceId);
-      await loadInstance();
-    } catch (error: any) {
-      alert(`启动失败: ${error.message}`);
-    } finally {
-      setIsOperating(false);
-    }
-  };
-
-  const handleStop = async () => {
-    setIsOperating(true);
-    try {
-      await api.workflow.stopAppWorkflow(instanceId);
-      await loadInstance();
-    } catch (error: any) {
-      alert(`停止失败: ${error.message}`);
-    } finally {
-      setIsOperating(false);
-    }
-  };
-
-  const handleSyncStatus = async () => {
-    setIsOperating(true);
-    try {
-      await api.workflow.syncAppWorkflowStatus(instanceId);
-      await loadInstance();
-    } catch (error: any) {
-      alert(`同步状态失败: ${error.message}`);
-    } finally {
-      setIsOperating(false);
-    }
-  };
-
   const loadLogs = async () => {
+    setLoadingLogs(true);
     try {
       const data = await api.workflow.getAppWorkflowLogs(instanceId);
       setLogs(data.logs || '暂无日志');
     } catch (error: any) {
-      setLogs(`加载日志失败: ${error.message}`);
+      setLogs(`日志加载失败: ${error.message}`);
+    } finally {
+      setLoadingLogs(false);
     }
   };
 
-  // 根据状态判断可用操作
-  const getAvailableActions = () => {
+  const loadAccessData = async () => {
+    setLoadingAccess(true);
+    try {
+      const [access, bindings, ingressControllers] = await Promise.all([
+        api.workflow.getAppWorkflowAccessInfo(instanceId),
+        api.workflow.listAppWorkflowDomainBindings(instanceId),
+        api.workflow.getIngressControllers()
+      ]);
+      setAccessInfo(access);
+      setDomainBindings(bindings);
+      setControllers(ingressControllers.controllers || []);
+      setBindingForm((current) => ({
+        ingress_type: access.configured_ingress?.ingress_type || current.ingress_type || ingressControllers.controllers?.[0]?.ingress_class || 'nginx',
+        ingress_host: access.configured_ingress?.ingress_host || current.ingress_host,
+        ingress_ip: access.configured_ingress?.ingress_ip || current.ingress_ip || ingressControllers.controllers?.[0]?.external_ip || ''
+      }));
+    } catch (error) {
+      console.error('Failed to load access info:', error);
+      setAccessInfo(null);
+      setDomainBindings([]);
+      setControllers([]);
+    } finally {
+      setLoadingAccess(false);
+    }
+  };
+
+  const runOperation = async (label: string, action: () => Promise<any>) => {
+    setOperation(label);
+    try {
+      await action();
+      await loadInstance();
+      if (activeTab === 'access') {
+        await loadAccessData();
+      }
+    } catch (error: any) {
+      alert(`${label}失败: ${error.message}`);
+    } finally {
+      setOperation('');
+    }
+  };
+
+  const handleSaveBinding = async () => {
+    if (!bindingForm.ingress_host.trim() || !bindingForm.ingress_ip.trim()) {
+      alert('请填写完整的域名和 Ingress IP');
+      return;
+    }
+    setSavingBinding(true);
+    try {
+      await api.workflow.bindAppWorkflowIngress(instanceId, {
+        create_ingress: true,
+        ingress_type: bindingForm.ingress_type,
+        ingress_host: bindingForm.ingress_host.trim(),
+        ingress_ip: bindingForm.ingress_ip.trim()
+      });
+      await loadInstance();
+      await loadAccessData();
+    } catch (error: any) {
+      alert(`保存域名绑定失败: ${error.message}`);
+    } finally {
+      setSavingBinding(false);
+    }
+  };
+
+  const getAvailableActions = (status?: AppWorkflowStatus) => {
+    if (!status) return [];
+    if (status === 'pending') return ['initialize'];
+    if (status === 'unready' || status === 'ready') return ['start', 'stop', 'sync', 'rebuild'];
+    return [];
+  };
+
+  const tabs: Array<{ id: DetailTab; label: string }> = [
+    { id: 'overview', label: '概览' },
+    { id: 'config', label: '配置' },
+    { id: 'access', label: '访问' },
+    { id: 'logs', label: '日志' }
+  ];
+
+  const accessCards = useMemo(() => {
     if (!instance) return [];
-    const actions: string[] = [];
-    switch (instance.status) {
-      case 'pending':
-        actions.push('initialize');
-        break;
-      case 'initialized':
-        actions.push('start', 'stop', 'initialize_force');
-        break;
-      case 'running':
-        actions.push('stop', 'sync');
-        break;
-      case 'stopped':
-        actions.push('start', 'initialize_force');
-        break;
-      case 'failed':
-        actions.push('initialize_force', 'sync');
-        break;
-    }
-    return actions;
-  };
-
-  // 状态颜色映射
-  const getStatusColor = (status: AppWorkflowStatus) => {
-    const colors = {
-      pending: 'bg-gray-100 text-gray-700',
-      initializing: 'bg-blue-100 text-blue-700',
-      initialized: 'bg-indigo-100 text-indigo-700',
-      running: 'bg-green-100 text-green-700',
-      succeeded: 'bg-emerald-100 text-emerald-700',
-      failed: 'bg-red-100 text-red-700',
-      stopped: 'bg-yellow-100 text-yellow-700'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-700';
-  };
-
-  const getStatusText = (status: AppWorkflowStatus) => {
-    const texts = {
-      pending: '待初始化',
-      initializing: '初始化中',
-      initialized: '已初始化',
-      running: '运行中',
-      succeeded: '执行成功',
-      failed: '执行失败',
-      stopped: '已停止'
-    };
-    return texts[status] || status;
-  };
-
-  const getNodeStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: 'bg-gray-100 text-gray-700',
-      not_ready: 'bg-yellow-100 text-yellow-700',
-      ready: 'bg-green-100 text-green-700',
-      stopped: 'bg-slate-100 text-slate-700',
-      failed: 'bg-red-100 text-red-700'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-700';
-  };
-
-  const getNodeStatusText = (status: string) => {
-    const texts: Record<string, string> = {
-      pending: 'Pod未运行',
-      not_ready: 'Pod未就绪',
-      ready: 'Pod已就绪',
-      stopped: '已停止',
-      failed: '执行失败'
-    };
-    return texts[status] || status;
-  };
-
-  // 自动加载日志
-  useEffect(() => {
-    if (activeTab === 'logs' && instance) {
-      loadLogs();
-    }
-  }, [activeTab, instance]);
+    return [
+      { label: 'Service', value: accessInfo?.name || instance.service_name || '-' },
+      { label: '类型', value: accessInfo?.type || instance.service_type || '-' },
+      { label: '命名空间', value: accessInfo?.namespace || `secflow-${instance.project_id}` },
+      { label: '域名', value: instance.ingress_host || '-' }
+    ];
+  }, [accessInfo, instance]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
-      </div>
-    );
+    return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   }
 
   if (!instance) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen">
-        <AlertCircle className="text-red-400 mb-4" size={64} />
-        <p className="text-slate-600 font-medium">应用实例不存在</p>
-        <button
-          onClick={onBack}
-          className="mt-4 px-6 py-3 text-blue-600 hover:text-blue-700 font-medium"
-        >
-          返回列表
-        </button>
+      <div className="flex h-screen flex-col items-center justify-center">
+        <AlertCircle className="mb-4 text-red-400" size={64} />
+        <p className="font-medium text-slate-600">应用实例不存在</p>
+        <button onClick={onBack} className="mt-4 px-6 py-3 font-medium text-blue-600 hover:text-blue-700">返回列表</button>
       </div>
     );
   }
 
-  const availableActions = getAvailableActions();
+  const actions = getAvailableActions(instance.status);
+  const primaryPort = instance.service_ports?.[0]?.port;
 
   return (
     <div className="p-8">
-      {/* 页面标题和操作栏 */}
       <div className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
-          >
-            <ArrowLeft size={20} />
-          </button>
+          <button onClick={onBack} className="rounded-xl p-2 transition-colors hover:bg-slate-100"><ArrowLeft size={20} /></button>
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">{instance.name}</h1>
-            <p className="text-sm text-slate-500 mt-1">{instance.description || '暂无描述'}</p>
+            <h1 className="text-3xl font-black text-slate-900">{instance.name}</h1>
+            <p className="mt-1 text-sm text-slate-500">{instance.description || '暂无描述'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* 操作按钮 */}
-          {availableActions.includes('initialize') && (
-            <button
-              onClick={() => handleInitialize(false)}
-              disabled={isOperating}
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {isOperating && !isOperatingForce ? <Loader2 className="animate-spin" size={16} /> : <Power size={16} />}
-              初始化
-            </button>
-          )}
-          {availableActions.includes('start') && (
-            <button
-              onClick={handleStart}
-              disabled={isOperating}
-              className="px-5 py-2.5 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-500/20 hover:bg-green-500 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {isOperating ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}
-              启动
-            </button>
-          )}
-          {availableActions.includes('stop') && (
-            <button
-              onClick={handleStop}
-              disabled={isOperating}
-              className="px-5 py-2.5 bg-orange-600 text-white rounded-xl font-bold shadow-lg shadow-orange-500/20 hover:bg-orange-500 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {isOperating ? <Loader2 className="animate-spin" size={16} /> : <Square size={16} />}
-              停止
-            </button>
-          )}
-          {availableActions.includes('sync') && (
-            <button
-              onClick={handleSyncStatus}
-              disabled={isOperating}
-              className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold shadow-lg shadow-purple-500/20 hover:bg-purple-500 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {isOperating ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-              同步状态
-            </button>
-          )}
-          {availableActions.includes('initialize_force') && (
-            <button
-              onClick={() => handleInitialize(true)}
-              disabled={isOperating}
-              className="px-5 py-2.5 bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-500/20 hover:bg-red-500 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {isOperating && isOperatingForce ? <Loader2 className="animate-spin" size={16} /> : <Power size={16} />}
-              强制重新初始化
-            </button>
-          )}
+          {actions.includes('initialize') && <button onClick={() => runOperation('初始化', () => api.workflow.initializeAppWorkflow(instanceId, false))} disabled={!!operation} className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white hover:bg-blue-500 disabled:opacity-50">{operation === '初始化' ? <Loader2 className="animate-spin" size={16} /> : <Power size={16} />}初始化</button>}
+          {actions.includes('start') && <button onClick={() => runOperation('启动', () => api.workflow.startAppWorkflow(instanceId))} disabled={!!operation} className="flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 font-bold text-white hover:bg-green-500 disabled:opacity-50">{operation === '启动' ? <Loader2 className="animate-spin" size={16} /> : <Play size={16} />}启动</button>}
+          {actions.includes('stop') && <button onClick={() => runOperation('停止', () => api.workflow.stopAppWorkflow(instanceId))} disabled={!!operation} className="flex items-center gap-2 rounded-xl bg-orange-600 px-5 py-2.5 font-bold text-white hover:bg-orange-500 disabled:opacity-50">{operation === '停止' ? <Loader2 className="animate-spin" size={16} /> : <Square size={16} />}停止</button>}
+          {actions.includes('sync') && <button onClick={() => runOperation('同步状态', () => api.workflow.syncAppWorkflowStatus(instanceId))} disabled={!!operation} className="flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 font-bold text-white hover:bg-purple-500 disabled:opacity-50">{operation === '同步状态' ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}同步状态</button>}
+          {actions.includes('rebuild') && <button onClick={() => runOperation('强制重建', () => api.workflow.initializeAppWorkflow(instanceId, true))} disabled={!!operation} className="flex items-center gap-2 rounded-xl bg-amber-600 px-5 py-2.5 font-bold text-white hover:bg-amber-500 disabled:opacity-50">{operation === '强制重建' ? <Loader2 className="animate-spin" size={16} /> : <RotateCcw size={16} />}强制重建</button>}
         </div>
       </div>
 
-      {/* 状态和基本信息卡片 */}
-      <div className="mb-8 grid grid-cols-4 gap-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div className="text-xs font-black text-slate-500 uppercase mb-2">实例状态</div>
-          <span className={`inline-block px-4 py-2 rounded-xl text-sm font-bold ${getStatusColor(instance.status)}`}>
-            {getStatusText(instance.status)}
-          </span>
+      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-2 text-xs font-black uppercase text-slate-500">实例状态</div>
+          <StatusBadge status={instance.status} />
         </div>
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div className="text-xs font-black text-slate-500 uppercase mb-2">应用模板</div>
-          <div className="text-sm font-bold text-slate-900">{instance.template_name}</div>
-          <div className="text-xs text-slate-400 mt-1">{instance.template_id}</div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-2 text-xs font-black uppercase text-slate-500">节点状态</div>
+          <StatusBadge status={instance.node.status} />
         </div>
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div className="text-xs font-black text-slate-500 uppercase mb-2">K8s Service</div>
-          <div className="text-sm font-bold text-slate-900">{instance.service_name}</div>
-          <div className="text-xs text-slate-400 mt-1">{instance.service_type || 'ClusterIP'}</div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-2 text-xs font-black uppercase text-slate-500">应用模板</div>
+          <div className="font-bold text-slate-900">{instance.template_name || '-'}</div>
         </div>
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-          <div className="text-xs font-black text-slate-500 uppercase mb-2">副本数</div>
-          <div className="text-2xl font-black text-slate-900">{instance.replicas || 1}</div>
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="mb-2 text-xs font-black uppercase text-slate-500">Service</div>
+          <div className="font-bold text-slate-900">{instance.service_name || '-'}</div>
         </div>
       </div>
 
-      {/* Tab 导航 */}
       <div className="mb-6 border-b border-slate-200">
         <div className="flex items-center gap-8">
-          <button
-            onClick={() => setActiveTab('info')}
-            className={`pb-4 text-sm font-bold transition-colors border-b-2 ${
-              activeTab === 'info'
-                ? 'text-blue-600 border-blue-600'
-                : 'text-slate-400 border-transparent hover:text-slate-600'
-            }`}
-          >
-            基本信息
-          </button>
-          <button
-            onClick={() => setActiveTab('config')}
-            className={`pb-4 text-sm font-bold transition-colors border-b-2 ${
-              activeTab === 'config'
-                ? 'text-blue-600 border-blue-600'
-                : 'text-slate-400 border-transparent hover:text-slate-600'
-            }`}
-          >
-            配置详情
-          </button>
-          <button
-            onClick={() => setActiveTab('logs')}
-            className={`pb-4 text-sm font-bold transition-colors border-b-2 ${
-              activeTab === 'logs'
-                ? 'text-blue-600 border-blue-600'
-                : 'text-slate-400 border-transparent hover:text-slate-600'
-            }`}
-          >
-            运行日志
-          </button>
+          {tabs.map((tab) => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`border-b-2 pb-4 text-sm font-bold transition-colors ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Tab 内容 */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
-        {activeTab === 'info' && (
+      <div className="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm">
+        {activeTab === 'overview' && (
           <div className="space-y-8">
-            {/* 基本信息 */}
-            <div>
-              <h3 className="text-lg font-black text-slate-900 mb-4">实例信息</h3>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <div className="text-xs font-black text-slate-500 uppercase mb-2">实例 ID</div>
-                  <div className="text-sm text-slate-900 font-mono">{instance.id}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-black text-slate-500 uppercase mb-2">创建时间</div>
-                  <div className="text-sm text-slate-900">{new Date(instance.created_at).toLocaleString('zh-CN')}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-black text-slate-500 uppercase mb-2">项目 ID</div>
-                  <div className="text-sm text-slate-900 font-mono">{instance.project_id}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-black text-slate-500 uppercase mb-2">工作流类型</div>
-                  <div className="text-sm text-slate-900">{instance.workflow_type}</div>
-                </div>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <div className="mb-2 text-xs font-black uppercase text-slate-500">实例 ID</div>
+                <div className="font-mono text-sm text-slate-900">{instance.id}</div>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-black uppercase text-slate-500">创建时间</div>
+                <div className="text-sm text-slate-900">{new Date(instance.created_at).toLocaleString('zh-CN')}</div>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-black uppercase text-slate-500">项目 ID</div>
+                <div className="font-mono text-sm text-slate-900">{instance.project_id}</div>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-black uppercase text-slate-500">工作流类型</div>
+                <div className="text-sm text-slate-900">{instance.workflow_type}</div>
               </div>
             </div>
-
-            {/* 节点信息 */}
-            <div>
-              <h3 className="text-lg font-black text-slate-900 mb-4">节点状态</h3>
-              <div className="bg-slate-50 rounded-2xl p-6 space-y-4">
-                <div className="grid grid-cols-3 gap-6">
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase mb-2">节点名称</div>
-                    <div className="text-sm text-slate-900">{instance.node.name}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase mb-2">节点状态</div>
-                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${getNodeStatusColor(instance.node.status)}`}>
-                      {getNodeStatusText(instance.node.status)}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase mb-2">K8s 资源</div>
-                    <div className="text-sm text-slate-900 font-mono">
-                      {instance.node.k8s_resource_name || '-'}
-                    </div>
-                  </div>
-                </div>
-                {instance.node.message && (
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase mb-2">消息</div>
-                    <div className="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-xl">
-                      {instance.node.message}
-                    </div>
-                  </div>
-                )}
+            <div className="rounded-2xl bg-slate-50 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-black text-slate-900">节点信息</h3>
+                <StatusBadge status={instance.node.status} />
               </div>
-            </div>
-
-            {/* 服务端口 */}
-            <div>
-              <h3 className="text-lg font-black text-slate-900 mb-4">服务端口</h3>
-              <div className="bg-slate-50 rounded-2xl p-6">
-                <div className="grid grid-cols-4 gap-4 mb-2">
-                  <div className="text-xs font-black text-slate-500 uppercase">端口名称</div>
-                  <div className="text-xs font-black text-slate-500 uppercase">Service 端口</div>
-                  <div className="text-xs font-black text-slate-500 uppercase">容器端口</div>
-                  <div className="text-xs font-black text-slate-500 uppercase">协议</div>
-                </div>
-                {instance.service_ports.map((port, idx) => (
-                  <div key={idx} className="grid grid-cols-4 gap-4 py-2 border-t border-slate-200">
-                    <div className="text-sm text-slate-900">{port.name}</div>
-                    <div className="text-sm text-slate-900">{port.port}</div>
-                    <div className="text-sm text-slate-900">{port.target_port}</div>
-                    <div className="text-sm text-slate-900">{port.protocol || 'TCP'}</div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div><div className="mb-1 text-xs text-slate-400">节点名称</div><div className="font-bold text-slate-800">{instance.node.name}</div></div>
+                <div><div className="mb-1 text-xs text-slate-400">资源类型</div><div className="font-bold text-slate-800">{instance.node.k8s_resource_type || '-'}</div></div>
+                <div><div className="mb-1 text-xs text-slate-400">资源名称</div><div className="font-mono text-sm text-slate-800">{instance.node.k8s_resource_name || '-'}</div></div>
               </div>
+              {instance.node.message && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{instance.node.message}</div>}
+              {instance.node.init_logs && <div className="mt-4"><div className="mb-2 text-xs font-black uppercase text-slate-500">初始化日志摘要</div><pre className="max-h-64 overflow-auto rounded-2xl bg-slate-900 p-4 text-xs text-green-400 whitespace-pre-wrap">{instance.node.init_logs}</pre></div>}
             </div>
           </div>
         )}
 
         {activeTab === 'config' && (
           <div className="space-y-8">
-            {/* 环境变量 */}
             <div>
-              <h3 className="text-lg font-black text-slate-900 mb-4">环境变量</h3>
-              {instance.env_vars && instance.env_vars.length > 0 ? (
-                <div className="bg-slate-50 rounded-2xl p-6">
-                  {instance.env_vars.map((env, idx) => (
-                    <div key={idx} className="py-2 flex items-center justify-between border-t border-slate-200 first:border-t-0">
-                      <div className="text-sm font-mono text-slate-900">{env.name}</div>
-                      <div className="text-sm text-slate-600">{env.value}</div>
+              <h3 className="mb-4 text-lg font-black text-slate-900">Service 端口</h3>
+              <div className="rounded-2xl bg-slate-50 p-6">
+                {instance.service_ports?.length ? instance.service_ports.map((port, index) => (
+                  <div key={`${port.name}-${index}`} className="grid grid-cols-4 gap-4 border-t border-slate-200 py-2 first:border-t-0">
+                    <div className="text-sm text-slate-900">{port.name}</div>
+                    <div className="text-sm text-slate-900">{port.port}</div>
+                    <div className="text-sm text-slate-900">{port.target_port}</div>
+                    <div className="text-sm text-slate-900">{port.protocol || 'TCP'}</div>
+                  </div>
+                )) : <div className="text-sm text-slate-400">暂无端口配置</div>}
+              </div>
+            </div>
+            <div>
+              <h3 className="mb-4 text-lg font-black text-slate-900">环境变量</h3>
+              <div className="rounded-2xl bg-slate-50 p-6">
+                {instance.env_vars?.length ? instance.env_vars.map((env, index) => (
+                  <div key={`${env.name}-${index}`} className="flex items-center justify-between border-t border-slate-200 py-2 first:border-t-0">
+                    <div className="font-mono text-sm text-slate-900">{env.name}</div>
+                    <div className="text-sm text-slate-600">{env.value}</div>
+                  </div>
+                )) : <div className="text-sm text-slate-400">暂无环境变量</div>}
+              </div>
+            </div>
+            <div>
+              <h3 className="mb-4 text-lg font-black text-slate-900">卷挂载</h3>
+              <div className="rounded-2xl bg-slate-50 p-6">
+                {instance.volume_mounts?.length ? instance.volume_mounts.map((mount, index) => (
+                  <div key={`${mount.pvc_name}-${index}`} className="border-t border-slate-200 py-3 first:border-t-0">
+                    <div className="font-bold text-slate-900">{mount.pvc_name}</div>
+                    <div className="mt-1 text-xs text-slate-500">挂载路径：{mount.mount_path}</div>
+                  </div>
+                )) : <div className="text-sm text-slate-400">暂无卷挂载</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'access' && (
+          <div className="space-y-8">
+            {loadingAccess ? (
+              <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-blue-600" size={32} /></div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                  {accessCards.map((card) => (
+                    <div key={card.label} className="rounded-xl bg-slate-50 p-4">
+                      <div className="text-[10px] font-black uppercase text-slate-400">{card.label}</div>
+                      <div className="mt-1 break-all text-sm font-bold text-slate-800">{card.value}</div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-sm text-slate-400">无环境变量</div>
-              )}
-            </div>
-
-            {/* 卷挂载 */}
-            <div>
-              <h3 className="text-lg font-black text-slate-900 mb-4">卷挂载</h3>
-              {instance.volume_mounts && instance.volume_mounts.length > 0 ? (
-                <div className="bg-slate-50 rounded-2xl p-6">
-                  {instance.volume_mounts.map((vol, idx) => (
-                    <div key={idx} className="py-3 border-t border-slate-200 first:border-t-0">
-                      <div className="text-sm font-bold text-slate-900">{vol.pvc_name}</div>
-                      <div className="text-xs text-slate-500 mt-1">挂载路径: {vol.mount_path}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-slate-400">无卷挂载</div>
-              )}
-            </div>
-
-            {/* 资源配置 */}
-            <div>
-              <h3 className="text-lg font-black text-slate-900 mb-4">资源配置</h3>
-              {instance.resources ? (
-                <div className="bg-slate-50 rounded-2xl p-6 grid grid-cols-2 gap-6">
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase mb-2">请求资源</div>
-                    <div className="text-sm text-slate-900">
-                      CPU: {instance.resources.requests?.cpu || '-'} / 内存: {instance.resources.requests?.memory || '-'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-500 uppercase mb-2">资源限制</div>
-                    <div className="text-sm text-slate-900">
-                      CPU: {instance.resources.limits?.cpu || '-'} / 内存: {instance.resources.limits?.memory || '-'}
-                    </div>
+                <div>
+                  <h3 className="mb-4 text-lg font-black text-slate-900">访问方式</h3>
+                  <div className="space-y-3">
+                    {(accessInfo?.ingress_accesses || []).map((item, index) => (
+                      <div key={`ingress-${index}`} className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-bold text-slate-800">{item.host || '-'}</div>
+                          <Globe size={16} className="text-emerald-600" />
+                        </div>
+                        {item.url && <a href={item.url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-800">{item.url}<ExternalLink size={14} /></a>}
+                      </div>
+                    ))}
+                    {(accessInfo?.access_urls || []).map((item, index) => (
+                      <div key={`access-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-bold text-slate-800">{item.type}</div>
+                          {item.url && <a href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700">{item.url}<ExternalLink size={14} /></a>}
+                        </div>
+                        {primaryPort && item.type === 'ClusterIP' && instance.service_name && (
+                          <button onClick={() => window.open(api.k8s.proxyServiceUrl(instance.project_id, instance.service_name, item.port || primaryPort, item.path || '/'), '_blank')} className="mt-3 flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white hover:bg-cyan-700">
+                            <ExternalLink size={14} />
+                            通过代理访问
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {!(accessInfo?.ingress_accesses?.length || accessInfo?.access_urls?.length) && <div className="text-sm text-slate-400">当前没有可用的访问入口。</div>}
                   </div>
                 </div>
-              ) : (
-                <div className="text-sm text-slate-400">无资源配置</div>
-              )}
-            </div>
+                <div>
+                  <h3 className="mb-4 text-lg font-black text-slate-900">域名绑定</h3>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <select value={bindingForm.ingress_type} onChange={(event) => setBindingForm({ ...bindingForm, ingress_type: event.target.value, ingress_ip: controllers.find((item) => item.ingress_class === event.target.value)?.external_ip || bindingForm.ingress_ip })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500">
+                      {(controllers.length ? controllers : [{ ingress_class: 'nginx', name: 'nginx', namespace: '', type: '', external_ip: '', cluster_ip: '', ports: [] } as IngressController]).map((controller) => <option key={controller.name} value={controller.ingress_class}>{controller.ingress_class}</option>)}
+                    </select>
+                    <input value={bindingForm.ingress_host} onChange={(event) => setBindingForm({ ...bindingForm, ingress_host: event.target.value })} placeholder="demo.secflow.sothothv2.com" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                    <input value={bindingForm.ingress_ip} onChange={(event) => setBindingForm({ ...bindingForm, ingress_ip: event.target.value })} placeholder="Ingress IP" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" />
+                  </div>
+                  <button onClick={handleSaveBinding} disabled={savingBinding} className="mt-4 flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-500 disabled:opacity-50">{savingBinding ? <Loader2 className="animate-spin" size={16} /> : <Globe size={16} />}保存域名绑定</button>
+                  <div className="mt-4 space-y-3">
+                    {domainBindings.map((binding) => (
+                      <div key={binding.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="font-bold text-slate-800">{binding.domain}</div>
+                          <StatusBadge status={binding.binding_status} />
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">Ingress: {binding.ingress_name || '-'} | IP: {binding.ingress_ip || '-'}</div>
+                        {binding.message && <div className="mt-2 text-xs text-slate-500">{binding.message}</div>}
+                      </div>
+                    ))}
+                    {domainBindings.length === 0 && <div className="text-sm text-slate-400">暂无域名绑定记录。</div>}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {activeTab === 'logs' && (
           <div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">运行日志</h3>
-              <button
-                onClick={loadLogs}
-                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                刷新日志
-              </button>
+              <button onClick={loadLogs} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700"><FileText size={16} />刷新日志</button>
             </div>
-            <div className="bg-slate-900 rounded-2xl p-6 overflow-auto max-h-[600px]">
-              <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap">
-                {logs || '点击"刷新日志"加载日志内容'}
-              </pre>
-            </div>
+            {loadingLogs ? (
+              <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-blue-600" size={32} /></div>
+            ) : (
+              <div className="max-h-[600px] overflow-auto rounded-2xl bg-slate-900 p-6">
+                <pre className="whitespace-pre-wrap text-sm text-green-400">{logs || '暂无日志'}</pre>
+              </div>
+            )}
           </div>
         )}
       </div>

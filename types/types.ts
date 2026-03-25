@@ -195,6 +195,13 @@ export interface WorkflowNodeInstance {
   message?: string;
   input_env_vars?: any[];
   input_volume_mounts?: any[];
+  create_service?: boolean;
+  service_ports?: ServicePort[];
+  service_type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+  create_ingress?: boolean;
+  ingress_type?: string;
+  ingress_host?: string;
+  ingress_ip?: string;
   created_at: string;
 }
 

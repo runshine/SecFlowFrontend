@@ -171,6 +171,13 @@ export const workflowApi = {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes/${nodeId}`, { headers: getHeaders() });
     return handleResponse(response);
   },
+  getNodeAccessInfo: async (instanceId: string, nodeId: string) => {
+    const response = await fetch(
+      `${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes/${nodeId}/access-info`,
+      { headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
   updateNode: async (instanceId: string, nodeId: string, payload: any) => {
     const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/${instanceId}/nodes/${nodeId}`, {
       method: 'PUT',
@@ -212,6 +219,12 @@ export const workflowApi = {
   // --- Ingress Controllers ---
   getIngressControllers: async (): Promise<{ controllers: IngressController[] }> => {
     const response = await fetch(`${API_BASE}/api/workflow/app-workflows/ingress-controllers`, {
+      headers: getHeaders()
+    });
+    return handleResponse(response);
+  },
+  getNginxIngressIps: async (): Promise<{ items: IngressController[]; total: number }> => {
+    const response = await fetch(`${API_BASE}/api/workflow/workflow-instances/ingress-nginx-ips`, {
       headers: getHeaders()
     });
     return handleResponse(response);

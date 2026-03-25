@@ -90,12 +90,16 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     service_name: '',
     service_ports: [] as { name: string, port: number, target_port: number, protocol: string }[],
     service_type: 'ClusterIP' as 'ClusterIP' | 'NodePort' | 'LoadBalancer',
+    create_ingress: false,
     ingress_type: '' as '' | 'nginx',
     ingress_host: '',
+    ingress_ip: '',
     timeout_seconds: null as number | null
   });
   const [templates, setTemplates] = useState<{ id: string, name: string, type: 'app' | 'job' }[]>([]);
   const [pvcs, setPvcs] = useState<any[]>([]);
+  const [ingressControllers, setIngressControllers] = useState<any[]>([]);
+  const [loadingIngressControllers, setLoadingIngressControllers] = useState(false);
   
   // 访问服务相关状态
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
@@ -260,6 +264,19 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     }
   };
 
+  const loadIngressControllers = async () => {
+    try {
+      setLoadingIngressControllers(true);
+      const res = await api.workflow.getNginxIngressIps();
+      setIngressControllers(res.items || []);
+    } catch (e) {
+      console.error(e);
+      setIngressControllers([]);
+    } finally {
+      setLoadingIngressControllers(false);
+    }
+  };
+
   useEffect(() => {
     loadInstance();
     const interval = setInterval(() => {
@@ -275,6 +292,12 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
       loadTemplates();
     }
   }, [isAddNodeModalOpen]);
+
+  useEffect(() => {
+    if (isAddNodeModalOpen && selectedTemplate?.type === 'app') {
+      loadIngressControllers();
+    }
+  }, [isAddNodeModalOpen, selectedTemplate?.type]);
 
   const onConnect = useCallback((params: Connection) => {
     if (!isEditMode) return;
@@ -461,6 +484,10 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         service_name: template.type === 'app' ? autoServiceName : '',
         service_ports: template.type === 'app' ? servicePorts : [],
         service_type: 'ClusterIP',
+        create_ingress: false,
+        ingress_type: '',
+        ingress_host: '',
+        ingress_ip: '',
         timeout_seconds: null
       });
       
@@ -510,7 +537,21 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         return;
       }
     }
-    
+      if (newNodeConfig.create_ingress) {
+        if (newNodeConfig.ingress_type !== 'nginx') {
+          showToast("请选择 Nginx Ingress 类型", "warning");
+          return;
+        }
+        if (!newNodeConfig.ingress_ip) {
+          showToast("请选择 Ingress IP", "warning");
+          return;
+        }
+        if (!newNodeConfig.ingress_host || !newNodeConfig.ingress_host.trim()) {
+          showToast("请输入自定义域名", "warning");
+          return;
+        }
+      }
+
     try {
       setLoading(true);
       
@@ -518,7 +559,15 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         await api.workflow.updateNode(instanceId, editingNodeId, {
           name: newNodeConfig.name,
           env_vars: newNodeConfig.env_vars.filter(e => e.value),
-          volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name)
+          volume_mounts: newNodeConfig.volume_mounts.filter(v => v.pvc_name),
+          create_service: newNodeConfig.create_service,
+          service_name: newNodeConfig.create_service ? newNodeConfig.service_name : undefined,
+          service_ports: newNodeConfig.create_service ? newNodeConfig.service_ports : [],
+          service_type: newNodeConfig.create_service ? newNodeConfig.service_type : undefined,
+          create_ingress: newNodeConfig.create_service ? newNodeConfig.create_ingress : false,
+          ingress_type: newNodeConfig.create_service && newNodeConfig.create_ingress ? newNodeConfig.ingress_type : undefined,
+          ingress_host: newNodeConfig.create_service && newNodeConfig.create_ingress ? newNodeConfig.ingress_host : undefined,
+          ingress_ip: newNodeConfig.create_service && newNodeConfig.create_ingress ? newNodeConfig.ingress_ip : undefined
         });
         showToast("更新成功", "success");
       } else {
@@ -537,6 +586,12 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
             payload.service_name = newNodeConfig.service_name;
             payload.service_ports = newNodeConfig.service_ports;
             payload.service_type = newNodeConfig.service_type;
+            payload.create_ingress = newNodeConfig.create_ingress;
+            if (newNodeConfig.create_ingress) {
+              payload.ingress_type = newNodeConfig.ingress_type;
+              payload.ingress_host = newNodeConfig.ingress_host;
+              payload.ingress_ip = newNodeConfig.ingress_ip;
+            }
           }
         }
         
@@ -679,6 +734,10 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         service_name: nodeDetails.service_name || '',
         service_ports: nodeDetails.service_ports || [],
         service_type: nodeDetails.service_type || 'ClusterIP',
+        create_ingress: nodeDetails.create_ingress ?? Boolean(nodeDetails.ingress_type),
+        ingress_type: nodeDetails.ingress_type || '',
+        ingress_host: nodeDetails.ingress_host || '',
+        ingress_ip: nodeDetails.ingress_ip || '',
         timeout_seconds: nodeDetails.timeout_seconds || null
       });
       
@@ -1156,7 +1215,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
     setServiceAccessInfo(null);
     
     try {
-      const accessInfo = await api.k8s.getServiceAccess(instance.project_id, node.data.service_name);
+      const accessInfo = await api.workflow.getNodeAccessInfo(instanceId, nodeId);
       setServiceAccessInfo(accessInfo);
     } catch (e: any) {
       setServiceAccessInfo({ error: "获取访问信息失败: " + e.message });
@@ -1228,6 +1287,10 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         service_name: nodeDetails.service_name || '',
         service_ports: nodeDetails.service_ports || [],
         service_type: nodeDetails.service_type || 'ClusterIP',
+        create_ingress: nodeDetails.create_ingress ?? Boolean(nodeDetails.ingress_type),
+        ingress_type: nodeDetails.ingress_type || '',
+        ingress_host: nodeDetails.ingress_host || '',
+        ingress_ip: nodeDetails.ingress_ip || '',
         timeout_seconds: nodeDetails.timeout_seconds || null
       });
       
@@ -1994,7 +2057,14 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                           <input 
                             type="checkbox"
                             checked={newNodeConfig.create_service}
-                            onChange={e => setNewNodeConfig({...newNodeConfig, create_service: e.target.checked})}
+                            onChange={e => setNewNodeConfig({
+                              ...newNodeConfig,
+                              create_service: e.target.checked,
+                              create_ingress: e.target.checked ? newNodeConfig.create_ingress : false,
+                              ingress_type: e.target.checked ? newNodeConfig.ingress_type : '',
+                              ingress_host: e.target.checked ? newNodeConfig.ingress_host : '',
+                              ingress_ip: e.target.checked ? newNodeConfig.ingress_ip : ''
+                            })}
                             className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span className="text-xs font-bold text-indigo-700">创建 K8S Service</span>
@@ -2109,6 +2179,21 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                           {/* Ingress 配置 */}
                           <div className="space-y-2 pt-2 border-t border-indigo-100">
                             <div className="flex items-center justify-between">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={newNodeConfig.create_ingress}
+                                  onChange={e => setNewNodeConfig({
+                                    ...newNodeConfig,
+                                    create_ingress: e.target.checked,
+                                    ingress_type: e.target.checked ? 'nginx' : '',
+                                    ingress_host: e.target.checked ? newNodeConfig.ingress_host : '',
+                                    ingress_ip: e.target.checked ? newNodeConfig.ingress_ip : ''
+                                  })}
+                                  className="w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span className="text-xs font-bold text-indigo-700">创建 Ingress</span>
+                              </label>
                               <label className="text-[9px] font-black text-slate-500 uppercase">Ingress 配置</label>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -2117,7 +2202,8 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                                 <select
                                   className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg outline-none focus:border-indigo-500 text-sm font-bold text-slate-800"
                                   value={newNodeConfig.ingress_type}
-                                  onChange={e => setNewNodeConfig({...newNodeConfig, ingress_type: e.target.value as '' | 'nginx'})}
+                                  onChange={e => setNewNodeConfig({...newNodeConfig, ingress_type: e.target.value as '' | 'nginx', ingress_ip: ''})}
+                                  disabled={!newNodeConfig.create_ingress}
                                 >
                                   <option value="">不创建 Ingress</option>
                                   <option value="nginx">Nginx Ingress</option>
@@ -2131,17 +2217,36 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                                   value={newNodeConfig.ingress_host}
                                   onChange={e => setNewNodeConfig({...newNodeConfig, ingress_host: e.target.value})}
                                   placeholder="example.com"
-                                  disabled={!newNodeConfig.ingress_type}
+                                  disabled={!newNodeConfig.create_ingress}
                                 />
                               </div>
                             </div>
-                            {newNodeConfig.ingress_type && (
+                            {newNodeConfig.create_ingress && (
                               <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                  <span className="text-[9px] font-black text-emerald-700 uppercase">Ingress IP</span>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                    <span className="text-[9px] font-black text-emerald-700 uppercase">Ingress IP</span>
+                                  </div>
+                                  {loadingIngressControllers && <span className="text-[10px] font-bold text-emerald-700">加载中...</span>}
                                 </div>
-                                <div className="mt-1 text-sm font-mono font-bold text-emerald-800">172.31.30.101</div>
+                                <select
+                                  className="mt-2 w-full px-3 py-2 bg-white border border-emerald-200 rounded-lg outline-none focus:border-emerald-500 text-sm font-bold text-slate-800"
+                                  value={newNodeConfig.ingress_ip}
+                                  onChange={e => setNewNodeConfig({...newNodeConfig, ingress_ip: e.target.value})}
+                                >
+                                  <option value="">请选择 Ingress IP</option>
+                                  {ingressControllers.filter(controller => controller.external_ip).map((controller, idx) => (
+                                    <option key={`${controller.name}-${controller.external_ip}-${idx}`} value={controller.external_ip}>
+                                      {controller.external_ip} ({controller.name})
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="mt-2 text-sm font-mono font-bold text-emerald-800">
+                                  {newNodeConfig.ingress_ip && newNodeConfig.ingress_host
+                                    ? `${newNodeConfig.ingress_ip}  ${newNodeConfig.ingress_host}`
+                                    : '选择 IP 并输入域名后，这里会显示 hosts 绑定信息'}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -2619,7 +2724,32 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                   )}
                   
                   {/* 访问方式 */}
-                  {serviceAccessInfo.access_urls?.length > 0 && (
+                  {serviceAccessInfo.ingress_accesses?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase mb-3">域名访问</div>
+                      <div className="space-y-3">
+                        {serviceAccessInfo.ingress_accesses.map((item: any, i: number) => (
+                          <div key={i} className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-bold">
+                                {item.ingress_class_name || 'Ingress'}
+                              </span>
+                              <span className="text-xs text-slate-500">{item.ingress_name}</span>
+                            </div>
+                            <div className="font-mono text-sm text-slate-800 break-all">{item.host || '-'}</div>
+                            <div className="mt-2 text-xs text-slate-600">
+                              {item.selected_ip ? `hosts: ${item.selected_ip} ${item.host}` : '未记录所选 Ingress IP'}
+                            </div>
+                            {item.url && (
+                              <div className="mt-2 text-xs text-emerald-700 break-all">{item.url}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {serviceAccessInfo.ingress_accesses?.length === 0 && serviceAccessInfo.access_urls?.length > 0 && (
                     <div>
                       <div className="text-xs font-black text-slate-400 uppercase mb-3">访问方式</div>
                       <div className="space-y-3">
@@ -2649,6 +2779,16 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                   )}
                   
                   {/* 代理访问说明 */}
+                  {serviceAccessInfo.ingress_accesses?.length > 0 ? (
+                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <div className="text-xs font-black text-emerald-700 mb-2">域名访问说明</div>
+                      <ul className="text-xs text-emerald-700 space-y-1 list-disc list-inside">
+                        <li>优先使用上方已绑定的域名访问节点服务。</li>
+                        <li>请先在本机 `hosts` 文件中配置 `Ingress IP 域名` 的映射。</li>
+                        <li>配置完成后，可直接通过域名 URL 访问对应节点服务。</li>
+                      </ul>
+                    </div>
+                  ) : (
                   <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-100">
                     <div className="text-xs font-black text-yellow-700 mb-2">访问说明</div>
                     <ul className="text-xs text-yellow-700 space-y-1 list-disc list-inside">
@@ -2657,6 +2797,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
                       <li><strong>LoadBalancer</strong>: 通过外部负载均衡器IP访问</li>
                     </ul>
                   </div>
+                  )}
                 </div>
               ) : null}
             </div>

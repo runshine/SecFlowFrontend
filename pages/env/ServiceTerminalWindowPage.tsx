@@ -120,6 +120,22 @@ export const ServiceTerminalWindowPage: React.FC = () => {
   }, [terminalWs]);
 
   useEffect(() => {
+    if (!terminalWs) return;
+
+    const heartbeat = window.setInterval(() => {
+      if (terminalWs.readyState === WebSocket.OPEN) {
+        try {
+          terminalWs.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+        } catch {
+          // noop
+        }
+      }
+    }, 25000);
+
+    return () => window.clearInterval(heartbeat);
+  }, [terminalWs]);
+
+  useEffect(() => {
     void connectTerminal(initial.mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

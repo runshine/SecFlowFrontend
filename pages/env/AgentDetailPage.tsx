@@ -63,6 +63,12 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [services, setServices] = useState<AgentService[]>([]);
+  const [selectedNodeService, setSelectedNodeService] = useState<AgentService | null>(null);
+  const [selectedNodeServiceDetail, setSelectedNodeServiceDetail] = useState<any>(null);
+  const [selectedNodeServiceLogs, setSelectedNodeServiceLogs] = useState<string>('');
+  const [selectedNodeServiceIngress, setSelectedNodeServiceIngress] = useState<any[]>([]);
+  const [nodeServiceLoading, setNodeServiceLoading] = useState(false);
+  const [nodeServiceActionLoading, setNodeServiceActionLoading] = useState<string>('');
   const [tasks, setTasks] = useState<AsyncTask[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'processes' | 'network' | 'disks' | 'services'>('overview');
 
@@ -95,17 +101,38 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
     }
   }, [agentKey, projectId]);
 
+  useEffect(() => {
+    if (services.length === 0) {
+      setSelectedNodeService(null);
+      setSelectedNodeServiceDetail(null);
+      setSelectedNodeServiceLogs('');
+      setSelectedNodeServiceIngress([]);
+      return;
+    }
+    const current = selectedNodeService ? services.find((svc) => svc.name === selectedNodeService.name) : null;
+    const next = current || services[0];
+    if (!selectedNodeService || selectedNodeService.name !== next.name) {
+      setSelectedNodeService(next);
+    }
+  }, [services]);
+
+  useEffect(() => {
+    if (activeTab === 'services' && selectedNodeService) {
+      void loadNodeServiceDetail(selectedNodeService);
+    }
+  }, [activeTab, selectedNodeService?.name, projectId]);
+
   const loadAllData = async () => {
     if (!agentKey || !projectId) return;
     setLoading(true);
     try {
       const [agentData, servicesData, tasksData] = await Promise.all([
         api.environment.getAgentDetail(agentKey, projectId),
-        api.environment.getAgentServices(agentKey),
+        api.environment.getGlobalServices(projectId, { agent_key: agentKey, per_page: 500 }),
         api.environment.getTasks(projectId, { agent_key: agentKey })
       ]);
       setAgent(agentData);
-      setServices(servicesData?.services || []);
+      setServices(servicesData?.items || []);
       setTasks(tasksData?.task || []);
 
       let daemonInfo = agentData?.daemon_info || null;
@@ -118,7 +145,7 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       setDaemonAgentInfo(daemonInfo);
       try {
         const daemonHealthResp = await api.environment.getDaemonAgentHealth(agentKey);
-        setDaemonAgentHealth(daemonHealthResp || null);
+      setDaemonAgentHealth(daemonHealthResp || null);
       } catch (e) {
         console.warn('Failed to load daemon agent health', e);
       }
@@ -132,6 +159,70 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
       console.error("Failed to load agent detail", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadNodeServiceDetail = async (svc: AgentService) => {
+    if (!svc?.agent_key) return;
+    setNodeServiceLoading(true);
+    try {
+      const [detailResp, logsResp, ingressResp] = await Promise.all([
+        api.environment.getAgentServiceDetail(svc.agent_key, svc.name),
+        api.environment.getAgentServiceLogs(svc.agent_key, svc.name, 300),
+        api.environment.getGlobalIngress(projectId),
+      ]);
+
+      const ingressItems = (ingressResp?.items || []).filter((route: any) => {
+        const routeService = String(
+          route?.associated_service_name ||
+          route?.metadata?.service_name ||
+          route?.metadata?.associated_service_name ||
+          ''
+        ).trim();
+        return routeService === svc.name;
+      });
+
+      setSelectedNodeServiceDetail(detailResp || null);
+      setSelectedNodeServiceLogs(String(logsResp?.logs || logsResp?.error || '').trim());
+      setSelectedNodeServiceIngress(ingressItems);
+    } catch (err: any) {
+      console.error('Failed to load node service detail', err);
+      setSelectedNodeServiceDetail(null);
+      setSelectedNodeServiceLogs(`日志加载失败: ${err?.message || err}`);
+      setSelectedNodeServiceIngress([]);
+    } finally {
+      setNodeServiceLoading(false);
+    }
+  };
+
+  const handleNodeServiceAction = async (svc: AgentService, action: 'start' | 'stop' | 'delete') => {
+    if (!svc?.agent_key) return;
+    if (action === 'delete') {
+      const confirmed = window.confirm(`确认删除服务 ${svc.name}？系统会先停止服务，再删除绑定的 Ingress。`);
+      if (!confirmed) return;
+    }
+    setNodeServiceActionLoading(`${action}:${svc.name}`);
+    try {
+      if (action === 'start') {
+        await api.environment.startAgentService(svc.agent_key, svc.name);
+      } else if (action === 'stop') {
+        await api.environment.stopAgentService(svc.agent_key, svc.name);
+      } else {
+        await api.environment.deleteAgentService(svc.agent_key, svc.name, projectId);
+      }
+      notify(
+        action === 'delete' ? `服务 ${svc.name} 已删除` : `服务 ${svc.name} ${action === 'start' ? '启动' : '停止'}操作已提交`,
+        'success'
+      );
+      await loadAllData();
+      if (action !== 'delete') {
+        await loadNodeServiceDetail(svc);
+      }
+    } catch (err: any) {
+      console.error(`Failed to ${action} node service`, err);
+      notify(err?.message || `服务${action}失败`, 'error');
+    } finally {
+      setNodeServiceActionLoading('');
     }
   };
 
@@ -344,8 +435,8 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
     setDeployingBatch(true);
     try {
       const templateNames = Array.from(selectedTemplateNames.values()) as string[];
-      const existingServices = await api.environment.getAgentServices(agentKey);
-      const existingServiceNames = new Set<string>((existingServices?.services || []).map((svc) => svc.name));
+      const existingServices = await api.environment.getGlobalServices(projectId, { agent_key: agentKey, per_page: 500 });
+      const existingServiceNames = new Set<string>((existingServices?.items || []).map((svc: any) => svc.name));
       const skippedTemplates: string[] = [];
       const deployments = templateNames.map(templateName => ({
         service_name: buildServiceName(templateName),
@@ -722,62 +813,93 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
 
           {activeTab === 'services' && (
             <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden animate-in fade-in">
-               <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+                <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-4">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <Zap size={16} className="text-blue-500" /> 发现的存活服务 (Services)
+                    <Zap size={16} className="text-blue-500" /> 节点服务
                   </h4>
-               </div>
-               <table className="w-full text-left">
-                  <thead className="bg-slate-50/30 border-b border-slate-100 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                     <tr>
-                        <th className="px-8 py-5">服务名称</th>
-                        <th className="px-6 py-5">镜像标签 (Image)</th>
-                        <th className="px-6 py-5">网络映射</th>
-                        <th className="px-8 py-5 text-right">管理</th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                     {services.map(svc => (
-                        <tr key={svc.id} className="hover:bg-slate-50 transition-all group">
-                           <td className="px-8 py-5">
+                  <span className="text-[10px] font-black text-slate-400 uppercase">{services.length} 个服务</span>
+                </div>
+
+                {services.length === 0 ? (
+                  <div className="py-24 text-center text-slate-300 italic text-sm">当前节点暂无聚合服务记录</div>
+                ) : (
+                  <div className="divide-y divide-slate-50">
+                    {services.map(svc => {
+                      const isSelected = selectedNodeService?.name === svc.name;
+                      const isBusy = nodeServiceActionLoading === `${svc.agent_key || agentKey}:${svc.name}`;
+                      return (
+                        <button
+                          key={svc.id}
+                          type="button"
+                          onClick={() => setSelectedNodeService(svc)}
+                          className={`w-full text-left px-8 py-5 transition-all ${isSelected ? 'bg-blue-50/70' : 'hover:bg-slate-50/80'}`}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1 space-y-2">
                               <div className="flex items-center gap-3">
-                                 <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-black">
-                                    {svc.name[0].toUpperCase()}
-                                 </div>
-                                 <span className="text-sm font-black text-slate-700">{svc.name}</span>
-                              </div>
-                           </td>
-                           <td className="px-6 py-5">
-                              <span className="text-xs font-mono text-slate-400 truncate max-w-[200px] inline-block">{svc.image}</span>
-                           </td>
-                           <td className="px-6 py-5">
-                              <div className="flex flex-wrap gap-1">
-                                 {Object.entries(svc.ports || {}).map(([p, v]) => (
-                                    <span key={p} className="text-[10px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg border border-blue-100">
-                                       {p}➔{v}
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${isSelected ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                                  {svc.name[0].toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-sm font-black text-slate-800 break-all">{svc.name}</div>
+                                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                                    <StatusBadge status={svc.status || 'unknown'} />
+                                    <span className="text-[10px] font-bold text-slate-400">
+                                      模板：{svc.template_name || '未识别'}
                                     </span>
-                                 ))}
-                                 {!svc.ports && <span className="text-[10px] text-slate-300 italic">None</span>}
+                                  </div>
+                                </div>
                               </div>
-                           </td>
-                           <td className="px-8 py-5 text-right">
-                              <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                 <button className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                                    <Trash2 size={16} />
-                                 </button>
-                                 <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                                    <ExternalLink size={16} />
-                                 </button>
+                              <div className="text-[11px] font-mono text-slate-400 break-all">{svc.image || 'N/A'}</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {Object.entries(svc.ports || {}).length > 0 ? (
+                                  Object.entries(svc.ports || {}).map(([p, v]) => (
+                                    <span key={p} className="text-[10px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg border border-blue-100">
+                                      {p}➔{v}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-[10px] text-slate-300 italic">无端口映射</span>
+                                )}
                               </div>
-                           </td>
-                        </tr>
-                     ))}
-                     {services.length === 0 && (
-                        <tr><td colSpan={4} className="py-24 text-center text-slate-300 italic text-sm">No services discovered on this node</td></tr>
-                     )}
-                  </tbody>
-               </table>
-            </div>
+                            </div>
+                            <div
+                              className="flex flex-wrap justify-end gap-2 shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleNodeServiceAction(svc, 'start')}
+                                disabled={isBusy}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-black hover:bg-emerald-100 disabled:opacity-50"
+                              >
+                                启动
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNodeServiceAction(svc, 'stop')}
+                                disabled={isBusy}
+                                className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-black hover:bg-amber-100 disabled:opacity-50"
+                              >
+                                停止
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNodeServiceAction(svc, 'delete')}
+                                disabled={isBusy}
+                                className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-black hover:bg-red-100 disabled:opacity-50 flex items-center gap-1"
+                              >
+                                {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                删除
+                              </button>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
           )}
 
           {activeTab === 'overview' && (
@@ -1143,52 +1265,138 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
         </div>
 
         <div className="space-y-8">
-          {/* Metadata Sidebar Card */}
-          <div className="bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl space-y-8 relative overflow-hidden group">
-             <div className="absolute right-[-20px] top-[-20px] w-40 h-40 bg-blue-500 opacity-5 blur-3xl group-hover:opacity-10 transition-opacity" />
-             <div className="space-y-2">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">节点元数据</p>
-                <div className="flex items-center gap-3 mt-4">
-                   <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-blue-400">
-                      <Monitor size={24} />
-                   </div>
-                   <div>
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">系统架构</p>
-                      <p className="text-lg font-black">{sys?.architecture || 'x86_64'}</p>
-                   </div>
+          {activeTab === 'services' ? (
+            <div className="bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl space-y-8 relative overflow-hidden group">
+              <div className="absolute right-[-20px] top-[-20px] w-40 h-40 bg-blue-500 opacity-5 blur-3xl group-hover:opacity-10 transition-opacity" />
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">服务详情</p>
+                  <p className="text-xs text-slate-400 mt-2">点击左侧服务后，在这里查看详情、Ingress 与日志</p>
                 </div>
-             </div>
-             <div className="pt-8 border-t border-white/10 space-y-5">
-                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-                   <span className="uppercase tracking-widest">操作系统</span>
-                   <span className="text-white font-black">{sys?.os_name} {sys?.os_release}</span>
+                {nodeServiceLoading && <Loader2 size={18} className="animate-spin text-slate-400" />}
+              </div>
+
+              {!selectedNodeService ? (
+                <div className="bg-white/5 rounded-[2rem] p-6 text-sm text-slate-300">
+                  请选择左侧一个服务
                 </div>
-                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-                   <span className="uppercase tracking-widest">内核版本</span>
-                   <span className="text-white font-black">{sys?.kernel_version || 'N/A'}</span>
+              ) : (
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h4 className="text-xl font-black break-all">{selectedNodeService.name}</h4>
+                        <p className="text-[11px] font-mono text-slate-400 mt-2 break-all">{selectedNodeService.image || 'N/A'}</p>
+                      </div>
+                      <StatusBadge status={selectedNodeServiceDetail?.status || selectedNodeService.status || 'unknown'} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                        <p className="text-[10px] font-black text-slate-400 uppercase">模板</p>
+                        <p className="text-sm font-black mt-1">{selectedNodeService.template_name || '未识别'}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">ID: {selectedNodeService.template_id ?? 'N/A'}</p>
+                      </div>
+                      <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                        <p className="text-[10px] font-black text-slate-400 uppercase">节点</p>
+                        <p className="text-sm font-black mt-1">{selectedNodeService.agent_hostname || agent?.hostname || agentKey}</p>
+                        <p className="text-[11px] text-slate-400 mt-1 break-all">{selectedNodeService.agent_key || agentKey}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">服务绑定的 Ingress</p>
+                    {selectedNodeServiceIngress.length === 0 ? (
+                      <div className="bg-white/5 rounded-2xl p-4 text-sm text-slate-300">当前服务未绑定 Ingress</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {selectedNodeServiceIngress.map((route: any) => {
+                          const url = route.url || route.http_url || route.https_url || '';
+                          return (
+                            <div key={route.id || route.host} className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                              <p className="text-sm font-black break-all">{route.host || 'N/A'}{route.path || '/'}</p>
+                              <p className="text-[11px] text-slate-400 mt-2 break-all">{url || '无访问地址'}</p>
+                              {url && (
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                                  className="mt-3 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-black hover:bg-blue-700 flex items-center gap-1"
+                                >
+                                  <ExternalLink size={12} /> 打开
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">实时日志</p>
+                    <div className="bg-black/40 rounded-2xl p-4 max-h-72 overflow-auto text-[11px] font-mono whitespace-pre-wrap break-words text-slate-100 border border-white/10">
+                      {selectedNodeServiceLogs || '暂无日志'}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">运行态详情</p>
+                    <div className="bg-white/5 rounded-2xl p-4 max-h-80 overflow-auto border border-white/10">
+                      <pre className="text-[11px] text-slate-100 whitespace-pre-wrap break-words">
+                        {JSON.stringify(selectedNodeServiceDetail || {}, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-                   <span className="uppercase tracking-widest">启动时间</span>
-                   <span className="text-white font-black">{sys?.boot_time?.split('T')[0]}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-                   <span className="uppercase tracking-widest">节点唯一ID</span>
-                   <span className="text-white font-black font-mono">{agent.key}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-                   <span className="uppercase tracking-widest">最后活跃</span>
-                   <span className="text-white font-black">{agent.last_seen?.split('.')[0].replace('T', ' ')}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-                   <span className="uppercase tracking-widest">Agent版本</span>
-                   <span className="text-white font-black">{daemonInfo?.version || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-                   <span className="uppercase tracking-widest">Agent平台</span>
-                   <span className="text-white font-black">{daemonInfo?.platform || 'N/A'}</span>
-                </div>
-             </div>
-          </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl space-y-8 relative overflow-hidden group">
+               <div className="absolute right-[-20px] top-[-20px] w-40 h-40 bg-blue-500 opacity-5 blur-3xl group-hover:opacity-10 transition-opacity" />
+               <div className="space-y-2">
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">节点元数据</p>
+                  <div className="flex items-center gap-3 mt-4">
+                     <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-blue-400">
+                        <Monitor size={24} />
+                     </div>
+                     <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">系统架构</p>
+                        <p className="text-lg font-black">{sys?.architecture || 'x86_64'}</p>
+                     </div>
+                  </div>
+               </div>
+               <div className="pt-8 border-t border-white/10 space-y-5">
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                     <span className="uppercase tracking-widest">操作系统</span>
+                     <span className="text-white font-black">{sys?.os_name} {sys?.os_release}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                     <span className="uppercase tracking-widest">内核版本</span>
+                     <span className="text-white font-black">{sys?.kernel_version || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                     <span className="uppercase tracking-widest">启动时间</span>
+                     <span className="text-white font-black">{sys?.boot_time?.split('T')[0]}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                     <span className="uppercase tracking-widest">节点唯一ID</span>
+                     <span className="text-white font-black font-mono">{agent.key}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                     <span className="uppercase tracking-widest">最后活跃</span>
+                     <span className="text-white font-black">{agent.last_seen?.split('.')[0].replace('T', ' ')}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                     <span className="uppercase tracking-widest">Agent版本</span>
+                     <span className="text-white font-black">{daemonInfo?.version || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                     <span className="uppercase tracking-widest">Agent平台</span>
+                     <span className="text-white font-black">{daemonInfo?.platform || 'N/A'}</span>
+                  </div>
+               </div>
+            </div>
+          )}
 
           {/* Activity Log / Tasks Card */}
           <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">

@@ -1,5 +1,5 @@
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace, DaemonServicesResponse, DaemonServiceLogs, AgentTtydConnectionInfo, AgentIngressRouteInfo } from '../types/types';
+import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace, DaemonServicesResponse, DaemonServiceLogs, AgentTtydConnectionInfo, AgentIngressRouteInfo, AiHelperService, AiAgentItem, AiAgentSession, AiBatchSession, AiBatchRound } from '../types/types';
 
 const normalizeTask = (raw: any): AsyncTask => ({
   id: raw?.id || raw?.task_id || '',
@@ -264,6 +264,63 @@ export const environmentApi = {
     }).toString();
     return handleResponse(await fetch(`${API_BASE}/api/agent/services/global/ingress?${query}`, { headers: getHeaders() }));
   },
+
+  listAiHelpers: async (
+    projectId: string,
+    params: { agent_key?: string; health_status?: string } = {}
+  ): Promise<{ project_id: string; items: AiHelperService[]; total: number }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers?${new URLSearchParams({ project_id: projectId, ...(params as any) }).toString()}`, { headers: getHeaders() })),
+
+  getAiHelperDetail: async (projectId: string, agentKey: string, serviceName: string): Promise<AiHelperService> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}?project_id=${encodeURIComponent(projectId)}`, { headers: getHeaders() })),
+
+  listAiHelperAgents: async (projectId: string, agentKey: string, serviceName: string): Promise<{ default_agent_id?: string; items: AiAgentItem[]; total: number }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents?project_id=${encodeURIComponent(projectId)}`, { headers: getHeaders() })),
+
+  createAiHelperAgent: async (projectId: string, agentKey: string, serviceName: string, payload: any): Promise<AiAgentItem> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents?project_id=${encodeURIComponent(projectId)}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) })),
+
+  updateAiHelperAgent: async (projectId: string, agentKey: string, serviceName: string, agentId: string, payload: any): Promise<AiAgentItem> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents/${encodeURIComponent(agentId)}?project_id=${encodeURIComponent(projectId)}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) })),
+
+  deleteAiHelperAgent: async (projectId: string, agentKey: string, serviceName: string, agentId: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents/${encodeURIComponent(agentId)}?project_id=${encodeURIComponent(projectId)}`, { method: 'DELETE', headers: getHeaders(), body: JSON.stringify({ project_id: projectId }) })),
+
+  runAiHelperAgentAction: async (projectId: string, agentKey: string, serviceName: string, agentId: string, action: 'activate' | 'start' | 'stop'): Promise<AiAgentItem> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents/${encodeURIComponent(agentId)}/${action}?project_id=${encodeURIComponent(projectId)}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ project_id: projectId }) })),
+
+  getAiHelperAgentEnv: async (projectId: string, agentKey: string, serviceName: string, agentId: string): Promise<{ name: string; env: Record<string, string> }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents/${encodeURIComponent(agentId)}/env?project_id=${encodeURIComponent(projectId)}`, { headers: getHeaders() })),
+
+  replaceAiHelperAgentEnv: async (projectId: string, agentKey: string, serviceName: string, agentId: string, env: Record<string, string>): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents/${encodeURIComponent(agentId)}/env?project_id=${encodeURIComponent(projectId)}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ project_id: projectId, env }) })),
+
+  deleteAiHelperAgentEnvKeys: async (projectId: string, agentKey: string, serviceName: string, agentId: string, keys: string[]): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/agents/${encodeURIComponent(agentId)}/env?project_id=${encodeURIComponent(projectId)}`, { method: 'DELETE', headers: getHeaders(), body: JSON.stringify({ project_id: projectId, keys }) })),
+
+  listAiHelperSessions: async (projectId: string, agentKey: string, serviceName: string): Promise<{ items: AiAgentSession[]; total: number }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/sessions?project_id=${encodeURIComponent(projectId)}`, { headers: getHeaders() })),
+
+  createAiHelperSession: async (projectId: string, agentKey: string, serviceName: string, payload: any): Promise<AiAgentSession> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/sessions?project_id=${encodeURIComponent(projectId)}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ ...payload, project_id: projectId }) })),
+
+  getAiHelperSession: async (projectId: string, agentKey: string, serviceName: string, sessionId: string): Promise<AiAgentSession> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/sessions/${encodeURIComponent(sessionId)}?project_id=${encodeURIComponent(projectId)}`, { headers: getHeaders() })),
+
+  sendAiHelperSessionMessage: async (projectId: string, agentKey: string, serviceName: string, sessionId: string, content: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}/sessions/${encodeURIComponent(sessionId)}/messages?project_id=${encodeURIComponent(projectId)}`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ project_id: projectId, role: 'user', content }) })),
+
+  createAiBatchSession: async (projectId: string, payload: any): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/sessions/batch`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ ...payload, project_id: projectId }) })),
+
+  getAiBatchSession: async (batchId: string): Promise<AiBatchSession> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/sessions/batch/${encodeURIComponent(batchId)}`, { headers: getHeaders() })),
+
+  getAiBatchMessages: async (batchId: string): Promise<{ batch_id: string; items: AiBatchRound[]; total: number }> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/sessions/batch/${encodeURIComponent(batchId)}/messages`, { headers: getHeaders() })),
+
+  sendAiBatchMessage: async (batchId: string, content: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/sessions/batch/${encodeURIComponent(batchId)}/messages`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ role: 'user', content }) })),
   deleteGlobalIngressBatch: async (projectId: string, routeIds: string[]): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/services/global/ingress/delete-batch`, {
       method: 'POST',

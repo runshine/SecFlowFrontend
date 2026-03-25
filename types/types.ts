@@ -789,6 +789,81 @@ export interface AgentService {
   first_seen_at?: string;
   last_seen_at?: string;
   updated_at?: string;
+  tags?: string[];
+}
+
+export interface AiHelperService {
+  id: string;
+  project_id: string;
+  agent_key: string;
+  agent_hostname?: string;
+  agent_ip?: string;
+  service_name: string;
+  image: string;
+  status: string;
+  tags: string[];
+  active_agent_id?: string | null;
+  ai_agent_count: number;
+  health_status?: string;
+  health?: any;
+  agents?: AiAgentItem[];
+  last_seen_at?: string;
+  updated_at?: string;
+}
+
+export interface AiAgentItem {
+  agent_id: string;
+  name: string;
+  backend_type: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  enabled: boolean;
+  running: boolean;
+  active: boolean;
+  installed?: boolean;
+  pid?: number | null;
+  description?: string;
+  health?: any;
+  capabilities?: any;
+}
+
+export interface AiAgentSession {
+  session_id: string;
+  backend?: string;
+  agent_ids?: string[];
+  metadata?: Record<string, any>;
+  messages?: Array<{ role: string; content: string }>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AiBatchItem {
+  agent_key: string;
+  service_name: string;
+  helper_session_id?: string | null;
+  helper_agent_ids?: string[];
+  status: string;
+  last_error?: string;
+  updated_at?: string;
+}
+
+export interface AiBatchRound {
+  round_no: number;
+  role: string;
+  content: string;
+  response: any;
+  created_at?: string;
+}
+
+export interface AiBatchSession {
+  batch_id: string;
+  project_id: string;
+  status: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+  items: AiBatchItem[];
 }
 
 export interface Workspace {
@@ -814,7 +889,7 @@ export interface DeployScriptListResponse {
 export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
-  | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-template' | 'env-tasks'
+  | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-ai-agent' | 'env-template' | 'env-tasks'
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-instance-logs' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'

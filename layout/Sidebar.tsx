@@ -24,6 +24,7 @@ import {
   FileCode,
   FolderTree,
   Package,
+  Bot,
   Terminal,
   Zap,
   Workflow,
@@ -206,6 +207,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { id: 'env-template', label: '模板管理', icon: <Box size={14} /> }, 
             { id: 'env-agent', label: 'Agent 管理', icon: <Monitor size={14} /> }, 
             { id: 'env-service', label: '服务管理', icon: <Zap size={14} /> },
+            { id: 'env-ai-agent', label: 'AI Agent管理', icon: <Bot size={14} /> },
             { id: 'env-tasks', label: '任务管理', icon: <Workflow size={14} /> }
           ]} 
         />

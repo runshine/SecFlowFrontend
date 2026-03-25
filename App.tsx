@@ -27,6 +27,7 @@ import { EnvAgentPage } from './pages/env/EnvAgentPage';
 import { EnvTemplatePage } from './pages/env/EnvTemplatePage';
 import { EnvTasksPage } from './pages/env/EnvTasksPage';
 import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
+import { EnvAiAgentPage } from './pages/env/EnvAiAgentPage';
 import { ServiceTerminalWindowPage } from './pages/env/ServiceTerminalWindowPage';
 
 // Workflow Pages
@@ -352,6 +353,7 @@ const App: React.FC = () => {
       
       case 'env-agent': return <EnvAgentPage projectId={selectedProjectId} />;
       case 'env-service': return <ServiceMgmtPage projectId={selectedProjectId} />;
+      case 'env-ai-agent': return <EnvAiAgentPage projectId={selectedProjectId} />;
       case 'env-template': return <EnvTemplatePage projectId={selectedProjectId} />;
       case 'env-tasks': return <EnvTasksPage projectId={selectedProjectId} />;
 

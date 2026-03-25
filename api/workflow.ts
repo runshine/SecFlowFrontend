@@ -2,6 +2,11 @@
 import { API_BASE, handleResponse, getHeaders } from './base';
 import { AppTemplate, JobTemplate, WorkflowTemplate, WorkflowInstance, AppWorkflow, AppWorkflowLogs, IngressController, WorkflowInstanceNodeLogListResponse, ServiceAccessInfo, DomainBindingRecord } from '../types/types';
 
+const getWsBase = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}`;
+};
+
 export const workflowApi = {
   /**
    * 健康检查
@@ -332,5 +337,18 @@ export const workflowApi = {
       body: JSON.stringify(payload)
     });
     return handleResponse(response);
+  },
+  createTerminalProxyConnection: (
+    projectId: string,
+    podName: string,
+    containerName?: string,
+    command: string = '/bin/bash'
+  ): WebSocket => {
+    const token = localStorage.getItem('secflow_token');
+    const params = new URLSearchParams({ project_id: projectId, command });
+    if (containerName) params.append('container', containerName);
+    if (token) params.append('token', token);
+    const wsUrl = `${getWsBase()}/api/workflow/ws/pods/${encodeURIComponent(podName)}/exec?${params.toString()}`;
+    return new WebSocket(wsUrl);
   }
 };

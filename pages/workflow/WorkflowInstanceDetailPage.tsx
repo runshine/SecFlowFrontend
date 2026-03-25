@@ -962,7 +962,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         setTerminalZIndex(newZIndex);
 
         // 创建WebSocket连接，传递容器名称
-        const ws = api.k8s.createTerminalConnection(instance.project_id, podName, containerName);
+        const ws = api.workflow.createTerminalProxyConnection(instance.project_id, podName, containerName);
 
         ws.onopen = () => {
           setTerminalConnected(true);
@@ -1060,7 +1060,7 @@ export const WorkflowInstanceDetailPage: React.FC<{ instanceId: string, onBack: 
         const containerName = firstPod.containers?.[0]?.name;
 
         // 创建WebSocket连接
-        const ws = api.k8s.createTerminalConnection(instance.project_id, podName, containerName);
+        const ws = api.workflow.createTerminalProxyConnection(instance.project_id, podName, containerName);
 
         const newZIndex = maxZIndex + 1;
         setMaxZIndex(newZIndex);

@@ -90,15 +90,13 @@ export const getUserAccess = (user: UserInfo | null | undefined): UserAccess => 
   };
 };
 
-const SUPER_ADMIN_VIEWS = new Set<string>([
+const SUPER_ADMIN_ONLY_VIEWS = new Set<string>([
   'admin-dashboard',
   'user-mgmt-users',
   'user-mgmt-access',
   'user-mgmt-online',
   'user-mgmt-machine',
   'org-mgmt-departments',
-  'org-mgmt-members',
-  'org-mgmt-projects',
 ]);
 
 const ORDINARY_ADMIN_VIEWS = new Set<string>([
@@ -109,12 +107,12 @@ const ORDINARY_ADMIN_VIEWS = new Set<string>([
 export const canAccessView = (user: UserInfo | null | undefined, view: ViewType | string): boolean => {
   const access = getUserAccess(user);
 
-  if (SUPER_ADMIN_VIEWS.has(view)) {
-    return access.platformRole === 'super_admin';
-  }
-
   if (ORDINARY_ADMIN_VIEWS.has(view)) {
     return access.platformRole === 'super_admin' || access.platformRole === 'ordinary_admin';
+  }
+
+  if (SUPER_ADMIN_ONLY_VIEWS.has(view)) {
+    return access.platformRole === 'super_admin';
   }
 
   return true;

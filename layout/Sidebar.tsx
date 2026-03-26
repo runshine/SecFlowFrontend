@@ -31,11 +31,9 @@ import {
   Layout,
   Code2,
   Users,
-  UserCheck,
   UserCog,
   ShieldAlert,
   Globe,
-  Settings,
   ArrowLeftCircle,
   Cpu,
   Key,
@@ -263,8 +261,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={<ShieldAlert size={20} />}
             children={[
               { id: 'user-mgmt-users', label: '用户账号管理', icon: <Users size={14} /> },
-              { id: 'user-mgmt-roles', label: '角色定义管理', icon: <UserCheck size={14} /> },
-              { id: 'user-mgmt-perms', label: '功能权限分配', icon: <Settings size={14} /> },
               { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> },
               { id: 'user-mgmt-machine', label: '机机凭证管理', icon: <Cpu size={14} /> }
             ]}

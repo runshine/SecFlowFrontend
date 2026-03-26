@@ -609,6 +609,7 @@ export interface EnvTemplate {
   visibility?: 'shared' | 'private';
   owner_id?: string;
   owner_name?: string;
+  tags?: string[];
   permissions?: {
     can_view?: boolean;
     can_manage?: boolean;
@@ -624,6 +625,7 @@ export interface EnvTemplate {
     parse_error?: string | null;
     parse_status?: 'success' | 'error' | 'stale';
     content_hash?: string;
+    tags?: string[];
     web_port_presets?: Array<{
       name?: string;
       port: number;

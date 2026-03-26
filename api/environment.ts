@@ -69,6 +69,7 @@ export const environmentApi = {
       name?: string;
       description?: string;
       visibility?: 'shared' | 'private';
+      tags?: string[];
       web_port_presets?: Array<{
         name?: string;
         port: number;

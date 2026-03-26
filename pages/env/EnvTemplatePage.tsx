@@ -44,7 +44,8 @@ import {
   Container,
   Network,
   HardDrive,
-  Layers
+  Layers,
+  Tags
 } from 'lucide-react';
 import { EnvTemplate, TemplateFile, Agent, ParsedCompose } from '../../types/types';
 import { api } from '../../api/api';
@@ -125,6 +126,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     type: 'yaml' as 'yaml' | 'archive',
     content: '',
     visibility: 'shared' as 'shared' | 'private',
+    tags: [] as string[],
     web_port_presets: [] as WebPortPreset[]
   });
   const [detailWebPortPresets, setDetailWebPortPresets] = useState<WebPortPreset[]>([]);
@@ -295,6 +297,28 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       .filter((item: WebPortPreset) => Number.isFinite(item.port) && item.port > 0 && item.port <= 65535)
       .slice(0, 32);
   };
+
+  const normalizeTemplateTags = (raw: any): string[] => {
+    if (Array.isArray(raw)) {
+      return raw
+        .map((item) => String(item || '').trim())
+        .filter((item, index, arr) => Boolean(item) && arr.indexOf(item) === index)
+        .slice(0, 64);
+    }
+    if (typeof raw === 'string') {
+      return raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item, index, arr) => Boolean(item) && arr.indexOf(item) === index)
+        .slice(0, 64);
+    }
+    return [];
+  };
+
+  const stringifyTemplateTags = (tags: any): string => normalizeTemplateTags(tags).join(', ');
+
+  const getTemplateTags = (template: any): string[] =>
+    normalizeTemplateTags(template?.tags || template?.metadata?.tags || []);
 
   const viewDetail = async (templateId: number) => {
     setSelectedTemplate(templateId);
@@ -810,6 +834,31 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
     }
   };
 
+  const handleEditTemplateTags = async (template: any) => {
+    if (!template?.id) return;
+    if (!canManageTemplate(template)) {
+      notify("仅模板拥有者可修改模板 TAG", 'warning');
+      return;
+    }
+    const nextTags = await prompt({
+      title: '修改模板 TAG',
+      message: '请输入模板 TAG，使用英文逗号分隔',
+      defaultValue: stringifyTemplateTags(getTemplateTags(template)),
+      placeholder: '例如：AI_AGENT_HELPER, INTERNAL',
+      confirmText: '保存',
+      cancelText: '取消',
+    });
+    if (nextTags == null) return;
+    try {
+      await api.environment.updateTemplateBasic(template.id, { tags: normalizeTemplateTags(nextTags) });
+      notify('模板 TAG 已更新', 'success');
+      await loadTemplates();
+      await viewDetail(template.id);
+    } catch (err: any) {
+      notify(err?.message || "修改模板 TAG 失败", 'error');
+    }
+  };
+
   const addUploadWebPortPreset = () => {
     setNewTemplate((prev) => ({
       ...prev,
@@ -851,6 +900,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
       formData.append('description', newTemplate.description);
       formData.append('type', newTemplate.type);
       formData.append('visibility', newTemplate.visibility);
+      formData.append('tags', JSON.stringify(normalizeTemplateTags(newTemplate.tags)));
       formData.append('web_port_presets', JSON.stringify(normalizeWebPortPresets(newTemplate.web_port_presets || [])));
 
       if (uploadTab === 'file') {
@@ -875,7 +925,7 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
   };
 
   const resetUploadForm = () => {
-    setNewTemplate({ name: '', description: '', type: 'yaml', content: '', visibility: 'shared', web_port_presets: [] });
+    setNewTemplate({ name: '', description: '', type: 'yaml', content: '', visibility: 'shared', tags: [], web_port_presets: [] });
     setUploadError(null);
     setSelectedUploadFile(null);
     setIsDragOverUpload(false);
@@ -1169,6 +1219,15 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                    </>
                  )}
               </div>
+              {getTemplateTags(templateDetail).length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {getTemplateTags(templateDetail).map((tag) => (
+                    <span key={tag} className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-black tracking-wide">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1187,6 +1246,14 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                 className="px-8 py-4 bg-white border border-slate-200 text-slate-700 rounded-[1.5rem] font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm active:scale-95"
               >
                 <Edit3 size={20} className="text-emerald-600" /> 修改名称
+              </button>
+            )}
+            {canManageCurrentTemplate && (
+              <button
+                onClick={() => handleEditTemplateTags(templateDetail)}
+                className="px-8 py-4 bg-white border border-slate-200 text-slate-700 rounded-[1.5rem] font-black hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm active:scale-95"
+              >
+                <Tags size={20} className="text-amber-600" /> 修改 TAG
               </button>
             )}
             <button
@@ -1221,6 +1288,34 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
             </div>
           </div>
         )}
+
+        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h4 className="text-sm font-black text-slate-800">模板 TAG</h4>
+              <p className="text-xs text-slate-500 mt-1">用于模板分类、识别和自动化关联。</p>
+            </div>
+            {canManageCurrentTemplate && (
+              <button
+                onClick={() => handleEditTemplateTags(templateDetail)}
+                className="px-3 py-2 text-xs font-black rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200"
+              >
+                编辑 TAG
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-4">
+            {getTemplateTags(templateDetail).length > 0 ? (
+              getTemplateTags(templateDetail).map((tag) => (
+                <span key={tag} className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black tracking-wide">
+                  {tag}
+                </span>
+              ))
+            ) : (
+              <p className="text-xs text-slate-400">暂无 TAG</p>
+            )}
+          </div>
+        </div>
 
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between">
@@ -1646,6 +1741,18 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                           {t.owner_name && (
                             <p className="text-[10px] text-slate-400 mt-1 truncate">Owner: {t.owner_name}</p>
                           )}
+                          {getTemplateTags(t).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {getTemplateTags(t).slice(0, 4).map((tag) => (
+                                <span key={tag} className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-black">
+                                  {tag}
+                                </span>
+                              ))}
+                              {getTemplateTags(t).length > 4 && (
+                                <span className="text-[10px] text-slate-400 font-black">+{getTemplateTags(t).length - 4}</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1884,6 +1991,20 @@ export const EnvTemplatePage: React.FC<{ projectId: string }> = ({ projectId }) 
                     rows={2}
                     className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm resize-none"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
+                    TAG
+                  </label>
+                  <input
+                    type="text"
+                    value={stringifyTemplateTags(newTemplate.tags)}
+                    onChange={(e) => setNewTemplate({ ...newTemplate, tags: normalizeTemplateTags(e.target.value) })}
+                    placeholder="使用英文逗号分隔，例如：AI_AGENT_HELPER, INTERNAL"
+                    className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-4 ring-blue-500/5 transition-all font-medium shadow-sm"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-2">模板 TAG 会用于分类、识别和自动化关联。</p>
                 </div>
 
                 {/* Template Type */}

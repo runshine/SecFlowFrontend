@@ -42,6 +42,7 @@ export const orgApi = {
       total: data.total || 0,
       projects: (data.projects || []).map((p: any) => ({
         id: p.id,
+        project_space_id: p.id,
         name: p.name,
         description: p.description,
         is_public: p.is_public,

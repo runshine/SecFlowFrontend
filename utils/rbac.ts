@@ -74,7 +74,7 @@ export const getUserAccess = (user: UserInfo | null | undefined): UserAccess => 
       canManageRoles: false,
       canManageDepartments: false,
       canManageDepartmentMembers: true,
-      canManageOrgProjects: false,
+      canManageOrgProjects: true,
     };
   }
 
@@ -103,6 +103,7 @@ const SUPER_ADMIN_VIEWS = new Set<string>([
 
 const ORDINARY_ADMIN_VIEWS = new Set<string>([
   'org-mgmt-members',
+  'org-mgmt-projects',
 ]);
 
 export const canAccessView = (user: UserInfo | null | undefined, view: ViewType | string): boolean => {

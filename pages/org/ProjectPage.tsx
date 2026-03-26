@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { FolderOpen, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Globe, Lock, Building2 } from 'lucide-react';
+import { FolderOpen, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Globe, Lock } from 'lucide-react';
 import { orgApi, UserPermissionInfo } from '../../api/org';
-import { getHeaders, API_BASE } from '../../api/base';
 import { Project, Department } from '../../types/types';
 
 export const ProjectPage: React.FC = () => {
@@ -23,6 +22,10 @@ export const ProjectPage: React.FC = () => {
     fetchUserPermissions();
   }, []);
 
+  const manageableDepartmentIds = userPermissions?.manageable_department_ids || [];
+  const isOrdinaryAdmin = userPermissions?.platform_role === 'ordinary_admin';
+  const canManageOrgProjects = !!userPermissions?.can_manage_org_projects;
+
   const fetchUserPermissions = async () => {
     try {
       const data = await orgApi.getUserPermissions();
@@ -34,61 +37,56 @@ export const ProjectPage: React.FC = () => {
 
   // 检查用户是否可以编辑/删除项目
   const canManageProject = (project: Project): boolean => {
-    if (!userPermissions) return false;
+    if (!userPermissions || !userPermissions.can_manage_org_projects) return false;
 
     // admin用户可以管理所有项目
     if (userPermissions.is_admin) return true;
 
-    // 检查用户是否是项目所属部门的组长或副组长
-    // manageable_department_ids 包含用户作为组长/副组长的部门及其下级部门
+    if (!project.org_id) {
+      return false;
+    }
+
+    const boundDepartmentIds = (project.departments || [])
+      .map(dept => Number(dept.id))
+      .filter(deptId => Number.isFinite(deptId));
+
+    if (boundDepartmentIds.length > 0) {
+      return boundDepartmentIds.every(deptId => manageableDepartmentIds.includes(deptId));
+    }
+
     const ownerDeptId = project.owner_department_id;
-    if (ownerDeptId && userPermissions.manageable_department_ids.includes(ownerDeptId)) {
+    if (ownerDeptId && manageableDepartmentIds.includes(ownerDeptId)) {
       return true;
     }
 
     return false;
   };
 
-  // 自动同步项目到组织架构系统
-  const syncProjectToOrg = async (project: Project): Promise<{ org_id: number; departments: Department[] } | null> => {
-    try {
-      // 直接调用组织架构API创建项目（跳过项目空间）
-      const response = await fetch(`${API_BASE}/api/auth/org/projects`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({
-          name: project.name,
-          description: project.description || '',
-          is_public: true,  // 默认创建为公开项目
-          department_ids: []
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('同步项目到组织架构系统失败:', error);
-        return null;
-      }
-
-      const created = await response.json();
-      if (created && created.id) {
-        return {
-          org_id: created.id,
-          departments: created.departments || []
-        };
-      }
-    } catch (error) {
-      console.error('同步项目到组织架构系统失败:', error);
-    }
-    return null;
-  };
-
   const fetchProjects = async () => {
     setLoading(true);
     try {
-      // 从项目服务获取用户部门相关的项目列表
       const data = await orgApi.listUserDepartmentProjects();
-      setProjects(data.projects || []);
+      const enrichedProjects = await Promise.all(
+        (data.projects || []).map(async project => {
+          try {
+            const orgProject = await orgApi.getOrgProjectByName(project.name);
+            if (!orgProject) {
+              return project;
+            }
+
+            const orgId = typeof orgProject.id === 'number' ? orgProject.id : Number(orgProject.id);
+            return {
+              ...project,
+              org_id: Number.isFinite(orgId) ? orgId : undefined,
+              departments: orgProject.departments?.length ? orgProject.departments : project.departments,
+            };
+          } catch (error) {
+            console.error(`获取项目 ${project.name} 的组织架构信息失败:`, error);
+            return project;
+          }
+        })
+      );
+      setProjects(enrichedProjects);
     } catch (e) {
       console.error(e);
     } finally {
@@ -107,6 +105,18 @@ export const ProjectPage: React.FC = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageOrgProjects) {
+      alert('当前账号没有项目权限管理权限');
+      return;
+    }
+    if (isOrdinaryAdmin && formData.is_public) {
+      alert('普通管理员只能创建绑定所属部门及下级部门的私有项目');
+      return;
+    }
+    if (isOrdinaryAdmin && formData.department_ids.length === 0) {
+      alert('普通管理员必须为项目绑定所属部门或下级部门');
+      return;
+    }
     setFormLoading(true);
     try {
       await orgApi.createProject({
@@ -170,6 +180,10 @@ export const ProjectPage: React.FC = () => {
   };
 
   const openEditModal = (project: Project) => {
+    if (isOrdinaryAdmin && !project.org_id) {
+      alert('该项目未绑定到当前可管理的组织部门范围，无法由普通管理员修改');
+      return;
+    }
     setSelectedProject(project);
     setFormData({
       name: project.name,
@@ -202,11 +216,25 @@ export const ProjectPage: React.FC = () => {
           <button onClick={fetchProjects} className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95">
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">
-            <Plus size={20} /> 创建新项目
-          </button>
+          {canManageOrgProjects && (
+            <button
+              onClick={() => {
+                setFormData({ name: '', description: '', is_public: false, department_ids: [] });
+                setIsCreateModalOpen(true);
+              }}
+              className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95"
+            >
+              <Plus size={20} /> 创建新项目
+            </button>
+          )}
         </div>
       </div>
+
+      {isOrdinaryAdmin && (
+        <div className="bg-amber-50 border border-amber-100 text-amber-700 px-6 py-4 rounded-[2rem] text-sm font-semibold">
+          普通管理员仅可管理所属部门及下级部门已绑定的项目，且创建项目时必须绑定本部门树内的部门。
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-slate-900 p-8 rounded-[3rem] text-white flex flex-col justify-between group overflow-hidden relative shadow-2xl">
@@ -364,12 +392,17 @@ export const ProjectPage: React.FC = () => {
                 <div className="flex gap-4">
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, is_public: true })}
+                    onClick={() => {
+                      if (!isOrdinaryAdmin) {
+                        setFormData({ ...formData, is_public: true });
+                      }
+                    }}
+                    disabled={isOrdinaryAdmin}
                     className={`flex-1 py-4 rounded-2xl font-black transition-all ${
                       formData.is_public 
                         ? 'bg-green-600 text-white shadow-lg shadow-green-500/20' 
                         : 'bg-slate-100 text-slate-400'
-                    }`}
+                    } ${isOrdinaryAdmin ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     <Globe size={20} className="mx-auto mb-2" />
                     公开项目
@@ -411,6 +444,11 @@ export const ProjectPage: React.FC = () => {
                     ))}
                   </div>
                 </div>
+              )}
+              {isOrdinaryAdmin && (
+                <p className="text-xs text-slate-400 font-semibold">
+                  普通管理员只能选择所属部门及下级部门，公开项目仅支持超级管理员创建。
+                </p>
               )}
               <button disabled={formLoading} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
                 {formLoading ? <Loader2 className="animate-spin" size={20} /> : <FolderOpen size={20} />}
@@ -462,12 +500,17 @@ export const ProjectPage: React.FC = () => {
                 <div className="flex gap-4">
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, is_public: true })}
+                    onClick={() => {
+                      if (!isOrdinaryAdmin) {
+                        setFormData({ ...formData, is_public: true });
+                      }
+                    }}
+                    disabled={isOrdinaryAdmin}
                     className={`flex-1 py-4 rounded-2xl font-black transition-all ${
                       formData.is_public 
                         ? 'bg-green-600 text-white shadow-lg shadow-green-500/20' 
                         : 'bg-slate-100 text-slate-400'
-                    }`}
+                    } ${isOrdinaryAdmin ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     <Globe size={20} className="mx-auto mb-2" />
                     公开项目
@@ -486,6 +529,11 @@ export const ProjectPage: React.FC = () => {
                   </button>
                 </div>
               </div>
+              {isOrdinaryAdmin && (
+                <p className="text-xs text-slate-400 font-semibold">
+                  普通管理员不能将项目调整为公开项目，只能维护本部门树内已绑定的组织项目记录。
+                </p>
+              )}
               <button disabled={formLoading} className="w-full py-5 bg-amber-600 text-white rounded-2xl font-black shadow-xl shadow-amber-500/20 hover:bg-amber-700 transition-all flex items-center justify-center gap-3">
                 {formLoading ? <Loader2 className="animate-spin" size={20} /> : <RefreshCw size={20} />}
                 立即更新项目

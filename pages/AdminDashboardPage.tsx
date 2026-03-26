@@ -117,7 +117,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         {/* Users */}
         <div
-          onClick={() => setCurrentView('user-mgmt-users')}
+          onClick={() => setCurrentView('user-mgmt-access')}
           className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
         >
           <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -130,7 +130,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
         {/* Roles */}
         <div
-          onClick={() => setCurrentView('user-mgmt-roles')}
+          onClick={() => setCurrentView('user-mgmt-access')}
           className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
         >
           <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -315,10 +315,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           </h3>
           <div className="grid grid-cols-2 gap-4 relative z-10">
             <button
-              onClick={() => setCurrentView('user-mgmt-users')}
+              onClick={() => setCurrentView('user-mgmt-access')}
               className="px-4 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all text-sm"
             >
-              用户管理
+              权限管理
             </button>
             <button
               onClick={() => setCurrentView('user-mgmt-online')}

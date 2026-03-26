@@ -54,12 +54,14 @@ import { RoleMgmtPage } from './pages/user/RoleMgmtPage';
 import { PermMgmtPage } from './pages/user/PermMgmtPage';
 import { OnlineSessionPage } from './pages/user/OnlineSessionPage';
 import { MachineTokenPage } from './pages/user/MachineTokenPage';
+import { UserPermissionPage } from './pages/user/UserPermissionPage';
 
 // Organization Pages
 import { DepartmentPage } from './pages/org/DepartmentPage';
 import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
 import { ProjectPage } from './pages/org/ProjectPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
+import { canAccessView, getUserAccess, getUserCenterDefaultView } from './utils/rbac';
 
 const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'env-agent', 'env-service', 'env-template', 'env-tasks',
@@ -202,12 +204,8 @@ const App: React.FC = () => {
   };
 
   // UID=1 is always admin, or has admin role
-  const isAdmin = !!(
-    user && (
-      Number(user.id) === 1 ||
-      (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
-    )
-  );
+  const userAccess = getUserAccess(user);
+  const isAdmin = userAccess.canAccessAdminDashboard;
 
   const fetchAdminStats = async () => {
     if (!user || !isAdmin) return;
@@ -227,6 +225,12 @@ const App: React.FC = () => {
       fetchAdminStats();
     }
   }, [token, currentView, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (canAccessView(user, currentView)) return;
+    setCurrentView(getUserCenterDefaultView(user));
+  }, [user, currentView]);
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -311,6 +315,10 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    if (user && !canAccessView(user, currentView)) {
+      return <div className="p-20 text-center"><h3 className="text-xl font-black text-slate-400">当前账号无权访问该页面。</h3></div>;
+    }
+
     switch (currentView) {
       case 'dashboard': return (
         <DashboardPage 
@@ -384,6 +392,7 @@ const App: React.FC = () => {
       case 'sys-settings': return <WorkflowPlaceholder title="系统设置" icon={<Settings />} />;
       case 'change-password': return <WorkflowPlaceholder title="修改密码" icon={<Lock />} />;
       case 'user-mgmt-users': return <UserMgmtPage />;
+      case 'user-mgmt-access': return <UserPermissionPage />;
       case 'user-mgmt-roles': return <RoleMgmtPage />;
       case 'user-mgmt-perms': return <PermMgmtPage />;
       case 'user-mgmt-online': return <OnlineSessionPage />;

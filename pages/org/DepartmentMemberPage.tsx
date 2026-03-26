@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, UserCheck, Shield, Crown, UserCircle, Lock } from 'lucide-react';
+import { Users, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, UserCheck, Shield, Crown, UserCircle, Lock, ArrowRightLeft, Building2 } from 'lucide-react';
 import { orgApi, UserPermissionInfo } from '../../api/org';
 import { authApi } from '../../api/auth';
 import { Department, DepartmentMember, UserInfo } from '../../types/types';
@@ -14,16 +14,23 @@ export const DepartmentMemberPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<DepartmentMember | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({ user_id: '', department_id: '', role: 'member' });
+  const [moveDepartmentId, setMoveDepartmentId] = useState('');
   const [userPermissions, setUserPermissions] = useState<UserPermissionInfo | null>(null);
 
   useEffect(() => {
     fetchDepartments();
-    fetchUsers();
     fetchUserPermissions();
   }, []);
+
+  useEffect(() => {
+    if (userPermissions?.can_manage_users) {
+      fetchUsers();
+    }
+  }, [userPermissions]);
 
   useEffect(() => {
     if (selectedDepartmentId) {
@@ -70,30 +77,8 @@ export const DepartmentMemberPage: React.FC = () => {
     return styles[role] || 'bg-slate-50 text-slate-600 border-slate-100';
   };
 
-  const getCurrentUserRole = (): string | null => {
-    if (!userPermissions || !selectedDepartmentId) return null;
-    const currentUserId = userPermissions.user_id;
-    if (!currentUserId) return null;
-    
-    // 检查用户是否是目标部门的直接成员
-    const member = members.find(m => m.user_id === currentUserId);
-    if (member) {
-      return member.role;
-    }
-    
-    // 检查用户是否是上级部门的组长
-    // 如果用户可以管理部门但不是直接成员，则视为上级部门组长
-    if (canManageCurrentDepartment()) {
-      return 'leader';
-    }
-    
-    return null;
-  };
-
   const canEditRole = (): boolean => {
-    if (userPermissions?.is_admin) return true;
-    const currentRole = getCurrentUserRole();
-    return currentRole === 'leader';
+    return !!userPermissions?.can_manage_users;
   };
 
   const getAvailableRoles = (): { value: string; label: string }[] => {
@@ -103,32 +88,19 @@ export const DepartmentMemberPage: React.FC = () => {
       { value: 'leader', label: '组长' }
     ];
     
-    if (userPermissions?.is_admin) return allRoles;
-    
-    const currentRole = getCurrentUserRole();
-    if (currentRole === 'leader') return allRoles;
-    if (currentRole === 'vice_leader') return [{ value: 'member', label: '成员' }];
-    
+    if (userPermissions?.can_manage_users) return allRoles;
     return [{ value: 'member', label: '成员' }];
   };
 
   const canRemoveMember = (member: DepartmentMember): boolean => {
-    if (!canManageCurrentDepartment()) return false;
-    if (userPermissions?.is_admin) return true;
-    
-    const currentRole = getCurrentUserRole();
-    if (!currentRole) return false;
-    
-    const roleHierarchy: Record<string, number> = {
-      'leader': 3,
-      'vice_leader': 2,
-      'member': 1
-    };
-    
-    const currentLevel = roleHierarchy[currentRole] || 0;
-    const targetLevel = roleHierarchy[member.role] || 0;
-    
-    return currentLevel > targetLevel;
+    return !!userPermissions?.can_manage_users && canManageCurrentDepartment();
+  };
+
+  const canMoveMember = (member: DepartmentMember): boolean => {
+    if (!userPermissions?.can_manage_department_members) return false;
+    if (!canManageDepartment(member.department_id)) return false;
+    if (userPermissions.is_admin) return true;
+    return member.role === 'member';
   };
 
   const fetchDepartments = async () => {
@@ -217,6 +189,25 @@ export const DepartmentMemberPage: React.FC = () => {
     }
   };
 
+  const handleMoveMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMember || !moveDepartmentId) return;
+    setFormLoading(true);
+    try {
+      await orgApi.updateDepartmentMember(selectedMember.id, { department_id: parseInt(moveDepartmentId, 10) });
+      setIsMoveModalOpen(false);
+      setSelectedMember(null);
+      setMoveDepartmentId('');
+      if (selectedDepartmentId) {
+        fetchMembers(selectedDepartmentId);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   const openEditModal = (member: DepartmentMember) => {
     setSelectedMember(member);
     setFormData({
@@ -234,6 +225,12 @@ export const DepartmentMemberPage: React.FC = () => {
       role: 'member'
     });
     setIsAddModalOpen(true);
+  };
+
+  const openMoveModal = (member: DepartmentMember) => {
+    setSelectedMember(member);
+    setMoveDepartmentId(member.department_id.toString());
+    setIsMoveModalOpen(true);
   };
 
   const filteredMembers = members.filter(m =>
@@ -260,7 +257,7 @@ export const DepartmentMemberPage: React.FC = () => {
           <button onClick={() => selectedDepartmentId && fetchMembers(selectedDepartmentId)} className="p-4 bg-white border border-slate-200 text-slate-500 rounded-2xl hover:bg-slate-50 transition-all shadow-sm active:scale-95">
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
-          {canManageCurrentDepartment() && (
+          {userPermissions?.can_manage_users && canManageCurrentDepartment() && (
             <button onClick={openAddModal} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">
               <Plus size={20} /> 添加成员
             </button>
@@ -360,6 +357,15 @@ export const DepartmentMemberPage: React.FC = () => {
                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                       {canManageCurrentDepartment() ? (
                         <>
+                          {canMoveMember(member) && (
+                            <button
+                              onClick={() => openMoveModal(member)}
+                              className="p-3 bg-indigo-50 text-indigo-500 border border-transparent hover:border-indigo-100 rounded-xl transition-all shadow-sm"
+                              title="调整所属部门"
+                            >
+                              <ArrowRightLeft size={16} />
+                            </button>
+                          )}
                           {canEditRole() && (
                             <button
                               onClick={() => openEditModal(member)}
@@ -378,7 +384,7 @@ export const DepartmentMemberPage: React.FC = () => {
                               <Trash2 size={16} />
                             </button>
                           )}
-                          {!canEditRole() && !canRemoveMember(member) && (
+                          {!canMoveMember(member) && !canEditRole() && !canRemoveMember(member) && (
                             <span className="text-[10px] text-slate-400 font-medium px-2 py-1 bg-slate-100 rounded-lg">
                               <Lock size={10} className="inline mr-1" />无权操作
                             </span>
@@ -399,7 +405,7 @@ export const DepartmentMemberPage: React.FC = () => {
       </div>
 
       {/* Add Member Modal */}
-      {isAddModalOpen && (
+      {isAddModalOpen && userPermissions?.can_manage_users && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-10 pb-4 border-b border-slate-50 flex items-center justify-between">
@@ -464,8 +470,48 @@ export const DepartmentMemberPage: React.FC = () => {
         </div>
       )}
 
+      {isMoveModalOpen && selectedMember && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-10 pb-4 border-b border-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white">
+                  <Building2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight">调整所属部门: {selectedMember.username}</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Move Department</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMoveModalOpen(false)} className="p-3 text-slate-300 hover:text-slate-600">
+                <X size={28} />
+              </button>
+            </div>
+            <form onSubmit={handleMoveMember} className="p-10 space-y-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">目标部门 *</label>
+                <select
+                  required
+                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-4 ring-indigo-500/10 font-bold text-slate-800"
+                  value={moveDepartmentId}
+                  onChange={e => setMoveDepartmentId(e.target.value)}
+                >
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+              <button disabled={formLoading} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
+                {formLoading ? <Loader2 className="animate-spin" size={20} /> : <ArrowRightLeft size={20} />}
+                确认调整部门
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Edit Member Modal */}
-      {isEditModalOpen && selectedMember && (
+      {isEditModalOpen && selectedMember && userPermissions?.can_manage_users && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-10 pb-4 border-b border-slate-50 flex items-center justify-between">

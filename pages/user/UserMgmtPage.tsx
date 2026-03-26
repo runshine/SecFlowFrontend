@@ -215,7 +215,7 @@ export const UserMgmtPage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-xl font-black text-slate-800">创建新用户</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Initialize Identity</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">New users default to ordinary user</p>
                   </div>
                 </div>
                 <button onClick={() => setIsCreateModalOpen(false)} className="p-3 text-slate-300 hover:text-slate-600"><X size={28} /></button>

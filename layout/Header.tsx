@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, Search, RotateCw, ShieldCheck, Clock, Settings, UserCog, Lock, LogOut, Calendar } from 'lucide-react';
 import { SecurityProject, UserInfo, ViewType } from '../types/types';
+import { getPlatformRoleLabel, getUserAccess, getUserCenterDefaultView } from '../utils/rbac';
 
 // 声明全局构建时间变量
 declare const __BUILD_TIME__: string;
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   fetchProjects, isRefreshing, setCurrentView, handleLogout
 }) => {
   const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
+  const userAccess = getUserAccess(user);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -107,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                  <ShieldCheck size={11} className="text-blue-500" />
-                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{user?.role?.[0] || 'Operator'}</span>
+                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{getPlatformRoleLabel(userAccess.platformRole)}</span>
               </div>
            </div>
         </div>
@@ -122,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="text-left hidden md:block">
                <p className="text-[10px] font-black text-white leading-tight">{user?.username}</p>
-               <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Administrator</p>
+               <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{getPlatformRoleLabel(userAccess.platformRole)}</p>
             </div>
             <ChevronDown size={14} className={`text-slate-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
           </button>
@@ -149,12 +151,14 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Settings size={16} className="text-slate-400" /> 系统设置
                 </button>
-                <button 
-                  onClick={() => { setCurrentView('user-mgmt-users'); setIsUserMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
-                >
-                  <UserCog size={16} className="text-slate-400" /> 用户管理
-                </button>
+                {userAccess.canAccessUserCenter && (
+                  <button 
+                    onClick={() => { setCurrentView(getUserCenterDefaultView(user)); setIsUserMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+                  >
+                    <UserCog size={16} className="text-slate-400" /> 用户管理
+                  </button>
+                )}
                 <button 
                   onClick={() => { setCurrentView('change-password'); setIsUserMenuOpen(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-all"

@@ -1,0 +1,137 @@
+import { UserInfo, ViewType } from '../types/types';
+
+export type PlatformRole = 'super_admin' | 'ordinary_admin' | 'ordinary_user';
+
+export interface UserAccess {
+  platformRole: PlatformRole;
+  canAccessUserCenter: boolean;
+  canAccessAdminDashboard: boolean;
+  canManageUsers: boolean;
+  canManageRoles: boolean;
+  canManageDepartments: boolean;
+  canManageDepartmentMembers: boolean;
+  canManageOrgProjects: boolean;
+}
+
+const PLATFORM_ROLE_ALIASES: Record<string, PlatformRole> = {
+  super_admin: 'super_admin',
+  admin: 'super_admin',
+  '管理员': 'super_admin',
+  '超级管理员': 'super_admin',
+  ordinary_admin: 'ordinary_admin',
+  '普通管理员': 'ordinary_admin',
+  ordinary_user: 'ordinary_user',
+  user: 'ordinary_user',
+  '普通用户': 'ordinary_user',
+};
+
+export const getPlatformRole = (user: UserInfo | null | undefined): PlatformRole => {
+  if (!user) return 'ordinary_user';
+
+  if (Number(user.id) === 1) {
+    return 'super_admin';
+  }
+
+  const names = [
+    user.platform_role,
+    ...(Array.isArray(user.role) ? user.role : []),
+  ].filter(Boolean) as string[];
+
+  for (const name of names) {
+    const normalized = PLATFORM_ROLE_ALIASES[name] || PLATFORM_ROLE_ALIASES[name.toLowerCase()];
+    if (normalized === 'super_admin') return normalized;
+  }
+  for (const name of names) {
+    const normalized = PLATFORM_ROLE_ALIASES[name] || PLATFORM_ROLE_ALIASES[name.toLowerCase()];
+    if (normalized === 'ordinary_admin') return normalized;
+  }
+
+  return 'ordinary_user';
+};
+
+export const getUserAccess = (user: UserInfo | null | undefined): UserAccess => {
+  const platformRole = getPlatformRole(user);
+
+  if (platformRole === 'super_admin') {
+    return {
+      platformRole,
+      canAccessUserCenter: true,
+      canAccessAdminDashboard: true,
+      canManageUsers: true,
+      canManageRoles: true,
+      canManageDepartments: true,
+      canManageDepartmentMembers: true,
+      canManageOrgProjects: true,
+    };
+  }
+
+  if (platformRole === 'ordinary_admin') {
+    return {
+      platformRole,
+      canAccessUserCenter: true,
+      canAccessAdminDashboard: false,
+      canManageUsers: false,
+      canManageRoles: false,
+      canManageDepartments: false,
+      canManageDepartmentMembers: true,
+      canManageOrgProjects: false,
+    };
+  }
+
+  return {
+    platformRole,
+    canAccessUserCenter: false,
+    canAccessAdminDashboard: false,
+    canManageUsers: false,
+    canManageRoles: false,
+    canManageDepartments: false,
+    canManageDepartmentMembers: false,
+    canManageOrgProjects: false,
+  };
+};
+
+const SUPER_ADMIN_VIEWS = new Set<string>([
+  'admin-dashboard',
+  'user-mgmt-users',
+  'user-mgmt-access',
+  'user-mgmt-online',
+  'user-mgmt-machine',
+  'org-mgmt-departments',
+  'org-mgmt-members',
+  'org-mgmt-projects',
+]);
+
+const ORDINARY_ADMIN_VIEWS = new Set<string>([
+  'org-mgmt-members',
+]);
+
+export const canAccessView = (user: UserInfo | null | undefined, view: ViewType | string): boolean => {
+  const access = getUserAccess(user);
+
+  if (SUPER_ADMIN_VIEWS.has(view)) {
+    return access.platformRole === 'super_admin';
+  }
+
+  if (ORDINARY_ADMIN_VIEWS.has(view)) {
+    return access.platformRole === 'super_admin' || access.platformRole === 'ordinary_admin';
+  }
+
+  return true;
+};
+
+export const getUserCenterDefaultView = (user: UserInfo | null | undefined): ViewType | 'dashboard' => {
+  const access = getUserAccess(user);
+  if (access.platformRole === 'super_admin') {
+    return 'user-mgmt-access';
+  }
+  if (access.platformRole === 'ordinary_admin') {
+    return 'org-mgmt-members';
+  }
+  return 'dashboard';
+};
+
+export const getPlatformRoleLabel = (platformRole: PlatformRole): string => {
+  if (platformRole === 'super_admin') return '超级管理员';
+  if (platformRole === 'ordinary_admin') return '普通管理员';
+  return '普通用户';
+};

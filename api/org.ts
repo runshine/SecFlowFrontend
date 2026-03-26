@@ -5,10 +5,17 @@ import { Department, DepartmentMember, Project, SecurityProject } from '../types
 export interface UserPermissionInfo {
   user_id: number;
   is_admin: boolean;
+  platform_role: 'super_admin' | 'ordinary_admin' | 'ordinary_user';
   department_ids: number[];
   manageable_department_ids: number[];
   department_structure_manageable_ids: number[];
   role_names: string[];
+  can_access_user_management: boolean;
+  can_manage_users: boolean;
+  can_manage_roles: boolean;
+  can_manage_departments: boolean;
+  can_manage_department_members: boolean;
+  can_manage_org_projects: boolean;
 }
 
 /**
@@ -102,7 +109,7 @@ export const orgApi = {
     return handleResponse(response);
   },
 
-  updateDepartmentMember: async (memberId: number, payload: { role?: string }): Promise<DepartmentMember> => {
+  updateDepartmentMember: async (memberId: number, payload: { role?: string; department_id?: number }): Promise<DepartmentMember> => {
     const response = await fetch(`${API_BASE}/api/auth/org/department-members/${memberId}`, {
       method: 'PUT',
       headers: getHeaders(),

@@ -13,6 +13,10 @@ export interface UserInfo {
   username: string;
   is_active: boolean;
   role: string[];
+  platform_role?: 'super_admin' | 'ordinary_admin' | 'ordinary_user';
+  department_member_id?: number | null;
+  department_id?: number | null;
+  department_name?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -895,7 +899,7 @@ export type ViewType =
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'
   | 'security-assessment' | 'vuln-engine'
   | 'sys-settings' | 'change-password'
-  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-online' | 'user-mgmt-machine'
+  | 'user-mgmt-users' | 'user-mgmt-roles' | 'user-mgmt-perms' | 'user-mgmt-access' | 'user-mgmt-online' | 'user-mgmt-machine'
   | 'org-mgmt-departments' | 'org-mgmt-members' | 'org-mgmt-projects';
 
 // Admin Dashboard Statistics Types

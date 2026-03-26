@@ -44,6 +44,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { UserInfo, ViewType } from '../types/types';
+import { getUserAccess } from '../utils/rbac';
 
 interface SidebarProps {
   user: UserInfo | null;
@@ -136,17 +137,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const renderMainSidebar = () => {
-    const isAdmin = !!(
-      user && (
-        Number(user.id) === 1 ||
-        (Array.isArray(user.role) && (user.role.includes('admin') || user.role.includes('管理员')))
-      )
-    );
+    const access = getUserAccess(user);
 
     return (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">
       <div className="space-y-1">
-        {isAdmin && (
+        {access.canAccessAdminDashboard && (
           <SidebarItem
             id="admin-dashboard"
             label="管理员控制台"
@@ -245,7 +241,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
   };
 
-  const renderUserMgmtSidebar = () => (
+  const renderUserMgmtSidebar = () => {
+    const access = getUserAccess(user);
+
+    return (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">
        <div className="space-y-4">
           <button 
@@ -254,31 +253,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
              <ArrowLeftCircle size={16} /> 返回业务大盘
           </button>
-          
-          <SidebarItem
-            id="user-mgmt-root"
-            label="用户权限中心"
-            icon={<ShieldAlert size={20} />}
-            children={[
+
+          {access.canManageUsers && (
+            <SidebarItem
+              id="user-mgmt-root"
+              label="用户权限中心"
+              icon={<ShieldAlert size={20} />}
+              children={[
               { id: 'user-mgmt-users', label: '用户账号管理', icon: <Users size={14} /> },
+              { id: 'user-mgmt-access', label: '用户权限管理', icon: <Shield size={14} /> },
               { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> },
               { id: 'user-mgmt-machine', label: '机机凭证管理', icon: <Cpu size={14} /> }
-            ]}
-          />
+              ]}
+            />
+          )}
           
           <SidebarItem 
             id="org-mgmt-root" 
             label="组织架构管理" 
             icon={<Building2 size={20} />} 
             children={[
-              { id: 'org-mgmt-departments', label: '部门结构管理', icon: <Building2 size={14} /> },
-              { id: 'org-mgmt-members', label: '部门成员管理', icon: <Users size={14} /> },
-              { id: 'org-mgmt-projects', label: '项目权限管理', icon: <FolderOpen size={14} /> }
+              ...(access.canManageDepartments ? [{ id: 'org-mgmt-departments', label: '部门结构管理', icon: <Building2 size={14} /> }] : []),
+              ...(access.canManageDepartmentMembers ? [{ id: 'org-mgmt-members', label: '部门成员管理', icon: <Users size={14} /> }] : []),
+              ...(access.canManageOrgProjects ? [{ id: 'org-mgmt-projects', label: '项目权限管理', icon: <FolderOpen size={14} /> }] : []),
             ]} 
           />
        </div>
     </nav>
   );
+  };
 
   return (
     <aside className={`${isSidebarCollapsed ? 'w-24' : 'w-80'} bg-slate-900 text-slate-300 flex flex-col transition-all duration-300 z-30 shadow-2xl shrink-0`}>

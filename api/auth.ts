@@ -143,6 +143,20 @@ export const authApi = {
     return handleResponse(response);
   },
 
+  getUserPlatformRole: async (userId: number): Promise<{ user_id: number; platform_role: string; role_names: string[] }> => {
+    const response = await fetch(`${API_BASE}/api/auth/users/${userId}/platform-role`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
+  updateUserPlatformRole: async (userId: number, roleName: 'ordinary_admin' | 'ordinary_user'): Promise<any> => {
+    const response = await fetch(`${API_BASE}/api/auth/users/${userId}/platform-role`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ role_name: roleName }),
+    });
+    return handleResponse(response);
+  },
+
   // 密码管理
   changePasswordAdmin: async (userId: number, payload: any): Promise<any> => {
     const response = await fetch(`${API_BASE}/api/auth/users/${userId}/password`, {

@@ -459,6 +459,9 @@ export interface Project {
   name: string;
   description?: string;
   is_public: boolean;
+  department_id?: number;
+  department_name?: string;
+  can_manage?: boolean;
   created_at: string;
   updated_at: string;
   departments?: Department[];
@@ -480,6 +483,9 @@ export interface SecurityProject {
   owner_name?: string;
   status?: string;
   is_public?: boolean;
+  department_id?: number | null;
+  department_name?: string | null;
+  can_manage?: boolean;
   created_at?: string;
   updated_at?: string;
   k8s_namespace?: string;

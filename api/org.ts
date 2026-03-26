@@ -46,6 +46,9 @@ export const orgApi = {
         name: p.name,
         description: p.description,
         is_public: p.is_public,
+        department_id: p.department_id,
+        department_name: p.department_name,
+        can_manage: p.can_manage,
         created_at: p.created_at,
         updated_at: p.updated_at,
         owner_id: p.owner_id,
@@ -53,7 +56,7 @@ export const orgApi = {
         owner_department_id: p.owner_department_id,
         owner_department_name: p.owner_department_name,
         roles: p.roles || [],
-        departments: p.owner_department_name ? [{ id: p.owner_department_id, name: p.owner_department_name }] : []
+        departments: p.department_id && p.department_name ? [{ id: p.department_id, name: p.department_name }] : []
       }))
     };
   },
@@ -151,15 +154,18 @@ export const orgApi = {
       id: p.id,  // 保留字符串ID，用于项目空间操作
       name: p.name,
       description: p.description || '',
-      is_public: true, // 项目空间系统默认为公开项目
+      is_public: !!p.is_public,
+      department_id: p.department_id ?? undefined,
+      department_name: p.department_name ?? undefined,
+      can_manage: p.can_manage ?? false,
       created_at: p.created_at || new Date().toISOString(),
       updated_at: p.updated_at || new Date().toISOString(),
-      departments: [], // 项目空间不包含部门信息，需单独获取
+      departments: p.department_id && p.department_name ? [{ id: p.department_id, name: p.department_name }] : [],
       project_space_id: p.id  // 保存项目空间ID
     }));
   },
 
-  createProject: async (payload: { name: string; description?: string; is_public: boolean; department_ids?: number[] }): Promise<Project> => {
+  createProject: async (payload: { name: string; description?: string; is_public: boolean; department_ids?: number[]; department_id?: number }): Promise<Project> => {
     let orgProjectData = null;
 
     try {
@@ -169,7 +175,9 @@ export const orgApi = {
         headers: getHeaders(),
         body: JSON.stringify({
           name: payload.name,
-          description: payload.description
+          description: payload.description,
+          is_public: payload.is_public,
+          department_id: payload.department_id ?? payload.department_ids?.[0]
         }),
       });
       await handleResponse(projectSpaceResponse);
@@ -208,7 +216,7 @@ export const orgApi = {
     return handleResponse(response);
   },
 
-  updateProject: async (projectId: number | string, payload: { name?: string; description?: string; is_public?: boolean }, orgProjectId?: number): Promise<Project> => {
+  updateProject: async (projectId: number | string, payload: { name?: string; description?: string; is_public?: boolean; department_id?: number }, orgProjectId?: number): Promise<Project> => {
     const projectIdStr = String(projectId);
     let orgResult = null;
 
@@ -220,7 +228,8 @@ export const orgApi = {
         body: JSON.stringify({
           name: payload.name,
           description: payload.description,
-          is_public: payload.is_public
+          is_public: payload.is_public,
+          department_id: payload.department_id
         }),
       });
       await handleResponse(projectSpaceResponse);

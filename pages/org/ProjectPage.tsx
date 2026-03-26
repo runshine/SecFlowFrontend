@@ -37,6 +37,10 @@ export const ProjectPage: React.FC = () => {
 
   // 检查用户是否可以编辑/删除项目
   const canManageProject = (project: Project): boolean => {
+    if (typeof project.can_manage === 'boolean') {
+      return project.can_manage;
+    }
+
     if (!userPermissions || !userPermissions.can_manage_org_projects) return false;
 
     // admin用户可以管理所有项目

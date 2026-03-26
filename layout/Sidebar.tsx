@@ -76,7 +76,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const isUserMgmtMode = currentView.startsWith('user-mgmt-') || currentView.startsWith('org-mgmt-');
 
-  const SidebarItem = ({ id, label, icon, children, depth = 0, healthStatus = null, applyHealth = false, disabled = false }: any) => {
+  const SidebarItem = ({
+    id,
+    label,
+    icon,
+    children,
+    depth = 0,
+    healthStatus = null,
+    applyHealth = false,
+    disabled = false,
+    disabledTitle,
+  }: any) => {
     const isExpanded = expandedMenus.has(id);
     const isActive = currentView === id;
     const hasChildren = children && children.length > 0;
@@ -109,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
           }`}
           style={{ marginLeft: depth > 0 ? `${depth * 0.75}rem` : '0' }}
-          title={disabled ? '请先选择项目后再使用此功能' : undefined}
+          title={disabled ? (disabledTitle || '请先选择项目后再使用此功能') : undefined}
         >
           {iconElement}
           {!isSidebarCollapsed && (
@@ -130,6 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             healthStatus={child.id === 'pentest-exec-code' ? codeAuditHealth : (child.healthStatus !== undefined ? child.healthStatus : healthStatus)}
             applyHealth={child.id === 'pentest-exec-code' ? true : (child.applyHealth !== undefined ? child.applyHealth : applyHealth)}
             disabled={disabled || !!child.disabled}
+            disabledTitle={child.disabledTitle}
           />
         ))}
       </div>
@@ -243,6 +254,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const renderUserMgmtSidebar = () => {
     const access = getUserAccess(user);
+    const isOrdinaryAdmin = access.platformRole === 'ordinary_admin';
+    const userCenterChildren = [
+      {
+        id: 'user-mgmt-users',
+        label: '用户账号管理',
+        icon: <Users size={14} />,
+        disabled: isOrdinaryAdmin,
+        disabledTitle: '普通管理员无权访问用户账号管理',
+      },
+      {
+        id: 'user-mgmt-access',
+        label: '用户权限管理',
+        icon: <Shield size={14} />,
+        disabled: isOrdinaryAdmin,
+        disabledTitle: '普通管理员无权访问用户权限管理',
+      },
+      {
+        id: 'user-mgmt-online',
+        label: '在线会话监控',
+        icon: <Globe size={14} />,
+        disabled: isOrdinaryAdmin,
+        disabledTitle: '普通管理员无权访问在线会话监控',
+      },
+      {
+        id: 'user-mgmt-machine',
+        label: '机机凭证管理',
+        icon: <Cpu size={14} />,
+        disabled: isOrdinaryAdmin,
+        disabledTitle: '普通管理员无权访问机机凭证管理',
+      },
+    ];
+    const orgCenterChildren = [
+      {
+        id: 'org-mgmt-departments',
+        label: '部门结构管理',
+        icon: <Building2 size={14} />,
+        disabled: !access.canManageDepartments,
+        disabledTitle: '普通管理员无权访问部门结构管理',
+      },
+      {
+        id: 'org-mgmt-members',
+        label: '部门成员管理',
+        icon: <Users size={14} />,
+        disabled: !access.canManageDepartmentMembers,
+        disabledTitle: '当前账号无权访问部门成员管理',
+      },
+      {
+        id: 'org-mgmt-projects',
+        label: '项目权限管理',
+        icon: <FolderOpen size={14} />,
+        disabled: !access.canManageOrgProjects,
+        disabledTitle: '当前账号无权访问项目权限管理',
+      },
+    ];
 
     return (
     <nav className="flex-1 px-5 py-2 space-y-8 overflow-y-auto custom-scrollbar">
@@ -254,29 +319,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
              <ArrowLeftCircle size={16} /> 返回业务大盘
           </button>
 
-          {access.canManageUsers && (
-            <SidebarItem
-              id="user-mgmt-root"
-              label="用户权限中心"
-              icon={<ShieldAlert size={20} />}
-              children={[
-              { id: 'user-mgmt-users', label: '用户账号管理', icon: <Users size={14} /> },
-              { id: 'user-mgmt-access', label: '用户权限管理', icon: <Shield size={14} /> },
-              { id: 'user-mgmt-online', label: '在线会话监控', icon: <Globe size={14} /> },
-              { id: 'user-mgmt-machine', label: '机机凭证管理', icon: <Cpu size={14} /> }
-              ]}
-            />
-          )}
+          <SidebarItem
+            id="user-mgmt-root"
+            label="用户权限中心"
+            icon={<ShieldAlert size={20} />}
+            children={userCenterChildren}
+          />
           
           <SidebarItem 
             id="org-mgmt-root" 
             label="组织架构管理" 
             icon={<Building2 size={20} />} 
-            children={[
-              ...(access.canManageDepartments ? [{ id: 'org-mgmt-departments', label: '部门结构管理', icon: <Building2 size={14} /> }] : []),
-              ...(access.canManageDepartmentMembers ? [{ id: 'org-mgmt-members', label: '部门成员管理', icon: <Users size={14} /> }] : []),
-              ...(access.canManageOrgProjects ? [{ id: 'org-mgmt-projects', label: '项目权限管理', icon: <FolderOpen size={14} /> }] : []),
-            ]} 
+            children={orgCenterChildren} 
           />
        </div>
     </nav>

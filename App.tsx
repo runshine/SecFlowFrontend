@@ -46,7 +46,15 @@ import { ExecutionCodeAuditPage } from './pages/pentest/ExecutionCodeAuditPage';
 import { ExecutionWorkPlatformPage } from './pages/pentest/ExecutionWorkPlatformPage';
 import { SecMateNGPage } from './pages/pentest/SecMateNGPage';
 import { ReportsPage } from './pages/pentest/ReportsPage';
-import { VulnEnginePage } from './pages/pentest/VulnEnginePage';
+import { VulnOverviewPage } from './pages/pentest/VulnOverviewPage';
+import { VulnIntakePage } from './pages/pentest/VulnIntakePage';
+import { VulnAnalysisPage } from './pages/pentest/VulnAnalysisPage';
+import { VulnVerificationPage } from './pages/pentest/VulnVerificationPage';
+import { VulnProofPage } from './pages/pentest/VulnProofPage';
+import { VulnDecisionPage } from './pages/pentest/VulnDecisionPage';
+import { VulnQueuePage } from './pages/pentest/VulnQueuePage';
+import { VulnServicesPage } from './pages/pentest/VulnServicesPage';
+import { VulnReproConfigPage } from './pages/pentest/VulnReproConfigPage';
 
 // User & Auth Pages
 import { UserMgmtPage } from './pages/user/UserMgmtPage';
@@ -74,7 +82,7 @@ const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'pentest-exec-code', 'pentest-exec-work', 'pentest-exec-secmate',
   'pentest-report',
   'security-assessment',
-  'vuln-engine'
+  'vuln-engine', 'vuln-overview', 'vuln-intake', 'vuln-analysis', 'vuln-verification', 'vuln-proof', 'vuln-decision', 'vuln-queue', 'vuln-services', 'vuln-repro-config'
 ]);
 
 const App: React.FC = () => {
@@ -95,7 +103,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'org-mgmt-root', 'workflow-root']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'org-mgmt-root', 'workflow-root', 'vuln-root']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
@@ -386,7 +394,16 @@ const App: React.FC = () => {
       case 'pentest-exec-secmate': return <SecMateNGPage projectId={selectedProjectId} />;
       case 'pentest-report': return <ReportsPage />;
       case 'security-assessment': return <SecurityAssessmentPage />;
-      case 'vuln-engine': return <VulnEnginePage projectId={selectedProjectId} />;
+      case 'vuln-engine':
+      case 'vuln-overview': return <VulnOverviewPage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-intake': return <VulnIntakePage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-analysis': return <VulnAnalysisPage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-verification': return <VulnVerificationPage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-proof': return <VulnProofPage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-decision': return <VulnDecisionPage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-queue': return <VulnQueuePage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-services': return <VulnServicesPage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
+      case 'vuln-repro-config': return <VulnReproConfigPage projectId={selectedProjectId} onNavigateToView={setCurrentView} />;
 
       // Admin Pages
       case 'sys-settings': return <WorkflowPlaceholder title="系统设置" icon={<Settings />} />;

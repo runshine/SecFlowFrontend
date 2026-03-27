@@ -34,6 +34,8 @@ import {
   UserCog,
   ShieldAlert,
   Globe,
+  Settings,
+  ServerCog,
   ArrowLeftCircle,
   Cpu,
   Key,
@@ -246,7 +248,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'pentest-report', label: '报告', icon: <FileText size={14} /> }
         ]} />
         <SidebarItem id="security-assessment" label="安全评估" icon={<ClipboardCheck size={20} />} disabled={!hasSelectedProject} />
-        <SidebarItem id="vuln-engine" label="漏洞引擎" icon={<Cpu size={20} />} disabled={!hasSelectedProject} />
+        <SidebarItem
+          id="vuln-root"
+          label="漏洞引擎"
+          icon={<Cpu size={20} />}
+          disabled={!hasSelectedProject}
+          children={[
+            { id: 'vuln-overview', label: '生命周期总览', icon: <Activity size={14} /> },
+            { id: 'vuln-intake', label: '漏洞上报', icon: <FolderOpen size={14} /> },
+            { id: 'vuln-analysis', label: '分析研判', icon: <GitBranch size={14} /> },
+            { id: 'vuln-verification', label: '验证复现', icon: <ShieldCheck size={14} /> },
+            { id: 'vuln-proof', label: '证明利用', icon: <Sparkles size={14} /> },
+            { id: 'vuln-decision', label: '裁决跟踪', icon: <ShieldAlert size={14} /> },
+            { id: 'vuln-queue', label: '运行队列', icon: <Workflow size={14} /> },
+            { id: 'vuln-services', label: '能力注册', icon: <ServerCog size={14} /> },
+            { id: 'vuln-repro-config', label: '复现模块配置', icon: <Settings size={14} /> }
+          ]}
+        />
       </div>
     </nav>
   );

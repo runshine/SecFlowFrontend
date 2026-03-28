@@ -1,6 +1,7 @@
 
 import { API_BASE, handleResponse, getHeaders } from './base';
 import { AdminDashboardStats } from '../types/types';
+import { menuApi } from './menu';
 
 // Service names for health check
 const SERVICES = [
@@ -26,6 +27,12 @@ const checkServiceHealth = async (endpoint: string): Promise<'healthy' | 'unheal
   } catch {
     return 'unhealthy';
   }
+};
+
+const mapSummaryHealth = (health?: string): 'healthy' | 'unhealthy' | 'unknown' => {
+  if (health === 'healthy') return 'healthy';
+  if (health === 'unknown' || health === 'stale') return 'unknown';
+  return 'unhealthy';
 };
 
 export const adminApi = {
@@ -106,12 +113,18 @@ export const adminApi = {
       },
     };
 
-    // Check service health in parallel
-    const serviceHealthPromises = SERVICES.map(async (service) => ({
-      name: service.name,
-      status: await checkServiceHealth(service.endpoint),
-    }));
-    const services = await Promise.all(serviceHealthPromises);
+    const services = await menuApi.getServiceHealthSummary()
+      .then((summary) => SERVICES.map((service) => ({
+        name: service.name,
+        status: mapSummaryHealth(summary.services[service.name]?.health),
+      })))
+      .catch(async () => {
+        const serviceHealthPromises = SERVICES.map(async (service) => ({
+          name: service.name,
+          status: await checkServiceHealth(service.endpoint),
+        }));
+        return Promise.all(serviceHealthPromises);
+      });
 
     return {
       users: {
@@ -137,10 +150,17 @@ export const adminApi = {
    * Refresh all service health statuses
    */
   getServiceHealth: async (): Promise<{ name: string; status: 'healthy' | 'unhealthy' | 'unknown' }[]> => {
-    const healthPromises = SERVICES.map(async (service) => ({
-      name: service.name,
-      status: await checkServiceHealth(service.endpoint),
-    }));
-    return Promise.all(healthPromises);
+    return menuApi.getServiceHealthSummary()
+      .then((summary) => SERVICES.map((service) => ({
+        name: service.name,
+        status: mapSummaryHealth(summary.services[service.name]?.health),
+      })))
+      .catch(async () => {
+        const healthPromises = SERVICES.map(async (service) => ({
+          name: service.name,
+          status: await checkServiceHealth(service.endpoint),
+        }));
+        return Promise.all(healthPromises);
+      });
   },
 };

@@ -12,6 +12,7 @@ import { k8sApi } from './k8s';
 import { adminApi } from './admin';
 import { vulnApi } from './vuln';
 import { fileserverApi } from './fileserver';
+import { menuApi } from './menu';
 import { configCenterApi } from './configcenter';
 
 export const api = {
@@ -24,6 +25,7 @@ export const api = {
   secmateNG: secmateNGApi,
   deployScript: deployScriptApi,
   workflow: workflowApi,
+  menu: menuApi,
   k8s: k8sApi,
   admin: adminApi,
   vuln: vulnApi,

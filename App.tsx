@@ -6,6 +6,7 @@ import { api } from './clients/api';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
 import { WorkflowPlaceholder } from './components/WorkflowPlaceholder';
+import { DialogViewport } from './components/DialogService';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectMgmtPage } from './pages/ProjectMgmtPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
@@ -77,6 +78,7 @@ import { DepartmentMemberPage } from './pages/org/DepartmentMemberPage';
 import { ProjectPage } from './pages/org/ProjectPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { canAccessView, getUserAccess, getUserCenterDefaultView } from './utils/rbac';
+import { AggregatedServiceHealth, MenuServiceHealthSummary } from './clients/menu';
 
 const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'env-agent', 'env-service', 'env-ai-agent', 'env-ai-agent-overview', 'env-ai-helper', 'env-ai-agent-manage', 'env-ai-session', 'env-ai-batch-session', 'env-template', 'env-tasks',
@@ -136,6 +138,25 @@ const App: React.FC = () => {
   const [workflowServiceHealthy, setWorkflowServiceHealthy] = useState<boolean | null>(null);
   const [vulnServiceHealthy, setVulnServiceHealthy] = useState<boolean | null>(null);
 
+  const normalizeServiceHealth = (status?: AggregatedServiceHealth | null): boolean | null => {
+    if (status === 'healthy') return true;
+    if (status === 'unhealthy' || status === 'degraded' || status === 'stale') return false;
+    return null;
+  };
+
+  const resolveMenuServiceHealth = (
+    services: MenuServiceHealthSummary['services'],
+    candidates: string[]
+  ): boolean | null => {
+    for (const candidate of candidates) {
+      const service = services[candidate];
+      if (service) {
+        return normalizeServiceHealth(service.health);
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
     const handleUnauthorized = () => {
       handleLogout();
@@ -169,75 +190,24 @@ const App: React.FC = () => {
     }
   }, [token]);
 
-  const checkAllHealth = () => {
-    checkResourceHealth();
-    checkStaticPackageHealth();
-    checkProjectHealth();
-    checkEnvHealth();
-    checkCodeAuditHealth();
-    checkWorkflowHealth();
-    checkVulnHealth();
-  };
-
-  const checkResourceHealth = async () => {
+  const checkAllHealth = async () => {
     try {
-      const res = await api.resources.getHealth();
-      setResourceServiceHealthy(res.status === 'UP' || res.status === 'healthy' || res.status === 'active');
+      const summary = await api.menu.getServiceHealthSummary();
+      const services = summary.services || {};
+      setResourceServiceHealthy(resolveMenuServiceHealth(services, ['secflow-resource', 'secflow-platform-resource']));
+      setStaticPackageHealthy(resolveMenuServiceHealth(services, ['secflow-static-binary', 'secflow-platform-static-binary']));
+      setProjectServiceHealthy(resolveMenuServiceHealth(services, ['secflow-project', 'secflow-platform-project']));
+      setEnvServiceHealthy(resolveMenuServiceHealth(services, ['secflow-k8s', 'secflow-platform-k8s']));
+      setCodeAuditServiceHealthy(resolveMenuServiceHealth(services, ['vscode-web-manager', 'secflow-app-code-server']));
+      setWorkflowServiceHealthy(resolveMenuServiceHealth(services, ['secflow-workflow', 'secflow-platform-workflow', 'secflow-workflow-status']));
+      setVulnServiceHealthy(resolveMenuServiceHealth(services, ['secflow-platform-vuln']));
     } catch (e) {
       setResourceServiceHealthy(false);
-    }
-  };
-
-  const checkStaticPackageHealth = async () => {
-    try {
-      const res = await api.staticPackages.getHealth();
-      setStaticPackageHealthy(res.status === 'UP' || res.status === 'healthy' || res.status === 'active');
-    } catch (e) {
       setStaticPackageHealthy(false);
-    }
-  };
-
-  const checkProjectHealth = async () => {
-    try {
-      const res = await api.projects.getHealth();
-      setProjectServiceHealthy(res.status === 'ok' || res.status === 'UP' || res.status === 'healthy');
-    } catch (e) {
       setProjectServiceHealthy(false);
-    }
-  };
-
-  const checkEnvHealth = async () => {
-    try {
-      const res = await api.environment.getHealth();
-      setEnvServiceHealthy(res.status === 'healthy' || res.status === 'UP' || res.status === 'active');
-    } catch (e) {
       setEnvServiceHealthy(false);
-    }
-  };
-
-  const checkCodeAuditHealth = async () => {
-    try {
-      const res = await api.codeServer.getHealth();
-      setCodeAuditServiceHealthy(res.status === 'healthy' || res.status === 'UP' || res.status === 'active');
-    } catch (e) {
       setCodeAuditServiceHealthy(false);
-    }
-  };
-
-  const checkWorkflowHealth = async () => {
-    try {
-      const res = await api.workflow.getHealth();
-      setWorkflowServiceHealthy(res.status === 'ok' || res.status === 'UP' || res.status === 'healthy');
-    } catch (e) {
       setWorkflowServiceHealthy(false);
-    }
-  };
-
-  const checkVulnHealth = async () => {
-    try {
-      const res = await api.vuln.getHealth();
-      setVulnServiceHealthy(res.status === 'ok' || res.status === 'UP' || res.status === 'healthy');
-    } catch (e) {
       setVulnServiceHealthy(false);
     }
   };
@@ -468,95 +438,101 @@ const App: React.FC = () => {
   }
 
   if (!token) return (
-    <div className="h-screen w-full flex items-center justify-center bg-slate-950 relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600 rounded-full blur-[120px]" />
-      </div>
-
-      <div className="w-full max-w-md p-10 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl relative z-10">
-        <div className="flex flex-col items-center mb-10 text-center">
-          <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/20">
-            <Shield className="text-white" size={40} />
-          </div>
-          <h1 className="text-4xl font-black text-white tracking-tighter">SecFlow</h1>
-          <p className="text-slate-500 mt-2 font-medium uppercase tracking-widest text-[10px]">专业安全测试流程引擎</p>
+    <>
+      <div className="h-screen w-full flex items-center justify-center bg-slate-950 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600 rounded-full blur-[120px]" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600 rounded-full blur-[120px]" />
         </div>
 
-        {loginError && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-xs font-bold flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-            <AlertCircle size={16} className="shrink-0" />
-            {loginError}
+        <div className="w-full max-w-md p-10 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl relative z-10">
+          <div className="flex flex-col items-center mb-10 text-center">
+            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-blue-500/20">
+              <Shield className="text-white" size={40} />
+            </div>
+            <h1 className="text-4xl font-black text-white tracking-tighter">SecFlow</h1>
+            <p className="text-slate-500 mt-2 font-medium uppercase tracking-widest text-[10px]">专业安全测试流程引擎</p>
           </div>
-        )}
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-500 uppercase ml-2">账户名称</label>
-            <input name="username" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" placeholder="Username" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-500 uppercase ml-2">身份凭证</label>
-            <input name="password" type="password" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" placeholder="Password" />
-          </div>
-          <button disabled={isLoading} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-50 disabled:active:scale-100">
-            {isLoading ? <Loader2 className="animate-spin" size={20} /> : '进入平台'}
-          </button>
-        </form>
+          {loginError && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl text-xs font-bold flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <AlertCircle size={16} className="shrink-0" />
+              {loginError}
+            </div>
+          )}
 
-        <p className="mt-8 text-center text-[10px] text-slate-600 font-medium leading-relaxed">
-          &copy; 2025 SecFlow 极速安全测试平台 <br/> 受信任的二进制分发与自动化渗透环境
-        </p>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase ml-2">账户名称</label>
+              <input name="username" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" placeholder="Username" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase ml-2">身份凭证</label>
+              <input name="password" type="password" required className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white outline-none focus:border-blue-500 transition-all" placeholder="Password" />
+            </div>
+            <button disabled={isLoading} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-500 active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-50 disabled:active:scale-100">
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : '进入平台'}
+            </button>
+          </form>
+
+          <p className="mt-8 text-center text-[10px] text-slate-600 font-medium leading-relaxed">
+            &copy; 2025 SecFlow 极速安全测试平台 <br/> 受信任的二进制分发与自动化渗透环境
+          </p>
+        </div>
       </div>
-    </div>
+      <DialogViewport />
+    </>
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
-      <Sidebar 
-        user={user} 
-        currentView={currentView} 
-        hasSelectedProject={!!selectedProjectId}
-        isSidebarCollapsed={isSidebarCollapsed} 
-        setIsSidebarCollapsed={setIsSidebarCollapsed} 
-        expandedMenus={expandedMenus} 
-        setExpandedMenus={setExpandedMenus} 
-        setCurrentView={setCurrentView} 
-        handleLogout={handleLogout}
-        resourceHealth={resourceServiceHealthy}
-        staticPackageHealth={staticPackageHealthy}
-        projectHealth={projectServiceHealthy}
-        envHealth={envServiceHealthy}
-        codeAuditHealth={codeAuditServiceHealthy}
-        workflowHealth={workflowServiceHealthy}
-        vulnHealth={vulnServiceHealthy}
-      />
-      <main className="flex-1 flex flex-col min-w-0">
-        <Header 
+    <>
+      <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
+        <Sidebar 
           user={user} 
-          projects={projects} 
-          selectedProjectId={selectedProjectId} 
-          setSelectedProjectId={setSelectedProjectId} 
-          isProjectDropdownOpen={isProjectDropdownOpen} 
-          setIsProjectDropdownOpen={setIsProjectDropdownOpen} 
-          searchQuery={searchQuery} 
-          setSearchQuery={setSearchQuery} 
-          fetchProjects={fetchProjects} 
-          isRefreshing={isRefreshing}
-          setCurrentView={setCurrentView}
+          currentView={currentView} 
+          hasSelectedProject={!!selectedProjectId}
+          isSidebarCollapsed={isSidebarCollapsed} 
+          setIsSidebarCollapsed={setIsSidebarCollapsed} 
+          expandedMenus={expandedMenus} 
+          setExpandedMenus={setExpandedMenus} 
+          setCurrentView={setCurrentView} 
           handleLogout={handleLogout}
+          resourceHealth={resourceServiceHealthy}
+          staticPackageHealth={staticPackageHealthy}
+          projectHealth={projectServiceHealthy}
+          envHealth={envServiceHealthy}
+          codeAuditHealth={codeAuditServiceHealthy}
+          workflowHealth={workflowServiceHealthy}
+          vulnHealth={vulnServiceHealthy}
         />
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
-          {renderContent()}
-        </div>
-      </main>
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; } 
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        .animate-in { animation: fade-in 0.3s ease-out; }
-      `}</style>
-    </div>
+        <main className="flex-1 flex flex-col min-w-0">
+          <Header 
+            user={user} 
+            projects={projects} 
+            selectedProjectId={selectedProjectId} 
+            setSelectedProjectId={setSelectedProjectId} 
+            isProjectDropdownOpen={isProjectDropdownOpen} 
+            setIsProjectDropdownOpen={setIsProjectDropdownOpen} 
+            searchQuery={searchQuery} 
+            setSearchQuery={setSearchQuery} 
+            fetchProjects={fetchProjects} 
+            isRefreshing={isRefreshing}
+            setCurrentView={setCurrentView}
+            handleLogout={handleLogout}
+          />
+          <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+            {renderContent()}
+          </div>
+        </main>
+        <style>{`
+          .custom-scrollbar::-webkit-scrollbar { width: 6px; } 
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+          @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+          .animate-in { animation: fade-in 0.3s ease-out; }
+        `}</style>
+      </div>
+      <DialogViewport />
+    </>
   );
 };
 

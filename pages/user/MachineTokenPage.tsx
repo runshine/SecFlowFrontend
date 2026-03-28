@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cpu, Plus, Search, RefreshCw, Loader2, Trash2, Key, ShieldCheck, Clock, Check, Copy, AlertCircle, X, Server, Power, PowerOff, Zap } from 'lucide-react';
 import { authApi } from '../../clients/auth';
+import { showConfirm } from '../../components/DialogService';
 import { MachineToken } from '../../types/types';
 
 export const MachineTokenPage: React.FC = () => {
@@ -62,7 +63,14 @@ export const MachineTokenPage: React.FC = () => {
   };
 
   const handleRegenerate = async (token: MachineToken) => {
-    if (!confirm(`确认重新生成机器 "${token.machine_code}" 的 Token？旧凭据将立即失效。`)) return;
+    const confirmed = await showConfirm({
+      title: '重新生成机器凭证',
+      message: `确认重新生成机器 "${token.machine_code}" 的 Token？旧凭据将立即失效。`,
+      confirmText: '重新生成',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       const res = await authApi.regenerateMachineToken(token.id);
       setLastCreatedToken(res.token);
@@ -83,6 +91,19 @@ export const MachineTokenPage: React.FC = () => {
     t.machine_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const handleDeleteToken = async (token: MachineToken) => {
+    const confirmed = await showConfirm({
+      title: '撤销机器凭证',
+      message: '确认撤销此机器凭证？该操作不可逆。',
+      confirmText: '确认撤销',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
+    await authApi.deleteMachineToken(token.id);
+    await fetchTokens();
+  };
 
   return (
     <div className="p-10 space-y-8 animate-in fade-in duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
@@ -193,7 +214,7 @@ export const MachineTokenPage: React.FC = () => {
                           <Zap size={16} />
                        </button>
                        <button 
-                         onClick={() => { if(confirm('确认撤销此机器凭证？该操作不可逆。')) authApi.deleteMachineToken(token.id).then(fetchTokens); }}
+                         onClick={() => void handleDeleteToken(token)}
                          className="p-3 bg-red-50 text-red-400 border border-transparent hover:border-red-100 rounded-xl transition-all shadow-sm"
                          title="彻底删除"
                        >

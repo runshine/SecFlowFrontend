@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, RefreshCw, Loader2, UserX, Monitor, Shield, Activity, Clock, Search, ExternalLink, MapPin, Hash, ShieldCheck, Zap } from 'lucide-react';
 import { authApi } from '../../clients/auth';
+import { showConfirm } from '../../components/DialogService';
 import { UserSession } from '../../types/types';
 
 export const OnlineSessionPage: React.FC = () => {
@@ -31,7 +32,14 @@ export const OnlineSessionPage: React.FC = () => {
   };
 
   const handleKick = async (userId: number, username: string) => {
-    if (!confirm(`确认强制下线用户 "${username}"？此操作将立即吊销该用户所有活跃 JWT Token。`)) return;
+    const confirmed = await showConfirm({
+      title: '强制下线用户',
+      message: `确认强制下线用户 "${username}"？此操作将立即吊销该用户所有活跃 JWT Token。`,
+      confirmText: '立即下线',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
     setIsActionLoading(true);
     try {
       await authApi.revokeUserSessions(userId);

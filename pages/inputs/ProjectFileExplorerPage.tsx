@@ -28,6 +28,7 @@ import {
   SecurityProject,
 } from '../../types/types';
 import { api } from '../../clients/api';
+import { showConfirm, showPrompt } from '../../components/DialogService';
 
 type ExplorerNodeType = 'project' | 'subproject' | 'directory' | 'file';
 
@@ -370,13 +371,18 @@ export const ProjectFileExplorerPage: React.FC<{ projectId: string; projects: Se
     await openNode(node);
   };
 
-  const askName = (title: string, currentValue = '') => {
-    const value = window.prompt(title, currentValue);
-    return value === null ? null : value.trim();
-  };
+  const askName = (title: string, currentValue = '') =>
+    showPrompt({
+      title,
+      message: '请输入名称后继续操作。',
+      defaultValue: currentValue,
+      placeholder: '请输入名称',
+      confirmText: '确认',
+      cancelText: '取消',
+    });
 
   const handleCreateSubproject = async () => {
-    const name = askName('请输入子项目名称');
+    const name = (await askName('请输入子项目名称'))?.trim() || '';
     if (!name) return;
     setBusyAction('create-subproject');
     try {
@@ -396,7 +402,7 @@ export const ProjectFileExplorerPage: React.FC<{ projectId: string; projects: Se
       alert('请先选择子项目或目录');
       return;
     }
-    const name = askName('请输入文件夹名称');
+    const name = (await askName('请输入文件夹名称'))?.trim() || '';
     if (!name) return;
     setBusyAction('create-directory');
     try {
@@ -415,7 +421,7 @@ export const ProjectFileExplorerPage: React.FC<{ projectId: string; projects: Se
   };
 
   const handleRename = async (node: FileExplorerNode) => {
-    const name = askName('请输入新的名称', node.name);
+    const name = (await askName('请输入新的名称', node.name))?.trim() || '';
     if (!name || name === node.name) return;
     setBusyAction(`rename:${node.id}`);
     try {
@@ -435,7 +441,13 @@ export const ProjectFileExplorerPage: React.FC<{ projectId: string; projects: Se
   };
 
   const handleDelete = async (node: FileExplorerNode) => {
-    const confirmed = window.confirm(`确认永久删除 ${node.name} 吗？该操作不可恢复。`);
+    const confirmed = await showConfirm({
+      title: '永久删除资源',
+      message: `确认永久删除 ${node.name} 吗？该操作不可恢复。`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
     if (!confirmed) return;
     setBusyAction(`delete:${node.id}`);
     try {

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, UserCheck, Shield, Crown, UserCircle, Lock, ArrowRightLeft, Building2 } from 'lucide-react';
 import { orgApi, UserPermissionInfo } from '../../clients/org';
 import { authApi } from '../../clients/auth';
+import { showConfirm } from '../../components/DialogService';
 import { Department, DepartmentMember, UserInfo } from '../../types/types';
 
 export const DepartmentMemberPage: React.FC = () => {
@@ -177,15 +178,21 @@ export const DepartmentMemberPage: React.FC = () => {
   };
 
   const handleRemoveMember = async (memberId: number) => {
-    if (confirm('确认移除该成员？')) {
-      try {
-        await orgApi.removeDepartmentMember(memberId);
-        if (selectedDepartmentId) {
-          fetchMembers(selectedDepartmentId);
-        }
-      } catch (err: any) {
-        alert(err.message);
+    const confirmed = await showConfirm({
+      title: '移除部门成员',
+      message: '确认移除该成员？',
+      confirmText: '确认移除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await orgApi.removeDepartmentMember(memberId);
+      if (selectedDepartmentId) {
+        fetchMembers(selectedDepartmentId);
       }
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 

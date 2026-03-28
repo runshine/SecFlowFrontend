@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Shield, ShieldOff, Key, UserCircle, Mail, Clock, ShieldCheck, UserX } from 'lucide-react';
 import { authApi } from '../../clients/auth';
+import { showConfirm } from '../../components/DialogService';
 import { UserInfo } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
 
@@ -75,6 +76,19 @@ export const UserMgmtPage: React.FC = () => {
   const filteredUsers = users.filter(u => 
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDeleteUser = async (user: UserInfo) => {
+    const confirmed = await showConfirm({
+      title: '删除用户',
+      message: `确认删除用户 "${user.username}"？`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
+    await authApi.deleteUser(user.id);
+    await fetchUsers();
+  };
 
   return (
     <div className="p-10 space-y-8 animate-in fade-in duration-500 pb-24 h-full overflow-y-auto">
@@ -189,7 +203,7 @@ export const UserMgmtPage: React.FC = () => {
                           <Key size={16} />
                        </button>
                        <button 
-                         onClick={() => { if(confirm('确认删除该用户？')) authApi.deleteUser(user.id).then(fetchUsers); }}
+                         onClick={() => void handleDeleteUser(user)}
                          className="p-3 bg-red-50 text-red-400 border border-transparent hover:border-red-100 rounded-xl transition-all shadow-sm"
                          title="彻底删除"
                        >

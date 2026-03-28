@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, ShieldCheck, UserCheck, Activity, Users, Hash, Clock, X } from 'lucide-react';
 import { authApi } from '../../clients/auth';
+import { showConfirm } from '../../components/DialogService';
 import { Role } from '../../types/types';
 
 export const RoleMgmtPage: React.FC = () => {
@@ -53,6 +54,19 @@ export const RoleMgmtPage: React.FC = () => {
     r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDeleteRole = async (role: Role) => {
+    const confirmed = await showConfirm({
+      title: '删除角色定义',
+      message: '确认彻底删除该角色定义？所有关联此角色的用户将失去相应权限。',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
+    await authApi.deleteRole(role.id);
+    await fetchRoles();
+  };
 
   return (
     <div className="p-10 space-y-8 animate-in fade-in duration-500 pb-24 h-full overflow-y-auto custom-scrollbar">
@@ -160,7 +174,7 @@ export const RoleMgmtPage: React.FC = () => {
                           <Edit3 size={16} />
                        </button>
                        <button 
-                         onClick={() => { if(confirm('确认彻底删除该角色定义？所有关联此角色的用户将失去相应权限。')) authApi.deleteRole(role.id).then(fetchRoles); }}
+                         onClick={() => void handleDeleteRole(role)}
                          className="p-3 bg-red-50 text-red-400 border border-transparent hover:border-red-100 rounded-xl transition-all shadow-sm"
                          title="彻底删除"
                        >

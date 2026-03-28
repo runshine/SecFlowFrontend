@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { FolderOpen, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Globe, Lock } from 'lucide-react';
 import { orgApi, UserPermissionInfo } from '../../clients/org';
+import { showConfirm } from '../../components/DialogService';
 import { Project, Department } from '../../types/types';
 
 export const ProjectPage: React.FC = () => {
@@ -168,18 +169,22 @@ export const ProjectPage: React.FC = () => {
   };
 
   const handleDelete = async (project: Project) => {
-    if (confirm('确认删除该项目？')) {
-      try {
-        // 使用项目空间ID删除项目
-        // 如果有组织架构ID，则同时删除组织架构系统记录；否则只删除项目空间
-        await orgApi.deleteProject(
-          project.project_space_id || project.id,
-          project.org_id || undefined
-        );
-        fetchProjects();
-      } catch (err: any) {
-        alert(err.message);
-      }
+    const confirmed = await showConfirm({
+      title: '删除项目',
+      message: `确认删除该项目 "${project.name}"？`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await orgApi.deleteProject(
+        project.project_space_id || project.id,
+        project.org_id || undefined
+      );
+      fetchProjects();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 

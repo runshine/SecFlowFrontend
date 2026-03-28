@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { Agent, AgentService, AsyncTask, DaemonAgentInfo, DaemonService, EnvTemplate, AgentTtydConnectionInfo, AgentIngressRouteInfo } from '../../types/types';
 import { api } from '../../clients/api';
+import { showConfirm } from '../../components/DialogService';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useUiFeedback } from '../../components/UiFeedback';
 
@@ -198,7 +199,13 @@ export const AgentDetailPage: React.FC<AgentDetailPageProps> = ({ agentKey, proj
   const handleNodeServiceAction = async (svc: AgentService, action: 'start' | 'stop' | 'delete') => {
     if (!svc?.agent_key) return;
     if (action === 'delete') {
-      const confirmed = window.confirm(`确认删除服务 ${svc.name}？系统会先停止服务，再删除绑定的 Ingress。`);
+      const confirmed = await showConfirm({
+        title: '删除节点服务',
+        message: `确认删除服务 ${svc.name}？系统会先停止服务，再删除绑定的 Ingress。`,
+        confirmText: '确认删除',
+        cancelText: '取消',
+        danger: true,
+      });
       if (!confirmed) return;
     }
     setNodeServiceActionLoading(`${action}:${svc.name}`);

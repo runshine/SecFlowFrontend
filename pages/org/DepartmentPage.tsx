@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Users, ChevronRight, ChevronDown, Lock } from 'lucide-react';
 import { orgApi, UserPermissionInfo } from '../../clients/org';
+import { showConfirm } from '../../components/DialogService';
 import { Department } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
 
@@ -118,13 +119,19 @@ export const DepartmentPage: React.FC = () => {
   };
 
   const handleDelete = async (departmentId: number) => {
-    if (confirm('确认删除该部门？删除部门将同时删除部门下的所有成员和项目关联。')) {
-      try {
-        await orgApi.deleteDepartment(departmentId);
-        fetchDepartments();
-      } catch (err: any) {
-        alert(err.message);
-      }
+    const confirmed = await showConfirm({
+      title: '删除部门',
+      message: '确认删除该部门？删除部门将同时删除部门下的所有成员和项目关联。',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await orgApi.deleteDepartment(departmentId);
+      fetchDepartments();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 

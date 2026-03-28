@@ -21,6 +21,7 @@ import { DocAnalysisPage } from './pages/inputs/DocAnalysisPage';
 import { TaskMgmtPage } from './pages/inputs/TaskMgmtPage';
 import { OtherInputPage } from './pages/inputs/OtherInputPage';
 import { OutputPvcPage } from './pages/inputs/OutputPvcPage';
+import { ProjectFileExplorerPage } from './pages/inputs/ProjectFileExplorerPage';
 
 // Env Pages
 import { EnvAgentPage } from './pages/env/EnvAgentPage';
@@ -28,6 +29,11 @@ import { EnvTemplatePage } from './pages/env/EnvTemplatePage';
 import { EnvTasksPage } from './pages/env/EnvTasksPage';
 import { ServiceMgmtPage } from './pages/env/ServiceMgmtPage';
 import { EnvAiAgentPage } from './pages/env/EnvAiAgentPage';
+import { EnvAiAgentOverviewPage } from './pages/env/EnvAiAgentOverviewPage';
+import { EnvAiHelperPage } from './pages/env/EnvAiHelperPage';
+import { EnvAiAgentManagePage } from './pages/env/EnvAiAgentManagePage';
+import { EnvAiSessionPage } from './pages/env/EnvAiSessionPage';
+import { EnvAiBatchSessionPage } from './pages/env/EnvAiBatchSessionPage';
 import { ServiceTerminalWindowPage } from './pages/env/ServiceTerminalWindowPage';
 
 // Workflow Pages
@@ -72,11 +78,12 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { canAccessView, getUserAccess, getUserCenterDefaultView } from './utils/rbac';
 
 const PROJECT_REQUIRED_VIEWS = new Set<string>([
-  'env-agent', 'env-service', 'env-template', 'env-tasks',
+  'env-agent', 'env-service', 'env-ai-agent', 'env-ai-agent-overview', 'env-ai-helper', 'env-ai-agent-manage', 'env-ai-session', 'env-ai-batch-session', 'env-template', 'env-tasks',
   'workflow-apps', 'workflow-app-detail',
   'workflow-app-instances', 'workflow-app-instance-detail',
   'workflow-jobs', 'workflow-job-detail',
   'workflow-instances', 'workflow-instance-detail', 'workflow-instance-logs',
+  'project-file-explorer',
   'engine-validation',
   'pentest-risk', 'pentest-system', 'pentest-threat', 'pentest-orch',
   'pentest-exec-code', 'pentest-exec-work', 'pentest-exec-secmate',
@@ -103,7 +110,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'org-mgmt-root', 'workflow-root', 'vuln-root']));
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['test-input', 'pentest-root', 'env-mgmt', 'env-ai-agent-root', 'base-mgmt', 'pentest-exec', 'user-mgmt-root', 'org-mgmt-root', 'workflow-root', 'vuln-root']));
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
 
   // Data States
@@ -133,6 +140,18 @@ const App: React.FC = () => {
     };
     window.addEventListener('secflow-unauthorized', handleUnauthorized);
     return () => window.removeEventListener('secflow-unauthorized', handleUnauthorized);
+  }, []);
+
+  useEffect(() => {
+    const handleNavigateView = (event: Event) => {
+      const detail = (event as CustomEvent<{ view?: string }>).detail;
+      const nextView = String(detail?.view || '').trim();
+      if (nextView) {
+        setCurrentView(nextView);
+      }
+    };
+    window.addEventListener('secflow-navigate-view', handleNavigateView as EventListener);
+    return () => window.removeEventListener('secflow-navigate-view', handleNavigateView as EventListener);
   }, []);
 
   useEffect(() => {
@@ -366,10 +385,16 @@ const App: React.FC = () => {
       case 'test-input-tasks': return <TaskMgmtPage projectId={selectedProjectId} />;
       case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
       case 'test-output-pvc': return <OutputPvcPage projectId={selectedProjectId} />;
+      case 'project-file-explorer': return <ProjectFileExplorerPage projectId={selectedProjectId} projects={projects} />;
       
       case 'env-agent': return <EnvAgentPage projectId={selectedProjectId} />;
       case 'env-service': return <ServiceMgmtPage projectId={selectedProjectId} />;
       case 'env-ai-agent': return <EnvAiAgentPage projectId={selectedProjectId} />;
+      case 'env-ai-agent-overview': return <EnvAiAgentOverviewPage projectId={selectedProjectId} />;
+      case 'env-ai-helper': return <EnvAiHelperPage projectId={selectedProjectId} />;
+      case 'env-ai-agent-manage': return <EnvAiAgentManagePage projectId={selectedProjectId} />;
+      case 'env-ai-session': return <EnvAiSessionPage projectId={selectedProjectId} />;
+      case 'env-ai-batch-session': return <EnvAiBatchSessionPage projectId={selectedProjectId} />;
       case 'env-template': return <EnvTemplatePage projectId={selectedProjectId} />;
       case 'env-tasks': return <EnvTasksPage projectId={selectedProjectId} />;
 

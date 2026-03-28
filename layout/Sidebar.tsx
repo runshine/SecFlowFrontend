@@ -25,6 +25,7 @@ import {
   FolderTree,
   Package,
   Bot,
+  MessageSquare,
   Terminal,
   Zap,
   Workflow,
@@ -174,6 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           healthStatus={staticPackageHealth}
           applyHealth={true}
           children={[
+            { id: 'project-file-explorer', label: '项目文件资源管理', icon: <FolderTree size={14} />, disabled: !hasSelectedProject, disabledTitle: '请先选择项目' },
             { id: 'static-packages', label: '静态软件包管理', icon: <Package size={14} /> },
             { id: 'deploy-script-mgmt', label: '部署脚本管理', icon: <Terminal size={14} /> }
           ]} 
@@ -214,7 +216,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { id: 'env-template', label: '模板管理', icon: <Box size={14} /> }, 
             { id: 'env-agent', label: 'Agent 管理', icon: <Monitor size={14} /> }, 
             { id: 'env-service', label: '服务管理', icon: <Zap size={14} /> },
-            { id: 'env-ai-agent', label: 'AI Agent管理', icon: <Bot size={14} /> },
+            {
+              id: 'env-ai-agent-root',
+              label: 'AI Agent管理',
+              icon: <Bot size={14} />,
+              children: [
+                { id: 'env-ai-agent-overview', label: 'AI Agent 总览', icon: <Activity size={12} /> },
+                { id: 'env-ai-helper', label: 'Helper 服务管理', icon: <ServerCog size={12} /> },
+                { id: 'env-ai-agent-manage', label: 'AI Agent 管理', icon: <Bot size={12} /> },
+                { id: 'env-ai-session', label: '单会话', icon: <MessageSquare size={12} /> },
+                { id: 'env-ai-batch-session', label: '批量会话', icon: <GitBranch size={12} /> },
+              ],
+            },
             { id: 'env-tasks', label: '任务管理', icon: <Workflow size={14} /> }
           ]} 
         />

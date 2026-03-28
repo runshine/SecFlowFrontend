@@ -27,6 +27,16 @@ export interface ProjectSpaceListResponse {
   projects: SecurityProject[];
 }
 
+const toProjectDepartment = (departmentId?: number, departmentName?: string): Department[] =>
+  departmentId && departmentName
+    ? [{
+        id: departmentId,
+        name: departmentName,
+        created_at: '',
+        updated_at: '',
+      }]
+    : [];
+
 export const orgApi = {
   // 用户权限接口
   getUserPermissions: async (): Promise<UserPermissionInfo> => {
@@ -56,7 +66,7 @@ export const orgApi = {
         owner_department_id: p.owner_department_id,
         owner_department_name: p.owner_department_name,
         roles: p.roles || [],
-        departments: p.department_id && p.department_name ? [{ id: p.department_id, name: p.department_name }] : []
+        departments: toProjectDepartment(p.department_id, p.department_name)
       }))
     };
   },
@@ -160,7 +170,7 @@ export const orgApi = {
       can_manage: p.can_manage ?? false,
       created_at: p.created_at || new Date().toISOString(),
       updated_at: p.updated_at || new Date().toISOString(),
-      departments: p.department_id && p.department_name ? [{ id: p.department_id, name: p.department_name }] : [],
+      departments: toProjectDepartment(p.department_id, p.department_name),
       project_space_id: p.id  // 保存项目空间ID
     }));
   },

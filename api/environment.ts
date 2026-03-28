@@ -1,5 +1,5 @@
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace, DaemonServicesResponse, DaemonServiceLogs, AgentTtydConnectionInfo, AgentIngressRouteInfo, AiHelperService, AiAgentItem, AiAgentSession, AiBatchSession, AiBatchRound } from '../types/types';
+import { Agent, AgentStats, EnvTemplate, AsyncTask, TaskLog, AgentService, Workspace, DaemonServicesResponse, DaemonServiceLogs, AgentTtydConnectionInfo, AgentIngressRouteInfo, AiHelperService, AiAgentItem, AiAgentSession, AiBatchSession, AiBatchRound, ProjectAiAgentItem } from '../types/types';
 
 const normalizeTask = (raw: any): AsyncTask => ({
   id: raw?.id || raw?.task_id || '',
@@ -271,6 +271,20 @@ export const environmentApi = {
     params: { agent_key?: string; health_status?: string } = {}
   ): Promise<{ project_id: string; items: AiHelperService[]; total: number }> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers?${new URLSearchParams({ project_id: projectId, ...(params as any) }).toString()}`, { headers: getHeaders() })),
+
+  listProjectAiAgents: async (
+    projectId: string,
+    params: { agent_key?: string; health_status?: string; backend_type?: string; installed?: boolean } = {}
+  ): Promise<{ project_id: string; items: ProjectAiAgentItem[]; total: number }> => {
+    const query = new URLSearchParams({
+      project_id: projectId,
+      ...(params.agent_key ? { agent_key: params.agent_key } : {}),
+      ...(params.health_status ? { health_status: params.health_status } : {}),
+      ...(params.backend_type ? { backend_type: params.backend_type } : {}),
+      ...(typeof params.installed === 'boolean' ? { installed: params.installed ? 'true' : 'false' } : {}),
+    }).toString();
+    return handleResponse(await fetch(`${API_BASE}/api/agent/ai-agents?${query}`, { headers: getHeaders() }));
+  },
 
   getAiHelperDetail: async (projectId: string, agentKey: string, serviceName: string): Promise<AiHelperService> =>
     handleResponse(await fetch(`${API_BASE}/api/agent/ai-helpers/${encodeURIComponent(agentKey)}/${encodeURIComponent(serviceName)}?project_id=${encodeURIComponent(projectId)}`, { headers: getHeaders() })),

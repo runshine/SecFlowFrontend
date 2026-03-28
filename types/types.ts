@@ -534,6 +534,97 @@ export interface ProjectPVC {
   resource_name?: string;
 }
 
+export interface FileSubproject {
+  id: number;
+  project_id: string;
+  name: string;
+  description?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FileDirectory {
+  id: number;
+  project_id: string;
+  subproject_id: number;
+  parent_id?: number | null;
+  name: string;
+  path_key: string;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManagedFile {
+  id: number;
+  project_id: string;
+  subproject_id: number;
+  directory_id?: number | null;
+  filename: string;
+  original_filename: string;
+  content_type?: string | null;
+  size: number;
+  sha256: string;
+  storage_key: string;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExplorerBreadcrumbItem {
+  node_type: 'project' | 'subproject' | 'directory';
+  id: string;
+  name: string;
+  subproject_id?: number | null;
+  directory_id?: number | null;
+}
+
+export interface FileExplorerNode {
+  node_type: 'project' | 'subproject' | 'directory' | 'file';
+  id: string;
+  name: string;
+  project_id: string;
+  subproject_id?: number | null;
+  directory_id?: number | null;
+  file_id?: number | null;
+  parent_directory_id?: number | null;
+  path_key?: string | null;
+  content_type?: string | null;
+  size?: number | null;
+  updated_at?: string | null;
+  special_badge?: string | null;
+  has_children: boolean;
+  children?: FileExplorerNode[];
+}
+
+export interface ExplorerRootResponse {
+  project_id: string;
+  root_name: string;
+  total: number;
+  items: FileExplorerNode[];
+}
+
+export interface DirectoryChildrenResponse {
+  project_id: string;
+  subproject_id: number;
+  directory_id?: number | null;
+  current_name: string;
+  current_path: string;
+  breadcrumbs: ExplorerBreadcrumbItem[];
+  directories: FileDirectory[];
+  files: ManagedFile[];
+}
+
+export interface FilePreviewResponse {
+  file_id: number;
+  filename: string;
+  content_type?: string | null;
+  preview_mode: 'text' | 'image' | 'pdf' | 'audio' | 'video' | 'binary';
+  preview_url: string;
+  download_url: string;
+}
+
 export interface PVCStatistics {
   total_pvcs: number;
   total_storage_gi: number;
@@ -840,6 +931,21 @@ export interface AiAgentItem {
   capabilities?: any;
 }
 
+export interface ProjectAiAgentItem extends AiAgentItem {
+  project_id: string;
+  agent_key: string;
+  agent_hostname?: string;
+  agent_ip?: string;
+  service_name: string;
+  image: string;
+  status: string;
+  health_status?: string;
+  helper_tags: string[];
+  helper_health?: any;
+  last_seen_at?: string;
+  updated_at?: string;
+}
+
 export interface AiAgentSession {
   session_id: string;
   backend?: string;
@@ -900,8 +1006,8 @@ export interface DeployScriptListResponse {
 
 export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
-  | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc'
-  | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-ai-agent' | 'env-template' | 'env-tasks'
+  | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc' | 'project-file-explorer'
+  | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-ai-agent' | 'env-ai-agent-overview' | 'env-ai-helper' | 'env-ai-agent-manage' | 'env-ai-session' | 'env-ai-batch-session' | 'env-template' | 'env-tasks'
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-instance-logs' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
   | 'pentest-threat' | 'pentest-orch' | 'pentest-exec-code' | 'pentest-exec-work' | 'pentest-exec-secmate' | 'pentest-report'

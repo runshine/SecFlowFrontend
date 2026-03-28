@@ -11,6 +11,7 @@ import { workflowApi } from './workflow';
 import { k8sApi } from './k8s';
 import { adminApi } from './admin';
 import { vulnApi } from './vuln';
+import { fileserverApi } from './fileserver';
 
 export const api = {
   auth: authApi,
@@ -24,5 +25,6 @@ export const api = {
   workflow: workflowApi,
   k8s: k8sApi,
   admin: adminApi,
-  vuln: vulnApi
+  vuln: vulnApi,
+  fileserver: fileserverApi
 };

@@ -13,6 +13,7 @@ import { StaticPackagesPage } from './pages/StaticPackagesPage';
 import { StaticPackageDetailPage } from './pages/StaticPackageDetailPage';
 import { DeployScriptPage } from './pages/DeployScriptPage';
 import { SecurityAssessmentPage } from './pages/SecurityAssessmentPage';
+import { ConfigCenterLlmPage } from './pages/ConfigCenterLlmPage';
 
 // Input Pages
 import { ReleasePackagePage } from './pages/inputs/ReleasePackagePage';
@@ -388,6 +389,8 @@ const App: React.FC = () => {
       case 'static-packages': return <StaticPackagesPage staticPackages={staticPackages} packageStats={packageStats} fetchStaticPackages={() => api.staticPackages.list().then(d => setStaticPackages(d.packages))} setActivePackageId={setActivePackageId} setCurrentView={setCurrentView} selectedIds={selectedStaticPkgIds} setSelectedIds={setSelectedStaticPkgIds} />;
       case 'static-package-detail': return <StaticPackageDetailPage packageId={activePackageId} onBack={() => setCurrentView('static-packages')} />;
       case 'deploy-script-mgmt': return <DeployScriptPage />;
+      case 'config-center-root':
+      case 'config-center-llm': return <ConfigCenterLlmPage />;
       
       // Resource Management Pages
       case 'test-input-release': return <ReleasePackagePage projectId={selectedProjectId} />;

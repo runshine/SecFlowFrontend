@@ -12,6 +12,7 @@ import { k8sApi } from './k8s';
 import { adminApi } from './admin';
 import { vulnApi } from './vuln';
 import { fileserverApi } from './fileserver';
+import { configCenterApi } from './configcenter';
 
 export const api = {
   auth: authApi,
@@ -26,5 +27,6 @@ export const api = {
   k8s: k8sApi,
   admin: adminApi,
   vuln: vulnApi,
-  fileserver: fileserverApi
+  fileserver: fileserverApi,
+  configCenter: configCenterApi
 };

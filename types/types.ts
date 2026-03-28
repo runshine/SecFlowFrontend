@@ -1007,6 +1007,7 @@ export interface DeployScriptListResponse {
 export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc' | 'project-file-explorer'
+  | 'config-center-root' | 'config-center-llm'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-ai-agent' | 'env-ai-agent-overview' | 'env-ai-helper' | 'env-ai-agent-manage' | 'env-ai-session' | 'env-ai-batch-session' | 'env-template' | 'env-tasks'
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-instance-logs' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
@@ -1052,6 +1053,67 @@ export interface AdminDashboardStats {
     status: 'healthy' | 'unhealthy' | 'unknown';
   }[];
   lastUpdated: string;
+}
+
+export interface LlmProviderSummary {
+  provider_key: string;
+  display_name: string;
+  provider_type: string;
+  enabled: boolean;
+  is_default: boolean;
+  api_base: string;
+  model: string;
+  api_key_masked: string;
+  organization?: string | null;
+  api_version?: string | null;
+  timeout_seconds: number;
+  max_tokens?: number | null;
+  temperature?: number | null;
+  env_bindings: Record<string, any>;
+  extra_config: Record<string, any>;
+  description?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface LlmProviderDetail {
+  provider_key: string;
+  display_name: string;
+  provider_type: string;
+  enabled: boolean;
+  is_default: boolean;
+  api_base: string;
+  model: string;
+  api_key: string;
+  organization?: string | null;
+  api_version?: string | null;
+  timeout_seconds: number;
+  max_tokens?: number | null;
+  temperature?: number | null;
+  env_bindings: Record<string, any>;
+  extra_config: Record<string, any>;
+  description?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface LlmProviderUpsertRequest {
+  provider_key: string;
+  display_name: string;
+  provider_type: string;
+  enabled: boolean;
+  is_default: boolean;
+  api_base: string;
+  model: string;
+  api_key: string;
+  organization?: string | null;
+  api_version?: string | null;
+  timeout_seconds: number;
+  max_tokens?: number | null;
+  temperature?: number | null;
+  env_bindings: Record<string, any>;
+  extra_config: Record<string, any>;
+  description?: string | null;
 }
 
 // Daemon Service Types (守护进程服务)

@@ -6,6 +6,7 @@ export interface UserAccess {
   platformRole: PlatformRole;
   canAccessUserCenter: boolean;
   canAccessAdminDashboard: boolean;
+  canAccessConfigCenter: boolean;
   canManageUsers: boolean;
   canManageRoles: boolean;
   canManageDepartments: boolean;
@@ -57,6 +58,7 @@ export const getUserAccess = (user: UserInfo | null | undefined): UserAccess => 
       platformRole,
       canAccessUserCenter: true,
       canAccessAdminDashboard: true,
+      canAccessConfigCenter: true,
       canManageUsers: true,
       canManageRoles: true,
       canManageDepartments: true,
@@ -70,6 +72,7 @@ export const getUserAccess = (user: UserInfo | null | undefined): UserAccess => 
       platformRole,
       canAccessUserCenter: true,
       canAccessAdminDashboard: false,
+      canAccessConfigCenter: false,
       canManageUsers: false,
       canManageRoles: false,
       canManageDepartments: false,
@@ -82,6 +85,7 @@ export const getUserAccess = (user: UserInfo | null | undefined): UserAccess => 
     platformRole,
     canAccessUserCenter: false,
     canAccessAdminDashboard: false,
+    canAccessConfigCenter: false,
     canManageUsers: false,
     canManageRoles: false,
     canManageDepartments: false,
@@ -92,6 +96,8 @@ export const getUserAccess = (user: UserInfo | null | undefined): UserAccess => 
 
 const SUPER_ADMIN_ONLY_VIEWS = new Set<string>([
   'admin-dashboard',
+  'config-center-root',
+  'config-center-llm',
   'user-mgmt-users',
   'user-mgmt-access',
   'user-mgmt-online',

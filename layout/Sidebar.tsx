@@ -191,6 +191,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           applyHealth={true}
         />
 
+        {access.canAccessConfigCenter && (
+          <SidebarItem
+            id="config-center-root"
+            label="配置中心"
+            icon={<Key size={20} />}
+            children={[
+              { id: 'config-center-llm', label: 'LLM 对接配置', icon: <Globe size={14} /> }
+            ]}
+          />
+        )}
+
         <SidebarItem 
           id="test-input" 
           label="公共资源管理" 

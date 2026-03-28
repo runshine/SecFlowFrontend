@@ -167,7 +167,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
         {/* PVC Storage */}
         <div
-          onClick={() => setCurrentView('test-output-pvc')}
+          onClick={() => setCurrentView('pvc-management')}
           className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer group"
         >
           <div className="w-12 h-12 bg-cyan-100 text-cyan-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">

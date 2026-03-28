@@ -22,7 +22,7 @@ import { CodeAuditPage } from './pages/inputs/CodeAuditPage';
 import { DocAnalysisPage } from './pages/inputs/DocAnalysisPage';
 import { TaskMgmtPage } from './pages/inputs/TaskMgmtPage';
 import { OtherInputPage } from './pages/inputs/OtherInputPage';
-import { OutputPvcPage } from './pages/inputs/OutputPvcPage';
+import { PvcManagementPage } from './pages/inputs/PvcManagementPage';
 import { ProjectFileExplorerPage } from './pages/inputs/ProjectFileExplorerPage';
 
 // Env Pages
@@ -86,7 +86,7 @@ const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'workflow-app-instances', 'workflow-app-instance-detail',
   'workflow-jobs', 'workflow-job-detail',
   'workflow-instances', 'workflow-instance-detail', 'workflow-instance-logs',
-  'project-file-explorer',
+  'project-file-explorer', 'pvc-management',
   'engine-validation',
   'pentest-risk', 'pentest-system', 'pentest-threat', 'pentest-orch',
   'pentest-exec-code', 'pentest-exec-work', 'pentest-exec-secmate',
@@ -368,7 +368,7 @@ const App: React.FC = () => {
       case 'test-input-doc': return <DocAnalysisPage projectId={selectedProjectId} />;
       case 'test-input-tasks': return <TaskMgmtPage projectId={selectedProjectId} />;
       case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
-      case 'test-output-pvc': return <OutputPvcPage projectId={selectedProjectId} />;
+      case 'pvc-management': return <PvcManagementPage projectId={selectedProjectId} />;
       case 'project-file-explorer': return <ProjectFileExplorerPage projectId={selectedProjectId} projects={projects} />;
       
       case 'env-agent': return <EnvAgentPage projectId={selectedProjectId} />;

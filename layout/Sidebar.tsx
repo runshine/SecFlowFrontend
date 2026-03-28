@@ -213,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { id: 'test-input-code', label: '输入-源代码', icon: <FileCode size={14} /> }, 
             { id: 'test-input-doc', label: '输入-文档类', icon: <FileText size={14} /> },
             { id: 'test-input-other', label: '输入-其他资源', icon: <FolderTree size={14} /> },
-            { id: 'test-output-pvc', label: '输出-PVC资源管理', icon: <HardDrive size={14} /> },
+            { id: 'pvc-management', label: 'PVC管理', icon: <HardDrive size={14} /> },
             { id: 'test-input-tasks', label: '任务管理', icon: <ListTodo size={14} /> }
           ]} 
         />

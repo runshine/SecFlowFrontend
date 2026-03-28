@@ -1,5 +1,13 @@
 import { API_BASE, handleResponse, getHeaders } from './base';
-import { ProjectResource, ProjectTask, ProjectPVC } from '../types/types';
+import {
+  ProjectResource,
+  ProjectTask,
+  ProjectPVC,
+  OutputPvcDetail,
+  PvcBrowserChildrenResponse,
+  PvcBrowserFileResponse,
+  PvcBrowserRootResponse,
+} from '../types/types';
 
 export const resourcesApi = {
   // Health Check
@@ -62,7 +70,7 @@ export const resourcesApi = {
     return handleResponse(response);
   },
 
-  getOutputPvcDetail: async (id: number): Promise<any> => {
+  getOutputPvcDetail: async (id: number): Promise<OutputPvcDetail> => {
     const response = await fetch(`${API_BASE}/api/resource/output-pvc/${id}`, {
       method: 'GET',
       headers: getHeaders(),
@@ -110,5 +118,106 @@ export const resourcesApi = {
   getPVCs: async (projectId: string): Promise<{ pvcs: ProjectPVC[]; total: number }> => {
     const response = await fetch(`${API_BASE}/api/resource/pvcs?project_id=${projectId}`, { headers: getHeaders() });
     return handleResponse(response);
-  }
+  },
+
+  getPvcBrowserRoot: async (resourceId: number): Promise<PvcBrowserRootResponse> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${resourceId}/browser/root`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
+  getPvcBrowserTree: async (resourceId: number): Promise<PvcBrowserRootResponse> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${resourceId}/browser/tree`, { headers: getHeaders() });
+    return handleResponse(response);
+  },
+
+  getPvcBrowserChildren: async (resourceId: number, path = '/'): Promise<PvcBrowserChildrenResponse> => {
+    const response = await fetch(
+      `${API_BASE}/api/resource/output-pvc/${resourceId}/browser/children?path=${encodeURIComponent(path)}`,
+      { headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
+
+  getPvcBrowserFile: async (resourceId: number, path: string, maxBytes = 1048576): Promise<PvcBrowserFileResponse> => {
+    const response = await fetch(
+      `${API_BASE}/api/resource/output-pvc/${resourceId}/browser/file?path=${encodeURIComponent(path)}&max_bytes=${maxBytes}`,
+      { headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
+
+  fetchPvcBrowserPreviewBlob: async (resourceId: number, path: string): Promise<Blob> => {
+    const response = await fetch(
+      `${API_BASE}/api/resource/output-pvc/${resourceId}/browser/download?path=${encodeURIComponent(path)}`,
+      { headers: getHeaders() }
+    );
+    if (!response.ok) {
+      await handleResponse(response);
+    }
+    return response.blob();
+  },
+
+  fetchPvcBrowserDownloadBlob: async (resourceId: number, path: string): Promise<Blob> => {
+    const response = await fetch(
+      `${API_BASE}/api/resource/output-pvc/${resourceId}/browser/download?path=${encodeURIComponent(path)}`,
+      { headers: getHeaders() }
+    );
+    if (!response.ok) {
+      await handleResponse(response);
+    }
+    return response.blob();
+  },
+
+  uploadPvcBrowserFile: async (resourceId: number, path: string, file: File): Promise<{ message: string; path: string; size: number }> => {
+    const formData = new FormData();
+    formData.append('path', path);
+    formData.append('file', file);
+    const headers = getHeaders();
+    const uploadHeaders: Record<string, string> = { ...headers };
+    delete uploadHeaders['Content-Type'];
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${resourceId}/browser/upload`, {
+      method: 'POST',
+      headers: uploadHeaders,
+      body: formData,
+    });
+    return handleResponse(response);
+  },
+
+  createPvcBrowserDirectory: async (resourceId: number, path: string, name: string): Promise<{ message: string; path: string }> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${resourceId}/browser/directories`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ path, name }),
+    });
+    return handleResponse(response);
+  },
+
+  renamePvcBrowserNode: async (resourceId: number, path: string, targetName: string): Promise<{ message: string; path: string }> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${resourceId}/browser/rename`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ path, target_name: targetName }),
+    });
+    return handleResponse(response);
+  },
+
+  movePvcBrowserNode: async (resourceId: number, path: string, targetPath: string): Promise<{ message: string; path: string }> => {
+    const response = await fetch(`${API_BASE}/api/resource/output-pvc/${resourceId}/browser/move`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ path, target_path: targetPath }),
+    });
+    return handleResponse(response);
+  },
+
+  deletePvcBrowserNode: async (resourceId: number, path: string): Promise<{ message: string; path: string }> => {
+    const response = await fetch(
+      `${API_BASE}/api/resource/output-pvc/${resourceId}/browser/node?path=${encodeURIComponent(path)}`,
+      {
+        method: 'DELETE',
+        headers: getHeaders(),
+      }
+    );
+    return handleResponse(response);
+  },
 };

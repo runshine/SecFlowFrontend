@@ -495,7 +495,7 @@ export interface ProjectResource {
   id: number;
   resource_uuid: string;
   name: string;
-  resource_type: 'document' | 'software' | 'code' | 'other';
+  resource_type: 'document' | 'software' | 'code' | 'other' | 'output_pvc';
   original_file_name: string;
   original_file_size: number;
   original_file_format?: string;
@@ -532,6 +532,71 @@ export interface ProjectPVC {
   storage_class: string;
   resource_id?: number;
   resource_name?: string;
+}
+
+export interface OutputPvcDetail {
+  id: number;
+  resource_uuid: string;
+  name: string;
+  description?: string | null;
+  resource_type: 'output_pvc';
+  pvc_name: string;
+  pvc_namespace: string;
+  pvc_size: string;
+  status: string;
+  project_ids: string[];
+  pvc_k8s_status?: {
+    name?: string;
+    capacity?: string;
+    status?: string;
+    storage_class?: string;
+    namespace?: string;
+  } | null;
+  in_use: boolean;
+  use_message?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PvcBrowserBreadcrumbItem {
+  path: string;
+  name: string;
+}
+
+export interface PvcBrowserNode {
+  path: string;
+  name: string;
+  node_type: 'directory' | 'file';
+  size?: number | null;
+  updated_at?: number | null;
+  content_type?: string | null;
+  has_children: boolean;
+  children?: PvcBrowserNode[];
+}
+
+export interface PvcBrowserRootResponse {
+  resource_id: number;
+  pvc_name: string;
+  total: number;
+  items: PvcBrowserNode[];
+}
+
+export interface PvcBrowserChildrenResponse {
+  resource_id: number;
+  pvc_name: string;
+  current_path: string;
+  breadcrumbs: PvcBrowserBreadcrumbItem[];
+  directories: PvcBrowserNode[];
+  files: PvcBrowserNode[];
+}
+
+export interface PvcBrowserFileResponse {
+  path: string;
+  filename: string;
+  size: number;
+  content_type?: string | null;
+  truncated: boolean;
+  base64: string;
 }
 
 export interface FileSubproject {
@@ -1006,7 +1071,7 @@ export interface DeployScriptListResponse {
 
 export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
-  | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'test-output-pvc' | 'project-file-explorer'
+  | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'pvc-management' | 'project-file-explorer'
   | 'config-center-root' | 'config-center-llm'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-ai-agent' | 'env-ai-agent-overview' | 'env-ai-helper' | 'env-ai-agent-manage' | 'env-ai-session' | 'env-ai-batch-session' | 'env-template' | 'env-tasks'
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-instance-logs' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'

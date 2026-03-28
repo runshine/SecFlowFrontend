@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-import { api } from '../../../api/api';
+import { api } from '../../../clients/api';
 import { AiAgentItem, AiHelperService, ProjectAiAgentItem } from '../../../types/types';
 
 export const prettyJson = (value: any) => JSON.stringify(value ?? {}, null, 2);

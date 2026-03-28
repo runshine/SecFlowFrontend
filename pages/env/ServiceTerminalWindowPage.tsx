@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, Loader2, Plug, PlugZap, TerminalSquare } from 'lucide-react';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { XTerminal } from '../../components/XTerminal';
 
 type TerminalMode = 'attach' | 'shell';

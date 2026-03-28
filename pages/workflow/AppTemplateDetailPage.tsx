@@ -12,7 +12,7 @@ import {
   Monitor
 } from 'lucide-react';
 import { AppTemplate, TemplateScope } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 
 export const AppTemplateDetailPage: React.FC<{ templateId: string, onBack: () => void }> = ({ templateId, onBack }) => {
   const [template, setTemplate] = useState<AppTemplate | null>(null);

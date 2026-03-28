@@ -48,8 +48,8 @@ import {
   Tags
 } from 'lucide-react';
 import { EnvTemplate, TemplateFile, Agent, ParsedCompose } from '../../types/types';
-import { api } from '../../api/api';
-import { API_BASE, getHeaders } from '../../api/base';
+import { api } from '../../clients/api';
+import { API_BASE, getHeaders } from '../../clients/base';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ComposeViewer } from '../../components/ComposeViewer';
 import { useUiFeedback } from '../../components/UiFeedback';

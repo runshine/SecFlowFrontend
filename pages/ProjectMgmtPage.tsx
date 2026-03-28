@@ -19,8 +19,8 @@ import {
   Trash2,
   User,
 } from 'lucide-react';
-import { api } from '../api/api';
-import { orgApi, UserPermissionInfo } from '../api/org';
+import { api } from '../clients/api';
+import { orgApi, UserPermissionInfo } from '../clients/org';
 import { Department, SecurityProject } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
 

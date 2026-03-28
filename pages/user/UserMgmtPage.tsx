@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Shield, ShieldOff, Key, UserCircle, Mail, Clock, ShieldCheck, UserX } from 'lucide-react';
-import { authApi } from '../../api/auth';
+import { authApi } from '../../clients/auth';
 import { UserInfo } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
 

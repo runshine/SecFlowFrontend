@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRightLeft, Loader2, RefreshCw, Shield, ShieldCheck, Users } from 'lucide-react';
-import { authApi } from '../../api/auth';
-import { orgApi } from '../../api/org';
+import { authApi } from '../../clients/auth';
+import { orgApi } from '../../clients/org';
 import { Department, UserInfo } from '../../types/types';
 import { getPlatformRoleLabel } from '../../utils/rbac';
 

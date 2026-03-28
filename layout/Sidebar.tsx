@@ -65,6 +65,7 @@ interface SidebarProps {
   envHealth?: boolean | null;
   codeAuditHealth?: boolean | null;
   workflowHealth?: boolean | null;
+  vulnHealth?: boolean | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -75,7 +76,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   projectHealth = null,
   envHealth = null,
   codeAuditHealth = null,
-  workflowHealth = null
+  workflowHealth = null,
+  vulnHealth = null
 }) => {
   const isUserMgmtMode = currentView.startsWith('user-mgmt-') || currentView.startsWith('org-mgmt-');
 
@@ -266,6 +268,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label="漏洞引擎"
           icon={<Cpu size={20} />}
           disabled={!hasSelectedProject}
+          healthStatus={vulnHealth}
+          applyHealth={true}
           children={[
             { id: 'vuln-overview', label: '生命周期总览', icon: <Activity size={14} /> },
             { id: 'vuln-intake', label: '漏洞上报', icon: <FolderOpen size={14} /> },

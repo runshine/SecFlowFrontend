@@ -30,7 +30,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { ProjectResource, ProjectTask, ProjectPVC } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
 interface BaseResourcePageProps {

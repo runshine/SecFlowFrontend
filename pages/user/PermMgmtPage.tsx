@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, UserCheck, Search, RefreshCw, Loader2, CheckCircle2, ChevronRight, Layout, Database, Shield, ArrowRightLeft, User, Tags, X, Plus } from 'lucide-react';
-import { authApi } from '../../api/auth';
+import { authApi } from '../../clients/auth';
 import { UserInfo, Role } from '../../types/types';
 
 export const PermMgmtPage: React.FC = () => {

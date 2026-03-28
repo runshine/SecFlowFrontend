@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, FileSearch, Zap, Workflow, Loader2, AlertCircle, Shield, ClipboardCheck, FileBox, HardDrive, Settings, UserCog, Lock, Globe, Users, UserCheck } from 'lucide-react';
 import { ViewType, SecurityProject, FileItem, UserInfo, Agent, EnvTemplate, AsyncTask, StaticPackage, PackageStats, AdminDashboardStats } from './types/types';
-import { api } from './api/api';
+import { api } from './clients/api';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
 import { WorkflowPlaceholder } from './components/WorkflowPlaceholder';
@@ -133,6 +133,7 @@ const App: React.FC = () => {
   const [envServiceHealthy, setEnvServiceHealthy] = useState<boolean | null>(null);
   const [codeAuditServiceHealthy, setCodeAuditServiceHealthy] = useState<boolean | null>(null);
   const [workflowServiceHealthy, setWorkflowServiceHealthy] = useState<boolean | null>(null);
+  const [vulnServiceHealthy, setVulnServiceHealthy] = useState<boolean | null>(null);
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -174,6 +175,7 @@ const App: React.FC = () => {
     checkEnvHealth();
     checkCodeAuditHealth();
     checkWorkflowHealth();
+    checkVulnHealth();
   };
 
   const checkResourceHealth = async () => {
@@ -227,6 +229,15 @@ const App: React.FC = () => {
       setWorkflowServiceHealthy(res.status === 'ok' || res.status === 'UP' || res.status === 'healthy');
     } catch (e) {
       setWorkflowServiceHealthy(false);
+    }
+  };
+
+  const checkVulnHealth = async () => {
+    try {
+      const res = await api.vuln.getHealth();
+      setVulnServiceHealthy(res.status === 'ok' || res.status === 'UP' || res.status === 'healthy');
+    } catch (e) {
+      setVulnServiceHealthy(false);
     }
   };
 
@@ -515,6 +526,7 @@ const App: React.FC = () => {
         envHealth={envServiceHealthy}
         codeAuditHealth={codeAuditServiceHealthy}
         workflowHealth={workflowServiceHealthy}
+        vulnHealth={vulnServiceHealthy}
       />
       <main className="flex-1 flex flex-col min-w-0">
         <Header 

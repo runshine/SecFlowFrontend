@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertCircle, Box, CheckCircle, ChevronLeft, ChevronRight, Loader2, Play, Plus, RefreshCw, RotateCcw, Search, StopCircle, Trash2, XCircle } from 'lucide-react';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { AppTemplate, AppWorkflow, AppWorkflowStatus, IngressController } from '../../types/types';
 
 type CreateStep = 'select-template' | 'fill-form';

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Activity, Play, StopCircle, Trash2, RefreshCw, Search, Loader2, Clock, Terminal, Plus, Power, PowerOff, Zap, ChevronLeft, ChevronRight, RotateCcw, FileText, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { WorkflowInstance } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
 export const WorkflowInstancePage: React.FC<{

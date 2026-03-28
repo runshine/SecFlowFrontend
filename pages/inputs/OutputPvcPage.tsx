@@ -22,7 +22,7 @@ import {
   AlertCircle,
   Clock
 } from 'lucide-react';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ProjectResource } from '../../types/types';
 

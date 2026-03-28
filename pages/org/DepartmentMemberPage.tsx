@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, UserCheck, Shield, Crown, UserCircle, Lock, ArrowRightLeft, Building2 } from 'lucide-react';
-import { orgApi, UserPermissionInfo } from '../../api/org';
-import { authApi } from '../../api/auth';
+import { orgApi, UserPermissionInfo } from '../../clients/org';
+import { authApi } from '../../clients/auth';
 import { Department, DepartmentMember, UserInfo } from '../../types/types';
 
 export const DepartmentMemberPage: React.FC = () => {

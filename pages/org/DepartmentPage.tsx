@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Building2, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Users, ChevronRight, ChevronDown, Lock } from 'lucide-react';
-import { orgApi, UserPermissionInfo } from '../../api/org';
+import { orgApi, UserPermissionInfo } from '../../clients/org';
 import { Department } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
 

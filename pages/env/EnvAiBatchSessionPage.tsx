@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bot, Loader2, RefreshCw, Send } from 'lucide-react';
 
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { AiBatchRound, AiBatchSession, AiHelperService } from '../../types/types';
 import { useUiFeedback } from '../../components/UiFeedback';
 import { EmptyState, JsonBlock, buildHelperKey, prettyJson, useAiHelpers } from './ai-agent/shared';

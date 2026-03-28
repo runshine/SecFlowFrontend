@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, FileText, RefreshCw, Search, TerminalSquare } from 'lucide-react';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { WorkflowInstance, WorkflowInstanceNodeLogRecord } from '../../types/types';
 
 const formatTime = (value?: string) => {

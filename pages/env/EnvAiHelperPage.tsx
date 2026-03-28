@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw, Server } from 'lucide-react';
 
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { AiAgentSession, AiHelperService } from '../../types/types';
 import { useUiFeedback } from '../../components/UiFeedback';
 import {

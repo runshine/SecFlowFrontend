@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ExternalLink, Globe, Loader2, Play, Power, RefreshCw, RotateCcw, Square, AlertCircle, FileText } from 'lucide-react';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { AppWorkflow, AppWorkflowStatus, DomainBindingRecord, IngressController, ServiceAccessInfo } from '../../types/types';
 import { StatusBadge } from '../../components/StatusBadge';
 

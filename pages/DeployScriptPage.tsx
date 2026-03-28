@@ -30,7 +30,7 @@ import {
   HardDrive,
   ExternalLink
 } from 'lucide-react';
-import { api } from '../api/api';
+import { api } from '../clients/api';
 import { DeployScriptItem } from '../types/types';
 
 export const DeployScriptPage: React.FC = () => {

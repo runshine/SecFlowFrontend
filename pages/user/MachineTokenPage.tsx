@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Cpu, Plus, Search, RefreshCw, Loader2, Trash2, Key, ShieldCheck, Clock, Check, Copy, AlertCircle, X, Server, Power, PowerOff, Zap } from 'lucide-react';
-import { authApi } from '../../api/auth';
+import { authApi } from '../../clients/auth';
 import { MachineToken } from '../../types/types';
 
 export const MachineTokenPage: React.FC = () => {

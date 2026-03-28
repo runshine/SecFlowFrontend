@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { Agent, AgentService, EnvTemplate } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useUiFeedback } from '../../components/UiFeedback';
 import { openServiceTerminalWindow as openServiceTerminalWindowPopup } from './serviceTerminal';

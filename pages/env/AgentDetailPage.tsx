@@ -37,7 +37,7 @@ import {
   SquareTerminal
 } from 'lucide-react';
 import { Agent, AgentService, AsyncTask, DaemonAgentInfo, DaemonService, EnvTemplate, AgentTtydConnectionInfo, AgentIngressRouteInfo } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useUiFeedback } from '../../components/UiFeedback';
 

@@ -14,7 +14,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { AsyncTask, TaskLog } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 import { useUiFeedback } from '../../components/UiFeedback';
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, Download, Search, FileText, HardDrive, ShieldCheck, Loader2, Info, FolderOpen, RefreshCw, Layers } from 'lucide-react';
 import { StaticPackage, PackageFile } from '../types/types';
-import { api } from '../api/api';
+import { api } from '../clients/api';
 import { StatusBadge } from '../components/StatusBadge';
 
 interface StaticPackageDetailPageProps {

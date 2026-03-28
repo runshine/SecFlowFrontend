@@ -18,7 +18,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { ProjectTask } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
 export const TaskMgmtPage: React.FC<{ projectId: string }> = ({ projectId }) => {

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Play, Plus, Power, RefreshCw, Save, Settings2, Trash2 } from 'lucide-react';
 
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { AiHelperService, ProjectAiAgentItem } from '../../types/types';
 import { useUiFeedback } from '../../components/UiFeedback';
 import { EmptyState, HealthBadge, JsonBlock, prettyJson, uniqueValues, useAiHelpers, useProjectAiAgents } from './ai-agent/shared';

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Shield, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, ShieldCheck, UserCheck, Activity, Users, Hash, Clock, X } from 'lucide-react';
-import { authApi } from '../../api/auth';
+import { authApi } from '../../clients/auth';
 import { Role } from '../../types/types';
 
 export const RoleMgmtPage: React.FC = () => {

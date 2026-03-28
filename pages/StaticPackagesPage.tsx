@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, CheckCircle2, Upload, HardDrive, Layers, Download, Trash2, CheckSquare, Square, Server, Search, Globe, Activity, AlertTriangle, Loader2, X, RefreshCw, ShieldCheck } from 'lucide-react';
 import { StaticPackage, PackageStats } from '../types/types';
 import { StatusBadge } from '../components/StatusBadge';
-import { api } from '../api/api';
+import { api } from '../clients/api';
 
 interface StaticPackagesPageProps {
   staticPackages: StaticPackage[];

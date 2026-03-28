@@ -24,7 +24,7 @@ import {
   HardDrive
 } from 'lucide-react';
 import { JobTemplate, TemplateScope } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 
 export const JobTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: (id: string) => void }> = ({ projectId, onNavigateToDetail }) => {
   const [templates, setTemplates] = useState<JobTemplate[]>([]);

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FolderOpen, Plus, Search, RefreshCw, Loader2, Trash2, Edit3, Globe, Lock } from 'lucide-react';
-import { orgApi, UserPermissionInfo } from '../../api/org';
+import { orgApi, UserPermissionInfo } from '../../clients/org';
 import { Project, Department } from '../../types/types';
 
 export const ProjectPage: React.FC = () => {

@@ -27,7 +27,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { SecurityProject, K8sResourceList, NamespaceStatus } from '../types/types';
-import { api } from '../api/api';
+import { api } from '../clients/api';
 import { StatusBadge } from '../components/StatusBadge';
 
 interface ProjectDetailPageProps {

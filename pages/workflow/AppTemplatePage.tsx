@@ -24,7 +24,7 @@ import {
   HardDrive
 } from 'lucide-react';
 import { AppTemplate, TemplateScope } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 import { StatusBadge } from '../../components/StatusBadge';
 
 export const AppTemplatePage: React.FC<{ projectId: string, onNavigateToDetail: (id: string) => void }> = ({ projectId, onNavigateToDetail }) => {

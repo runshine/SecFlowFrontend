@@ -27,7 +27,7 @@ import {
   ManagedFile,
   SecurityProject,
 } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 
 type ExplorerNodeType = 'project' | 'subproject' | 'directory' | 'file';
 

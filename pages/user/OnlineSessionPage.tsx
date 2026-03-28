@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Globe, RefreshCw, Loader2, UserX, Monitor, Shield, Activity, Clock, Search, ExternalLink, MapPin, Hash, ShieldCheck, Zap } from 'lucide-react';
-import { authApi } from '../../api/auth';
+import { authApi } from '../../clients/auth';
 import { UserSession } from '../../types/types';
 
 export const OnlineSessionPage: React.FC = () => {

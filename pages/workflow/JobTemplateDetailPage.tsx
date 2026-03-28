@@ -10,7 +10,7 @@ import {
   Plus
 } from 'lucide-react';
 import { JobTemplate, TemplateScope } from '../../types/types';
-import { api } from '../../api/api';
+import { api } from '../../clients/api';
 
 export const JobTemplateDetailPage: React.FC<{ templateId: string, onBack: () => void }> = ({ templateId, onBack }) => {
   const [template, setTemplate] = useState<JobTemplate | null>(null);

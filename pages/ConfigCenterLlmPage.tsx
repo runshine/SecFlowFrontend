@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, Braces, CheckCircle2, Eye, EyeOff, LayoutPanelTop, Loader2, MessageSquare, Plus, RefreshCw, Save, ShieldAlert, Sparkles, Trash2, Wifi } from 'lucide-react';
+import { Bot, BookOpenText, Braces, CheckCircle2, Eye, EyeOff, LayoutPanelTop, Loader2, MessageSquare, Plus, RefreshCw, Save, ShieldAlert, Sparkles, Trash2, Wifi, X } from 'lucide-react';
 import { api } from '../clients/api';
 import { showConfirm } from '../components/DialogService';
 import { LlmProviderDetail, LlmProviderSummary, LlmProviderTestResult, LlmProviderUpsertRequest } from '../types/types';
@@ -9,9 +9,7 @@ interface ConfigCenterLlmPageProps {
 }
 
 const normalizeEnvBindings = (envBindings: Record<string, any> | undefined) => {
-  const next = { ...(envBindings || {}) };
-  delete next.OPENAI_API_KEY;
-  return next;
+  return { ...(envBindings || {}) };
 };
 
 const normalizeDraft = (draft: Partial<LlmProviderUpsertRequest> | null | undefined): LlmProviderUpsertRequest => ({
@@ -83,6 +81,10 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
   const [jsonDraft, setJsonDraft] = useState<string>(stringifyDraft(createEmptyForm()));
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<LlmProviderTestResult | null>(null);
+  const [showUsageGuide, setShowUsageGuide] = useState(false);
+  const [showBulkEnvImport, setShowBulkEnvImport] = useState(false);
+  const [bulkEnvInput, setBulkEnvInput] = useState('');
+  const [refreshNotice, setRefreshNotice] = useState('');
 
   const selectedSummary = useMemo(
     () => providers.find((item) => item.provider_key === selectedKey) || null,
@@ -98,7 +100,7 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
     setJsonDraft(stringifyDraft(draft));
   };
 
-  const loadProviders = async (keepSelection = true) => {
+  const loadProviders = async (keepSelection = true): Promise<boolean> => {
     setError('');
     setRefreshing(true);
     try {
@@ -117,8 +119,10 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
       } else {
         await handleSelect((items.find((item: LlmProviderSummary) => item.is_default) || items[0]).provider_key);
       }
+      return true;
     } catch (err: any) {
       setError(err.message || '加载 LLM 配置失败');
+      return false;
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -128,6 +132,15 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
   useEffect(() => {
     void loadProviders(false);
   }, []);
+
+  useEffect(() => {
+    if (!refreshNotice) return;
+    const timer = window.setTimeout(() => {
+      setRefreshNotice('');
+      setMessage((current) => (current === refreshNotice ? '' : current));
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [refreshNotice]);
 
   const applyDetailToForm = (detail: LlmProviderDetail) => {
     const nextForm = normalizeDraft({
@@ -177,6 +190,15 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
     const emptyForm = createEmptyForm();
     setForm(emptyForm);
     syncJsonDraft(emptyForm);
+  };
+
+  const handleRefresh = async () => {
+    setMessage('');
+    const ok = await loadProviders(true);
+    if (!ok) return;
+    const notice = `已从服务端刷新 LLM Provider 列表与当前详情（${new Date().toLocaleTimeString('zh-CN', { hour12: false })}）`;
+    setRefreshNotice(notice);
+    setMessage(notice);
   };
 
   const handleSwitchMode = (mode: 'visual' | 'json') => {
@@ -314,6 +336,49 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
     }
   };
 
+  const handleBulkEnvImport = () => {
+    const lines = bulkEnvInput
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) {
+      setError('请先粘贴要导入的环境变量文本');
+      return;
+    }
+
+    const imported: Record<string, string> = {};
+    for (const line of lines) {
+      if (line.startsWith('#')) {
+        continue;
+      }
+      const separatorIndex = line.indexOf('=');
+      if (separatorIndex <= 0) {
+        setError(`环境变量格式不正确: ${line}`);
+        return;
+      }
+      const key = line.slice(0, separatorIndex).trim().toUpperCase();
+      const value = line.slice(separatorIndex + 1);
+      if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
+        setError(`环境变量名不合法: ${key}`);
+        return;
+      }
+      imported[key] = value;
+    }
+
+    setForm({
+      ...form,
+      env_bindings: {
+        ...form.env_bindings,
+        ...imported,
+      },
+    });
+    setMessage(`已批量导入 ${Object.keys(imported).length} 个环境变量`);
+    setError('');
+    setBulkEnvInput('');
+    setShowBulkEnvImport(false);
+  };
+
   const envEntries = Object.entries(form.env_bindings || {});
 
   return (
@@ -330,7 +395,7 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => void loadProviders(true)}
+            onClick={() => void handleRefresh()}
             className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600"
           >
             {refreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
@@ -349,6 +414,13 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
           >
             <MessageSquare size={16} />
             在线聊天
+          </button>
+          <button
+            onClick={() => setShowUsageGuide(true)}
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 shadow-sm"
+          >
+            <BookOpenText size={16} />
+            使用指引
           </button>
         </div>
       </div>
@@ -572,7 +644,58 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
               >
                 添加变量
               </button>
+              <button
+                type="button"
+                onClick={() => setShowBulkEnvImport((current) => !current)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600"
+              >
+                {showBulkEnvImport ? '收起批量导入' : '批量导入'}
+              </button>
             </div>
+
+            {showBulkEnvImport && (
+              <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-white p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">批量导入</p>
+                <p className="mt-2 text-xs leading-6 text-slate-500">
+                  支持按行粘贴 `KEY=value` 文本，导入时会覆盖同名变量。示例：
+                  <span className="mt-2 block rounded-xl bg-slate-950 px-3 py-3 font-mono text-[11px] leading-5 text-slate-100">
+                    {`ANTHROPIC_AUTH_TOKEN=sk-12345678
+ANTHROPIC_BASE_URL=http://127.0.0.1:3456
+NO_PROXY=127.0.0.1
+DISABLE_TELEMETRY=true
+DISABLE_COST_WARNINGS=true
+API_TIMEOUT_MS=600000`}
+                  </span>
+                </p>
+                <textarea
+                  value={bulkEnvInput}
+                  onChange={(event) => setBulkEnvInput(event.target.value)}
+                  rows={8}
+                  spellCheck={false}
+                  placeholder="在这里粘贴多行 KEY=value 文本"
+                  className="mt-4 w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4 font-mono text-sm leading-6 outline-none focus:border-blue-500"
+                />
+                <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkEnvInput('');
+                      setShowBulkEnvImport(false);
+                    }}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkEnvImport}
+                    className="rounded-2xl bg-blue-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-blue-500/20"
+                  >
+                    导入环境变量
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="mt-5 space-y-3">
               {envEntries.length === 0 && (
@@ -624,9 +747,9 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
             <div className="rounded-[2rem] border border-slate-200 bg-white px-5 py-4">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
                 <ShieldAlert size={14} className="text-amber-500" />
-                密钥策略
+                返回策略
               </div>
-              <p className="mt-3 text-xs text-slate-600">详情页允许回显明文 Key；列表仅显示脱敏摘要。</p>
+              <p className="mt-3 text-xs text-slate-600">配置中心不做脱敏处理，请求成功时按原样返回保存过的配置内容。</p>
             </div>
             <div className="rounded-[2rem] border border-slate-200 bg-white px-5 py-4">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
@@ -675,6 +798,234 @@ export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpen
           )}
         </div>
       </div>
+
+      {showUsageGuide && (
+        <div className="fixed inset-0 z-[320] flex items-center justify-center bg-slate-950/65 backdrop-blur-md p-6" onClick={() => setShowUsageGuide(false)}>
+          <div className="w-full max-w-4xl overflow-hidden rounded-[2rem] border border-slate-200 bg-[linear-gradient(160deg,#ffffff_0%,#f8fafc_55%,#eef2ff_100%)] shadow-[0_30px_120px_rgba(15,23,42,0.32)]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200/80 px-8 py-7">
+              <div>
+                <div className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
+                  Guide
+                </div>
+                <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">如何获取和使用 LLM 对接配置</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  这个弹窗面向需要消费配置中心的开发者、运维或其它微服务维护者，用来快速说明如何读取系统当前支持的 LLM Provider，以及如何拿到某个 Provider 的完整配置。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUsageGuide(false)}
+                className="rounded-2xl border border-slate-200 bg-white p-3 text-slate-400 transition-all hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-[75vh] space-y-6 overflow-y-auto px-8 py-7">
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
+                <h4 className="text-sm font-black text-slate-900">1. 管理员在前端维护 Provider</h4>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  在本页面可以新增、编辑、启停、设为默认、测试可用性，并通过“在线聊天”验证模型的真实响应效果。这里保存的是平台级全局配置，适合被多个微服务统一消费。
+                </p>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
+                <h4 className="text-sm font-black text-slate-900">2. 其它微服务如何读取已启用的配置</h4>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  业务服务应使用机机 Token 调用配置中心服务接口，而不是调用管理员接口。推荐先读取“已启用 Provider 列表”，再按需要读取某个 Provider 的详细配置。
+                </p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">列表接口</p>
+                    <code className="mt-3 block whitespace-pre-wrap break-all rounded-2xl bg-slate-950 px-4 py-4 text-xs leading-6 text-slate-100">
+{`GET /api/configcenter/service/llm/providers`}
+                    </code>
+                  </div>
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">详情接口</p>
+                    <code className="mt-3 block whitespace-pre-wrap break-all rounded-2xl bg-slate-950 px-4 py-4 text-xs leading-6 text-slate-100">
+{`GET /api/configcenter/service/llm/providers/{provider_key}`}
+                    </code>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
+                <h4 className="text-sm font-black text-slate-900">3. 推荐的消费顺序</h4>
+                <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+                  <p>先调用列表接口，确认当前有哪些启用中的 Provider，以及哪一个是默认 Provider。</p>
+                  <p>如果你的服务只需要使用默认渠道，就读取 `default_provider_key` 对应的详情。</p>
+                  <p>如果你的服务支持多模型切换，可以缓存列表结果，让调用方按 `provider_key` 选择具体模型渠道。</p>
+                </div>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
+                <h4 className="text-sm font-black text-slate-900">4. 典型返回内容里有哪些关键字段</h4>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    <p><span className="font-black text-slate-900">api_base</span>：上游 LLM API 地址</p>
+                    <p className="mt-2"><span className="font-black text-slate-900">model</span>：默认模型名，可为空</p>
+                    <p className="mt-2"><span className="font-black text-slate-900">api_key</span>：受控返回的访问密钥</p>
+                    <p className="mt-2"><span className="font-black text-slate-900">provider_type</span>：渠道协议类型</p>
+                  </div>
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    <p><span className="font-black text-slate-900">timeout_seconds</span>：请求超时建议</p>
+                    <p className="mt-2"><span className="font-black text-slate-900">max_tokens / temperature</span>：默认推理参数</p>
+                    <p className="mt-2"><span className="font-black text-slate-900">env_bindings</span>：可选环境变量映射</p>
+                    <p className="mt-2"><span className="font-black text-slate-900">extra_config</span>：扩展字段</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
+                <h4 className="text-sm font-black text-slate-900">5. curl 示例</h4>
+                <code className="mt-4 block whitespace-pre-wrap break-all rounded-[1.5rem] bg-slate-950 px-5 py-4 text-xs leading-6 text-slate-100">
+{`curl -H "Authorization: Bearer <machine-token>" \\
+  https://secflow.sothothv2.com/api/configcenter/service/llm/providers
+
+curl -H "Authorization: Bearer <machine-token>" \\
+  https://secflow.sothothv2.com/api/configcenter/service/llm/providers/openai-prod`}
+                </code>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
+                <h4 className="text-sm font-black text-slate-900">6. 列表接口实际响应 Example</h4>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  下面这个 example 来自当前环境中的真实列表响应，返回了当前已启用的两个 Provider：默认的
+                  <span className="mx-1 rounded-full bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700">local_litellm</span>
+                  和
+                  <span className="mx-1 rounded-full bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700">local_ccr</span>
+                  。
+                </p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">请求</p>
+                    <code className="mt-3 block whitespace-pre-wrap break-all rounded-2xl bg-slate-950 px-4 py-4 text-xs leading-6 text-slate-100">
+{`GET /api/configcenter/service/llm/providers
+Authorization: Bearer <machine-token>`}
+                    </code>
+                  </div>
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">响应</p>
+                    <code className="mt-3 block max-h-[420px] overflow-auto whitespace-pre-wrap break-all rounded-2xl bg-slate-950 px-4 py-4 text-xs leading-6 text-slate-100">
+{`{
+  "total": 2,
+  "default_provider_key": "local_litellm",
+  "items": [
+    {
+      "provider_key": "local_litellm",
+      "display_name": "LOCAL_LITELLM",
+      "provider_type": "openai-compatible",
+      "enabled": true,
+      "is_default": true,
+      "api_base": "http://172.31.29.10",
+      "model": "MiniMax/MiniMax-M2.5",
+      "api_key": "sk-12345678",
+      "organization": null,
+      "api_version": null,
+      "timeout_seconds": 60,
+      "max_tokens": null,
+      "temperature": null,
+      "env_bindings": {},
+      "extra_config": {},
+      "description": null
+    },
+    {
+      "provider_key": "local_ccr",
+      "display_name": "LOCAL_CCR",
+      "provider_type": "anthropic",
+      "enabled": true,
+      "is_default": false,
+      "api_base": "http://172.31.29.10:3456/v1",
+      "model": "claude-sonnet-4-6",
+      "api_key": "sk-12345678",
+      "organization": null,
+      "api_version": null,
+      "timeout_seconds": 60,
+      "max_tokens": null,
+      "temperature": null,
+      "env_bindings": {
+        "NO_PROXY": "172.31.29.10",
+        "API_TIMEOUT_MS": "600000",
+        "DISABLE_TELEMETRY": "true",
+        "ANTHROPIC_BASE_URL": "http://172.31.29.10:3456",
+        "ANTHROPIC_AUTH_TOKEN": "sk-12345678",
+        "DISABLE_COST_WARNINGS": "true"
+      },
+      "extra_config": {},
+      "description": null
+    }
+  ]
+}`}
+                    </code>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5">
+                <h4 className="text-sm font-black text-slate-900">7. LOCAL_CCR 实际响应 Example</h4>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  下面这个 example 来自当前环境中的真实 Provider：
+                  <span className="mx-1 rounded-full bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700">display_name=LOCAL_CCR</span>
+                  ，对应的
+                  <span className="mx-1 rounded-full bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700">provider_key=local_ccr</span>
+                  。
+                </p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">请求</p>
+                    <code className="mt-3 block whitespace-pre-wrap break-all rounded-2xl bg-slate-950 px-4 py-4 text-xs leading-6 text-slate-100">
+{`GET /api/configcenter/service/llm/providers/local_ccr
+Authorization: Bearer <machine-token>`}
+                    </code>
+                  </div>
+                  <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">响应</p>
+                    <code className="mt-3 block max-h-[420px] overflow-auto whitespace-pre-wrap break-all rounded-2xl bg-slate-950 px-4 py-4 text-xs leading-6 text-slate-100">
+{`{
+  "provider_key": "local_ccr",
+  "display_name": "LOCAL_CCR",
+  "provider_type": "anthropic",
+  "enabled": true,
+  "is_default": false,
+  "api_base": "http://172.31.29.10:3456/v1",
+  "model": "claude-sonnet-4-6",
+  "api_key": "sk-12345678",
+  "organization": null,
+  "api_version": null,
+  "timeout_seconds": 60,
+  "max_tokens": null,
+  "temperature": null,
+  "env_bindings": {
+    "NO_PROXY": "172.31.29.10",
+    "API_TIMEOUT_MS": "600000",
+    "DISABLE_TELEMETRY": "true",
+    "ANTHROPIC_BASE_URL": "http://172.31.29.10:3456",
+    "ANTHROPIC_AUTH_TOKEN": "sk-12345678",
+    "DISABLE_COST_WARNINGS": "true"
+  },
+  "extra_config": {},
+  "description": null,
+  "created_at": "2026-03-29T15:04:16",
+  "updated_at": "2026-03-29T23:12:12"
+}`}
+                    </code>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5">
+                <h4 className="text-sm font-black text-amber-800">8. 使用建议</h4>
+                <div className="mt-3 space-y-3 text-sm leading-7 text-amber-900">
+                  <p>不要把管理员接口暴露给业务服务，业务服务只应走 `/service/llm/providers`。</p>
+                  <p>如果服务要长期使用配置，建议本地做短期缓存，并在失败时重新拉取配置。</p>
+                  <p>如果需要验证某个 Provider 是否可用，可以在本页面先使用“测试可用性”或“在线聊天”。</p>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

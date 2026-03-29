@@ -1137,7 +1137,7 @@ export interface LlmProviderSummary {
   is_default: boolean;
   api_base: string;
   model: string;
-  api_key_masked: string;
+  api_key: string;
   organization?: string | null;
   api_version?: string | null;
   timeout_seconds: number;

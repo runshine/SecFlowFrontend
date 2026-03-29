@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Bot, Loader2, MessageSquare, RefreshCw, Send, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '../../clients/api';
 import {
   LlmProviderChatMessage,
@@ -24,6 +26,60 @@ const createFallbackModelList = (provider: LlmProviderSummary, errorMessage?: st
 
 const getProviderStatusTone = (provider: LlmProviderSummary) =>
   provider.enabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500';
+
+const MarkdownMessage: React.FC<{ content: string }> = ({ content }) => (
+  <div className="markdown-body break-words leading-6">
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+        a: ({ children, href }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-blue-600 underline decoration-blue-300 underline-offset-2"
+          >
+            {children}
+          </a>
+        ),
+        ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
+        ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>,
+        li: ({ children }) => <li>{children}</li>,
+        h1: ({ children }) => <h1 className="mb-3 text-xl font-black text-slate-900 last:mb-0">{children}</h1>,
+        h2: ({ children }) => <h2 className="mb-3 text-lg font-black text-slate-900 last:mb-0">{children}</h2>,
+        h3: ({ children }) => <h3 className="mb-2 text-base font-black text-slate-900 last:mb-0">{children}</h3>,
+        blockquote: ({ children }) => (
+          <blockquote className="mb-3 border-l-4 border-slate-300 bg-slate-50 px-4 py-2 italic text-slate-700 last:mb-0">
+            {children}
+          </blockquote>
+        ),
+        table: ({ children }) => (
+          <div className="mb-3 overflow-x-auto last:mb-0">
+            <table className="min-w-full border-collapse text-left text-xs">{children}</table>
+          </div>
+        ),
+        thead: ({ children }) => <thead className="bg-slate-200/70">{children}</thead>,
+        th: ({ children }) => <th className="border border-slate-300 px-3 py-2 font-black text-slate-800">{children}</th>,
+        td: ({ children }) => <td className="border border-slate-300 px-3 py-2 align-top">{children}</td>,
+        code: ({ children, className }) => {
+          const isBlock = Boolean(className);
+          if (isBlock) {
+            return (
+              <code className="block overflow-x-auto rounded-2xl bg-slate-950 px-4 py-3 font-mono text-xs text-slate-100">
+                {children}
+              </code>
+            );
+          }
+          return <code className="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[0.9em] text-slate-900">{children}</code>;
+        },
+        pre: ({ children }) => <pre className="mb-3 last:mb-0">{children}</pre>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  </div>
+);
 
 export const LlmProviderChatWorkspace: React.FC<LlmProviderChatWorkspaceProps> = ({ providers }) => {
   const providersByKey = useMemo(
@@ -441,7 +497,11 @@ export const LlmProviderChatWorkspace: React.FC<LlmProviderChatWorkspaceProps> =
                             <div className="mb-1 text-[10px] font-black uppercase tracking-widest opacity-70">
                               {message.role === 'user' ? '你' : message.role === 'assistant' ? provider.display_name : '系统提示'}
                             </div>
-                            <div className="whitespace-pre-wrap break-words leading-6">{message.content}</div>
+                            {message.role === 'assistant' ? (
+                              <MarkdownMessage content={message.content} />
+                            ) : (
+                              <div className="whitespace-pre-wrap break-words leading-6">{message.content}</div>
+                            )}
                           </div>
                         ))}
                       </div>

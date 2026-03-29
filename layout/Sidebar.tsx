@@ -202,20 +202,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           />
         )}
 
-        <SidebarItem 
-          id="test-input" 
-          label="公共资源管理" 
+        <SidebarItem
+          id="public-resource-management"
+          label="公共资源管理"
           healthStatus={resourceHealth}
           applyHealth={true}
-          icon={<FileBox size={20} />} 
-          children={[
-            { id: 'test-input-release', label: '输入-发布包', icon: <Archive size={14} /> }, 
-            { id: 'test-input-code', label: '输入-源代码', icon: <FileCode size={14} /> }, 
-            { id: 'test-input-doc', label: '输入-文档类', icon: <FileText size={14} /> },
-            { id: 'test-input-other', label: '输入-其他资源', icon: <FolderTree size={14} /> },
-            { id: 'pvc-management', label: 'PVC管理', icon: <HardDrive size={14} /> },
-            { id: 'test-input-tasks', label: '任务管理', icon: <ListTodo size={14} /> }
-          ]} 
+          icon={<FileBox size={20} />}
         />
 
         <SidebarItem 

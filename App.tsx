@@ -23,6 +23,7 @@ import { DocAnalysisPage } from './pages/inputs/DocAnalysisPage';
 import { TaskMgmtPage } from './pages/inputs/TaskMgmtPage';
 import { OtherInputPage } from './pages/inputs/OtherInputPage';
 import { PvcManagementPage } from './pages/inputs/PvcManagementPage';
+import { PublicResourceManagementPage } from './pages/inputs/PublicResourceManagementPage';
 import { ProjectFileExplorerPage } from './pages/inputs/ProjectFileExplorerPage';
 
 // Env Pages
@@ -86,7 +87,7 @@ const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'workflow-app-instances', 'workflow-app-instance-detail',
   'workflow-jobs', 'workflow-job-detail',
   'workflow-instances', 'workflow-instance-detail', 'workflow-instance-logs',
-  'project-file-explorer', 'pvc-management',
+  'project-file-explorer', 'pvc-management', 'public-resource-management',
   'engine-validation',
   'pentest-risk', 'pentest-system', 'pentest-threat', 'pentest-orch',
   'pentest-exec-code', 'pentest-exec-work', 'pentest-exec-secmate',
@@ -363,12 +364,13 @@ const App: React.FC = () => {
       case 'config-center-llm': return <ConfigCenterLlmPage />;
       
       // Resource Management Pages
-      case 'test-input-release': return <ReleasePackagePage projectId={selectedProjectId} />;
-      case 'test-input-code': return <CodeAuditPage projectId={selectedProjectId} />;
-      case 'test-input-doc': return <DocAnalysisPage projectId={selectedProjectId} />;
-      case 'test-input-tasks': return <TaskMgmtPage projectId={selectedProjectId} />;
-      case 'test-input-other': return <OtherInputPage projectId={selectedProjectId} />;
-      case 'pvc-management': return <PvcManagementPage projectId={selectedProjectId} />;
+      case 'public-resource-management': return <PublicResourceManagementPage projectId={selectedProjectId} />;
+      case 'test-input-release': return <PublicResourceManagementPage projectId={selectedProjectId} initialTab="release" />;
+      case 'test-input-code': return <PublicResourceManagementPage projectId={selectedProjectId} initialTab="code" />;
+      case 'test-input-doc': return <PublicResourceManagementPage projectId={selectedProjectId} initialTab="doc" />;
+      case 'test-input-tasks': return <PublicResourceManagementPage projectId={selectedProjectId} initialTab="tasks" />;
+      case 'test-input-other': return <PublicResourceManagementPage projectId={selectedProjectId} initialTab="other" />;
+      case 'pvc-management': return <PublicResourceManagementPage projectId={selectedProjectId} initialTab="pvc" />;
       case 'project-file-explorer': return <ProjectFileExplorerPage projectId={selectedProjectId} projects={projects} />;
       
       case 'env-agent': return <EnvAgentPage projectId={selectedProjectId} />;

@@ -1,5 +1,14 @@
 import { API_BASE, handleResponse, getHeaders } from './base';
 
+const publicJson = async (url: string, init?: RequestInit) => {
+  const response = await fetch(url, init);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(errorData.detail || errorData.error || errorData.message || `API Error (${response.status})`);
+  }
+  return response.json();
+};
+
 export const vulnApi = {
   getHealth: async (): Promise<{ status: string; service: string }> =>
     handleResponse(await fetch(`${API_BASE}/api/vuln/health`, { headers: getHeaders() })),
@@ -122,4 +131,28 @@ export const vulnApi = {
       method: 'POST',
       headers: getHeaders()
     })),
+
+  getPublicIntakeCatalog: async (): Promise<any> =>
+    publicJson(`${API_BASE}/api/vuln/public/intake/catalog`),
+
+  getPublicIntakeExample: async (kind: 'cli' | 'plugin' | 'skill' | 'openapi'): Promise<any> =>
+    publicJson(`${API_BASE}/api/vuln/public/intake/examples/${kind}`),
+
+  getPublicIntakeSpec: async (): Promise<any> =>
+    publicJson(`${API_BASE}/api/vuln/public/intake/spec/openapi`),
+
+  downloadPublicCliSdkUrl: () => `${API_BASE}/api/vuln/public/intake/sdk/cli`,
+
+  downloadPublicPluginSdkUrl: () => `${API_BASE}/api/vuln/public/intake/sdk/plugin`,
+
+  downloadPublicSkillSdkUrl: () => `${API_BASE}/api/vuln/public/intake/sdk/skill`,
+
+  getPublicOpenApiSpecUrl: () => `${API_BASE}/api/vuln/public/intake/spec/openapi`,
+
+  submitAnonymousIntake: async (payload: any): Promise<any> =>
+    publicJson(`${API_BASE}/api/vuln/public/intake/submissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
 };

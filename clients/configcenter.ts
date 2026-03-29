@@ -17,6 +17,27 @@ export const configCenterApi = {
       body: JSON.stringify(payload),
     })),
 
+  testLlmProvider: async (payload: any): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/configcenter/admin/llm/providers/test`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    })),
+
+  listLlmProviderModels: async (providerKey: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/configcenter/admin/llm/providers/models`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ provider_key: providerKey }),
+    })),
+
+  chatWithLlmProviders: async (payload: any): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/configcenter/admin/llm/providers/chat`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    })),
+
   updateLlmProvider: async (providerKey: string, payload: any): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/configcenter/admin/llm/providers/${encodeURIComponent(providerKey)}`, {
       method: 'PUT',

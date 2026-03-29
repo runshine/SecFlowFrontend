@@ -1190,6 +1190,54 @@ export interface LlmProviderUpsertRequest {
   description?: string | null;
 }
 
+export interface LlmProviderTestResult {
+  ok: boolean;
+  provider_type: string;
+  request_target: string;
+  latency_ms: number;
+  status_code?: number | null;
+  response_preview?: string | null;
+  error_message?: string | null;
+}
+
+export interface LlmProviderModelOption {
+  value: string;
+  label: string;
+  source: 'remote' | 'configured' | 'manual';
+}
+
+export interface LlmProviderModelListResult {
+  provider_key: string;
+  provider_type: string;
+  request_target?: string | null;
+  status_code?: number | null;
+  error_message?: string | null;
+  items: LlmProviderModelOption[];
+}
+
+export interface LlmProviderChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface LlmProviderChatTarget {
+  provider_key: string;
+  model: string;
+  messages: LlmProviderChatMessage[];
+}
+
+export interface LlmProviderChatResult {
+  provider_key: string;
+  provider_type: string;
+  model: string;
+  ok: boolean;
+  assistant_message?: string | null;
+  latency_ms: number;
+  status_code?: number | null;
+  request_target?: string | null;
+  error_message?: string | null;
+}
+
 // Daemon Service Types (守护进程服务)
 export interface DaemonService {
   name: string;

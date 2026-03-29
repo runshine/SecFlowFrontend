@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, Braces, CheckCircle2, Eye, EyeOff, LayoutPanelTop, Loader2, Plus, RefreshCw, Save, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, Braces, CheckCircle2, Eye, EyeOff, LayoutPanelTop, Loader2, MessageSquare, Plus, RefreshCw, Save, ShieldAlert, Sparkles, Trash2, Wifi } from 'lucide-react';
 import { api } from '../clients/api';
 import { showConfirm } from '../components/DialogService';
-import { LlmProviderDetail, LlmProviderSummary, LlmProviderUpsertRequest } from '../types/types';
+import { LlmProviderChatWorkspace } from '../components/configcenter/LlmProviderChatWorkspace';
+import { LlmProviderDetail, LlmProviderSummary, LlmProviderTestResult, LlmProviderUpsertRequest } from '../types/types';
 
 const normalizeEnvBindings = (envBindings: Record<string, any> | undefined) => {
   const next = { ...(envBindings || {}) };
@@ -77,6 +78,9 @@ export const ConfigCenterLlmPage: React.FC = () => {
   const [isCreating, setIsCreating] = useState(true);
   const [editorMode, setEditorMode] = useState<'visual' | 'json'>('visual');
   const [jsonDraft, setJsonDraft] = useState<string>(stringifyDraft(createEmptyForm()));
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<LlmProviderTestResult | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const selectedSummary = useMemo(
     () => providers.find((item) => item.provider_key === selectedKey) || null,
@@ -149,6 +153,7 @@ export const ConfigCenterLlmPage: React.FC = () => {
   const handleSelect = async (providerKey: string) => {
     setError('');
     setMessage('');
+    setTestResult(null);
     try {
       const detail = await api.configCenter.getLlmProvider(providerKey);
       setSelectedKey(providerKey);
@@ -166,6 +171,7 @@ export const ConfigCenterLlmPage: React.FC = () => {
     setEditorMode('visual');
     setMessage('');
     setError('');
+    setTestResult(null);
     const emptyForm = createEmptyForm();
     setForm(emptyForm);
     syncJsonDraft(emptyForm);
@@ -198,6 +204,7 @@ export const ConfigCenterLlmPage: React.FC = () => {
       const payload = syncSystemEnvBindings(sourceForm);
       setForm(payload);
       syncJsonDraft(payload);
+      setTestResult(null);
       if (isCreating) {
         const created = await api.configCenter.createLlmProvider(payload);
         setMessage(`已创建 LLM Provider: ${created.display_name}`);
@@ -213,6 +220,34 @@ export const ConfigCenterLlmPage: React.FC = () => {
       setError(err.message || '保存失败');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    setError('');
+    setMessage('');
+    setTesting(true);
+    try {
+      const sourceForm = editorMode === 'json' ? normalizeDraft(JSON.parse(jsonDraft || '{}')) : form;
+      if (!String(sourceForm.model || '').trim()) {
+        setError('测试前请填写模型');
+        setTestResult(null);
+        return;
+      }
+      const payload = syncSystemEnvBindings(sourceForm);
+      setForm(payload);
+      syncJsonDraft(payload);
+      const result = await api.configCenter.testLlmProvider(payload);
+      setTestResult(result);
+      setMessage(result.ok ? '模型可用性测试成功' : '');
+      if (!result.ok && result.error_message) {
+        setError(result.error_message);
+      }
+    } catch (err: any) {
+      setTestResult(null);
+      setError(err.message || '测试失败');
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -306,6 +341,13 @@ export const ConfigCenterLlmPage: React.FC = () => {
             <Plus size={16} />
             新建 Provider
           </button>
+          <button
+            onClick={() => setChatOpen((current) => !current)}
+            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black shadow-sm ${chatOpen ? 'border border-blue-200 bg-blue-50 text-blue-700' : 'border border-slate-200 bg-white text-slate-600'}`}
+          >
+            <MessageSquare size={16} />
+            {chatOpen ? '收起在线聊天' : '在线聊天'}
+          </button>
         </div>
       </div>
 
@@ -314,6 +356,8 @@ export const ConfigCenterLlmPage: React.FC = () => {
           {error || message}
         </div>
       )}
+
+      {chatOpen && <LlmProviderChatWorkspace providers={providers} />}
 
       <div className="grid grid-cols-1 xl:grid-cols-[360px,minmax(0,1fr)] gap-6">
         <div className="rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm">
@@ -408,6 +452,14 @@ export const ConfigCenterLlmPage: React.FC = () => {
                   </button>
                 </>
               )}
+              <button
+                onClick={() => void handleTest()}
+                disabled={saving || testing}
+                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 disabled:opacity-50"
+              >
+                {testing ? <Loader2 size={16} className="animate-spin" /> : <Wifi size={16} />}
+                测试可用性
+              </button>
               <button
                 onClick={() => void handleSave()}
                 disabled={saving}
@@ -586,6 +638,41 @@ export const ConfigCenterLlmPage: React.FC = () => {
             </div>
           </div>
           </>
+          )}
+          {testResult && (
+            <div className={`mt-8 rounded-[2rem] border p-6 ${testResult.ok ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">测试结果</p>
+                  <h3 className={`mt-2 text-xl font-black ${testResult.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {testResult.ok ? '模型可用' : '模型不可用'}
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-black">
+                  <span className="rounded-full bg-white px-3 py-1 text-slate-600">{testResult.provider_type}</span>
+                  <span className="rounded-full bg-white px-3 py-1 text-slate-600">{testResult.latency_ms} ms</span>
+                  {testResult.status_code !== null && testResult.status_code !== undefined && (
+                    <span className="rounded-full bg-white px-3 py-1 text-slate-600">HTTP {testResult.status_code}</span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="rounded-[1.5rem] border border-white/70 bg-white/80 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">请求目标</p>
+                  <p className="mt-2 break-all font-mono text-xs text-slate-700">{testResult.request_target}</p>
+                </div>
+                <div className="rounded-[1.5rem] border border-white/70 bg-white/80 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {testResult.ok ? '响应片段' : '错误摘要'}
+                  </p>
+                  <p className={`mt-2 whitespace-pre-wrap break-words text-sm ${testResult.ok ? 'text-slate-700' : 'text-red-700'}`}>
+                    {testResult.ok
+                      ? (testResult.response_preview || '测试成功，但上游返回内容为空。')
+                      : (testResult.error_message || '测试失败，未返回更多错误信息。')}
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -22,20 +22,49 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const serviceStatusMeta: Record<string, { label: string; panelClass: string; textClass: string; icon: React.ReactNode }> = {
+    healthy: {
+      label: '正常',
+      panelClass: 'bg-green-50 border-green-200',
+      textClass: 'text-green-600',
+      icon: <CheckCircle className="w-5 h-5 text-green-500" />,
+    },
+    unhealthy: {
+      label: '异常',
+      panelClass: 'bg-red-50 border-red-200',
+      textClass: 'text-red-600',
+      icon: <XCircle className="w-5 h-5 text-red-500" />,
+    },
+    degraded: {
+      label: '降级',
+      panelClass: 'bg-amber-50 border-amber-200',
+      textClass: 'text-amber-600',
+      icon: <AlertCircle className="w-5 h-5 text-amber-500" />,
+    },
+    stale: {
+      label: '陈旧',
+      panelClass: 'bg-orange-50 border-orange-200',
+      textClass: 'text-orange-600',
+      icon: <Clock className="w-5 h-5 text-orange-500" />,
+    },
+    unknown: {
+      label: '未知',
+      panelClass: 'bg-yellow-50 border-yellow-200',
+      textClass: 'text-yellow-600',
+      icon: <AlertCircle className="w-5 h-5 text-yellow-500" />,
+    },
+    unregistered: {
+      label: '未纳管',
+      panelClass: 'bg-slate-50 border-slate-200',
+      textClass: 'text-slate-500',
+      icon: <Server className="w-5 h-5 text-slate-400" />,
+    },
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await onRefresh();
     setTimeout(() => setIsRefreshing(false), 500);
-  };
-
-  // Service health status icon
-  const ServiceHealthIcon = ({ status }: { status: 'healthy' | 'unhealthy' | 'unknown' }) => {
-    if (status === 'healthy') {
-      return <CheckCircle className="w-5 h-5 text-green-500" />;
-    } else if (status === 'unhealthy') {
-      return <XCircle className="w-5 h-5 text-red-500" />;
-    }
-    return <AlertCircle className="w-5 h-5 text-yellow-500" />;
   };
 
   // Default empty stats
@@ -50,6 +79,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     lastUpdated: new Date().toISOString(),
   };
 
+  const serviceStatusCounts = stats.services.reduce((acc: Record<string, number>, service) => {
+    acc[service.status] = (acc[service.status] || 0) + 1;
+    return acc;
+  }, {});
   return (
     <div className="p-8 space-y-8 animate-in fade-in duration-500">
       {/* Header */}
@@ -84,29 +117,36 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           <Server className="w-5 h-5" />
           服务健康状态
         </h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+          {Object.entries(serviceStatusMeta).map(([status, meta]) => (
+            <div key={status} className={`p-4 rounded-2xl border ${meta.panelClass}`}>
+              <div className="flex items-center gap-2 mb-2">
+                {meta.icon}
+                <span className={`text-xs font-black uppercase ${meta.textClass}`}>{meta.label}</span>
+              </div>
+              <p className="text-2xl font-black text-slate-900">{serviceStatusCounts[status] || 0}</p>
+            </div>
+          ))}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {stats.services.map((service) => (
-            <div
-              key={service.name}
-              className={`p-4 rounded-2xl border ${
-                service.status === 'healthy'
-                  ? 'bg-green-50 border-green-200'
-                  : service.status === 'unhealthy'
-                  ? 'bg-red-50 border-red-200'
-                  : 'bg-yellow-50 border-yellow-200'
-              }`}
-            >
+            <div key={service.id} className={`p-4 rounded-2xl border ${serviceStatusMeta[service.status].panelClass}`}>
               <div className="flex items-center justify-between mb-2">
-                <ServiceHealthIcon status={service.status} />
-                <span className={`text-xs font-bold uppercase ${
-                  service.status === 'healthy' ? 'text-green-600' :
-                  service.status === 'unhealthy' ? 'text-red-600' : 'text-yellow-600'
-                }`}>
-                  {service.status === 'healthy' ? '正常' : service.status === 'unhealthy' ? '异常' : '未知'}
+                {serviceStatusMeta[service.status].icon}
+                <span className={`text-xs font-bold uppercase ${serviceStatusMeta[service.status].textClass}`}>
+                  {serviceStatusMeta[service.status].label}
                 </span>
               </div>
-              <p className="text-xs font-bold text-slate-600 truncate" title={service.name}>
-                {service.name.replace('secflow-platform-', '')}
+              <p className="text-xs font-bold text-slate-700 truncate" title={service.name}>
+                {service.name}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500 truncate" title={service.id}>
+                {service.runtimeStatus ? `${service.runtimeStatus}` : (service.registered ? 'menu 聚合' : service.source === 'direct' ? '直连兜底' : '目录未纳管')}
+              </p>
+              <p className="mt-2 text-[11px] font-bold text-slate-700">
+                {service.replicas !== null && service.replicas !== undefined
+                  ? `副本 ${service.readyReplicas ?? 0}/${service.replicas} · Available ${service.availableReplicas ?? 0}`
+                  : '副本信息暂不可用'}
               </p>
             </div>
           ))}

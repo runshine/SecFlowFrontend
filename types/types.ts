@@ -1114,8 +1114,17 @@ export interface AdminDashboardStats {
     };
   };
   services: {
+    id: string;
     name: string;
-    status: 'healthy' | 'unhealthy' | 'unknown';
+    apiPrefix?: string;
+    status: 'healthy' | 'unhealthy' | 'degraded' | 'stale' | 'unknown' | 'unregistered';
+    registered: boolean;
+    source: 'menu' | 'direct' | 'catalog';
+    replicas?: number | null;
+    readyReplicas?: number | null;
+    availableReplicas?: number | null;
+    runtimeStatus?: string | null;
+    deploymentName?: string | null;
   }[];
   lastUpdated: string;
 }

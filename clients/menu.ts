@@ -12,6 +12,12 @@ export interface MenuServiceHealthItem {
   latency_ms?: number | null;
   last_check_at?: number | null;
   error?: string | null;
+  registered?: boolean;
+  replicas?: number | null;
+  ready_replicas?: number | null;
+  available_replicas?: number | null;
+  deployment_name?: string | null;
+  runtime_status?: string | null;
 }
 
 export interface MenuServiceHealthSummary {

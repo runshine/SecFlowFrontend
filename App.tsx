@@ -138,6 +138,7 @@ const App: React.FC = () => {
   const [codeAuditServiceHealthy, setCodeAuditServiceHealthy] = useState<boolean | null>(null);
   const [workflowServiceHealthy, setWorkflowServiceHealthy] = useState<boolean | null>(null);
   const [vulnServiceHealthy, setVulnServiceHealthy] = useState<boolean | null>(null);
+  const [configCenterServiceHealthy, setConfigCenterServiceHealthy] = useState<boolean | null>(null);
 
   const normalizeServiceHealth = (status?: AggregatedServiceHealth | null): boolean | null => {
     if (status === 'healthy') return true;
@@ -202,6 +203,7 @@ const App: React.FC = () => {
       setCodeAuditServiceHealthy(resolveMenuServiceHealth(services, ['vscode-web-manager', 'secflow-app-code-server']));
       setWorkflowServiceHealthy(resolveMenuServiceHealth(services, ['secflow-workflow', 'secflow-platform-workflow', 'secflow-workflow-status']));
       setVulnServiceHealthy(resolveMenuServiceHealth(services, ['secflow-platform-vuln']));
+      setConfigCenterServiceHealthy(resolveMenuServiceHealth(services, ['secflow-platform-configcenter']));
     } catch (e) {
       setResourceServiceHealthy(false);
       setStaticPackageHealthy(false);
@@ -210,6 +212,7 @@ const App: React.FC = () => {
       setCodeAuditServiceHealthy(false);
       setWorkflowServiceHealthy(false);
       setVulnServiceHealthy(false);
+      setConfigCenterServiceHealthy(false);
     }
   };
 
@@ -506,6 +509,7 @@ const App: React.FC = () => {
           codeAuditHealth={codeAuditServiceHealthy}
           workflowHealth={workflowServiceHealthy}
           vulnHealth={vulnServiceHealthy}
+          configCenterHealth={configCenterServiceHealthy}
         />
         <main className="flex-1 flex flex-col min-w-0">
           <Header 

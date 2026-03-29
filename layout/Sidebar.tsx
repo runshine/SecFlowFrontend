@@ -66,6 +66,7 @@ interface SidebarProps {
   codeAuditHealth?: boolean | null;
   workflowHealth?: boolean | null;
   vulnHealth?: boolean | null;
+  configCenterHealth?: boolean | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -77,7 +78,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   envHealth = null,
   codeAuditHealth = null,
   workflowHealth = null,
-  vulnHealth = null
+  vulnHealth = null,
+  configCenterHealth = null
 }) => {
   const isUserMgmtMode = currentView.startsWith('user-mgmt-') || currentView.startsWith('org-mgmt-');
 
@@ -196,6 +198,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             id="config-center-root"
             label="配置中心"
             icon={<Key size={20} />}
+            healthStatus={configCenterHealth}
+            applyHealth={true}
             children={[
               { id: 'config-center-llm', label: 'LLM 对接配置', icon: <Globe size={14} /> }
             ]}
@@ -275,7 +279,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           applyHealth={true}
           children={[
             { id: 'vuln-overview', label: '生命周期总览', icon: <Activity size={14} /> },
-            { id: 'vuln-intake', label: '漏洞上报', icon: <FolderOpen size={14} /> },
+            { id: 'vuln-intake', label: '疑点上报', icon: <FolderOpen size={14} /> },
             { id: 'vuln-analysis', label: '分析研判', icon: <GitBranch size={14} /> },
             { id: 'vuln-verification', label: '验证复现', icon: <ShieldCheck size={14} /> },
             { id: 'vuln-proof', label: '证明利用', icon: <Sparkles size={14} /> },

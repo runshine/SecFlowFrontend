@@ -8,6 +8,45 @@ export const getHeaders = () => {
   };
 };
 
+const stringifyErrorPart = (value: any): string => {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => stringifyErrorPart(item)).filter(Boolean).join('；');
+  }
+
+  if (typeof value === 'object') {
+    const location = Array.isArray(value.loc) ? value.loc.join('.') : '';
+    const message = value.msg || value.message || value.detail || '';
+    if (location && message) return `${location}: ${message}`;
+    if (message) return String(message);
+    return Object.entries(value)
+      .map(([key, item]) => `${key}: ${stringifyErrorPart(item)}`)
+      .filter((item) => !item.endsWith(': '))
+      .join('；');
+  }
+
+  return String(value);
+};
+
+const extractErrorMessage = (errorData: any, status: number): string => {
+  const candidates = [
+    errorData?.detail,
+    errorData?.error,
+    errorData?.message,
+    errorData?.details,
+  ];
+
+  for (const candidate of candidates) {
+    const formatted = stringifyErrorPart(candidate).trim();
+    if (formatted) return formatted;
+  }
+
+  return `API Error (${status})`;
+};
+
 export const handleResponse = async (response: Response) => {
   // 处理 401 Token 失效
   if (response.status === 401) {
@@ -23,7 +62,7 @@ export const handleResponse = async (response: Response) => {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    const message = errorData.detail || errorData.error || errorData.message || `API Error (${response.status})`;
+    const message = extractErrorMessage(errorData, response.status);
     const error = new Error(message);
     if (errorData.code) (error as any).code = errorData.code;
     if (errorData.details) (error as any).details = errorData.details;

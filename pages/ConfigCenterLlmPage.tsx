@@ -1,14 +1,38 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, CheckCircle2, Eye, EyeOff, Loader2, Plus, RefreshCw, Save, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, Braces, CheckCircle2, Eye, EyeOff, LayoutPanelTop, Loader2, Plus, RefreshCw, Save, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 import { api } from '../clients/api';
 import { showConfirm } from '../components/DialogService';
 import { LlmProviderDetail, LlmProviderSummary, LlmProviderUpsertRequest } from '../types/types';
 
-const defaultEnvBindings = {
-  OPENAI_BASE_URL: '',
-  OPENAI_API_KEY: '',
-  OPENAI_MODEL: '',
+const normalizeEnvBindings = (envBindings: Record<string, any> | undefined) => {
+  const next = { ...(envBindings || {}) };
+  delete next.OPENAI_API_KEY;
+  return next;
 };
+
+const normalizeDraft = (draft: Partial<LlmProviderUpsertRequest> | null | undefined): LlmProviderUpsertRequest => ({
+  provider_key: String(draft?.provider_key || ''),
+  display_name: String(draft?.display_name || ''),
+  provider_type: String(draft?.provider_type || 'openai-compatible'),
+  enabled: typeof draft?.enabled === 'boolean' ? draft.enabled : true,
+  is_default: typeof draft?.is_default === 'boolean' ? draft.is_default : false,
+  api_base: String(draft?.api_base || ''),
+  model: String(draft?.model || ''),
+  api_key: String(draft?.api_key || ''),
+  organization: draft?.organization ? String(draft.organization) : '',
+  api_version: draft?.api_version ? String(draft.api_version) : '',
+  timeout_seconds: typeof draft?.timeout_seconds === 'number' && Number.isFinite(draft.timeout_seconds) ? draft.timeout_seconds : 60,
+  max_tokens: typeof draft?.max_tokens === 'number' && Number.isFinite(draft.max_tokens) ? draft.max_tokens : null,
+  temperature: typeof draft?.temperature === 'number' && Number.isFinite(draft.temperature) ? draft.temperature : null,
+  env_bindings: normalizeEnvBindings(draft?.env_bindings as Record<string, any> | undefined),
+  extra_config: draft?.extra_config && typeof draft.extra_config === 'object' && !Array.isArray(draft.extra_config) ? draft.extra_config : {},
+  description: draft?.description ? String(draft.description) : '',
+});
+
+const stringifyDraft = (draft: LlmProviderUpsertRequest) => JSON.stringify({
+  ...draft,
+  env_bindings: normalizeEnvBindings(draft.env_bindings),
+}, null, 2);
 
 const createEmptyForm = (): LlmProviderUpsertRequest => ({
   provider_key: '',
@@ -24,7 +48,7 @@ const createEmptyForm = (): LlmProviderUpsertRequest => ({
   timeout_seconds: 60,
   max_tokens: null,
   temperature: null,
-  env_bindings: { ...defaultEnvBindings },
+  env_bindings: {},
   extra_config: {},
   description: '',
 });
@@ -51,6 +75,8 @@ export const ConfigCenterLlmPage: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [showSecret, setShowSecret] = useState(false);
   const [isCreating, setIsCreating] = useState(true);
+  const [editorMode, setEditorMode] = useState<'visual' | 'json'>('visual');
+  const [jsonDraft, setJsonDraft] = useState<string>(stringifyDraft(createEmptyForm()));
 
   const selectedSummary = useMemo(
     () => providers.find((item) => item.provider_key === selectedKey) || null,
@@ -59,13 +85,12 @@ export const ConfigCenterLlmPage: React.FC = () => {
 
   const syncSystemEnvBindings = (draft: LlmProviderUpsertRequest) => ({
     ...draft,
-    env_bindings: {
-      ...draft.env_bindings,
-      OPENAI_BASE_URL: draft.api_base,
-      OPENAI_API_KEY: draft.api_key,
-      OPENAI_MODEL: draft.model,
-    },
+    env_bindings: normalizeEnvBindings(draft.env_bindings),
   });
+
+  const syncJsonDraft = (draft: LlmProviderUpsertRequest) => {
+    setJsonDraft(stringifyDraft(draft));
+  };
 
   const loadProviders = async (keepSelection = true) => {
     setError('');
@@ -78,7 +103,9 @@ export const ConfigCenterLlmPage: React.FC = () => {
       if (items.length === 0) {
         setSelectedKey('');
         setIsCreating(true);
-        setForm(createEmptyForm());
+        const emptyForm = createEmptyForm();
+        setForm(emptyForm);
+        syncJsonDraft(emptyForm);
       } else if (nextSelected && items.some((item: LlmProviderSummary) => item.provider_key === nextSelected)) {
         await handleSelect(nextSelected);
       } else {
@@ -97,7 +124,7 @@ export const ConfigCenterLlmPage: React.FC = () => {
   }, []);
 
   const applyDetailToForm = (detail: LlmProviderDetail) => {
-    setForm({
+    const nextForm = normalizeDraft({
       provider_key: detail.provider_key,
       display_name: detail.display_name,
       provider_type: detail.provider_type,
@@ -111,16 +138,12 @@ export const ConfigCenterLlmPage: React.FC = () => {
       timeout_seconds: detail.timeout_seconds,
       max_tokens: detail.max_tokens ?? null,
       temperature: detail.temperature ?? null,
-      env_bindings: {
-        ...defaultEnvBindings,
-        ...(detail.env_bindings || {}),
-        OPENAI_BASE_URL: detail.env_bindings?.OPENAI_BASE_URL || detail.api_base,
-        OPENAI_API_KEY: detail.env_bindings?.OPENAI_API_KEY || detail.api_key,
-        OPENAI_MODEL: detail.env_bindings?.OPENAI_MODEL || detail.model,
-      },
+      env_bindings: normalizeEnvBindings(detail.env_bindings),
       extra_config: detail.extra_config || {},
       description: detail.description || '',
     });
+    setForm(nextForm);
+    syncJsonDraft(nextForm);
   };
 
   const handleSelect = async (providerKey: string) => {
@@ -140,9 +163,30 @@ export const ConfigCenterLlmPage: React.FC = () => {
     setSelectedKey('');
     setIsCreating(true);
     setShowSecret(true);
+    setEditorMode('visual');
     setMessage('');
     setError('');
-    setForm(createEmptyForm());
+    const emptyForm = createEmptyForm();
+    setForm(emptyForm);
+    syncJsonDraft(emptyForm);
+  };
+
+  const handleSwitchMode = (mode: 'visual' | 'json') => {
+    if (mode === editorMode) return;
+    if (mode === 'json') {
+      syncJsonDraft(form);
+      setEditorMode('json');
+      return;
+    }
+    try {
+      const parsed = normalizeDraft(JSON.parse(jsonDraft || '{}'));
+      setForm(parsed);
+      syncJsonDraft(parsed);
+      setEditorMode('visual');
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'JSON 解析失败，请先修正格式');
+    }
   };
 
   const handleSave = async () => {
@@ -150,7 +194,10 @@ export const ConfigCenterLlmPage: React.FC = () => {
     setError('');
     setMessage('');
     try {
-      const payload = syncSystemEnvBindings(form);
+      const sourceForm = editorMode === 'json' ? normalizeDraft(JSON.parse(jsonDraft || '{}')) : form;
+      const payload = syncSystemEnvBindings(sourceForm);
+      setForm(payload);
+      syncJsonDraft(payload);
       if (isCreating) {
         const created = await api.configCenter.createLlmProvider(payload);
         setMessage(`已创建 LLM Provider: ${created.display_name}`);
@@ -318,6 +365,24 @@ export const ConfigCenterLlmPage: React.FC = () => {
               </h2>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode('visual')}
+                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black ${editorMode === 'visual' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                  <LayoutPanelTop size={14} />
+                  可视化编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode('json')}
+                  className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black ${editorMode === 'json' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                >
+                  <Braces size={14} />
+                  JSON 编辑
+                </button>
+              </div>
               {!isCreating && (
                 <>
                   <button
@@ -354,6 +419,22 @@ export const ConfigCenterLlmPage: React.FC = () => {
             </div>
           </div>
 
+          {editorMode === 'json' ? (
+            <div className="mt-8 space-y-4">
+              <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-5">
+                <h3 className="text-sm font-black text-slate-900">JSON 配置</h3>
+                <p className="mt-1 text-xs text-slate-500">这里展示并编辑当前 Provider 的完整配置对象。切回可视化编辑时会自动解析并同步字段。</p>
+              </div>
+              <textarea
+                value={jsonDraft}
+                onChange={(event) => setJsonDraft(event.target.value)}
+                rows={28}
+                spellCheck={false}
+                className="w-full rounded-[2rem] border border-slate-200 bg-slate-950 px-5 py-4 font-mono text-sm leading-6 text-slate-100 outline-none focus:border-blue-500"
+              />
+            </div>
+          ) : (
+          <>
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">渠道标识</label>
@@ -425,7 +506,7 @@ export const ConfigCenterLlmPage: React.FC = () => {
                   <Sparkles size={16} className="text-blue-500" />
                   环境变量绑定
                 </h3>
-                <p className="mt-1 text-xs text-slate-500">保存时会自动把 API Base / Key / Model 同步到默认的 `OPENAI_*` 变量，方便其他微服务直接消费。</p>
+                <p className="mt-1 text-xs text-slate-500">默认环境变量键会保留为空值，只有你手动填写后才会写入具体内容，密钥仍通过独立字段管理。</p>
               </div>
               <button
                 type="button"
@@ -443,6 +524,11 @@ export const ConfigCenterLlmPage: React.FC = () => {
             </div>
 
             <div className="mt-5 space-y-3">
+              {envEntries.length === 0 && (
+                <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs font-medium text-slate-500">
+                  当前没有环境变量绑定。环境变量绑定是可选项，可按需手动添加。
+                </div>
+              )}
               {envEntries.map(([key, value]) => (
                 <div key={key} className="grid grid-cols-[220px,1fr,44px] gap-3">
                   <input
@@ -453,8 +539,7 @@ export const ConfigCenterLlmPage: React.FC = () => {
                       ));
                       setForm({ ...form, env_bindings: Object.fromEntries(nextEntries) });
                     }}
-                    disabled={['OPENAI_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_MODEL'].includes(key)}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none disabled:bg-slate-100 disabled:text-slate-400"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
                   />
                   <input
                     value={String(value ?? '')}
@@ -463,13 +548,12 @@ export const ConfigCenterLlmPage: React.FC = () => {
                   />
                   <button
                     type="button"
-                    disabled={['OPENAI_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_MODEL'].includes(key)}
                     onClick={() => {
                       const next = { ...form.env_bindings };
                       delete next[key];
                       setForm({ ...form, env_bindings: next });
                     }}
-                    className="rounded-2xl border border-slate-200 bg-white text-slate-400 hover:text-red-600 disabled:opacity-30"
+                    className="rounded-2xl border border-slate-200 bg-white text-slate-400 hover:text-red-600"
                   >
                     <Trash2 size={16} className="mx-auto" />
                   </button>
@@ -482,9 +566,9 @@ export const ConfigCenterLlmPage: React.FC = () => {
             <div className="rounded-[2rem] border border-slate-200 bg-white px-5 py-4">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
                 <CheckCircle2 size={14} className="text-green-500" />
-                默认变量
+                可选绑定
               </div>
-              <p className="mt-3 text-xs font-mono text-slate-600">OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL</p>
+              <p className="mt-3 text-xs text-slate-600">环境变量绑定完全按需填写，不再预置任何默认项。</p>
             </div>
             <div className="rounded-[2rem] border border-slate-200 bg-white px-5 py-4">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
@@ -501,6 +585,8 @@ export const ConfigCenterLlmPage: React.FC = () => {
               <p className="mt-3 text-xs text-slate-600">其他微服务通过机机 Token 调用 `/api/configcenter/service/llm/providers` 获取配置。</p>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

@@ -15,6 +15,7 @@ import { StaticPackageDetailPage } from './pages/StaticPackageDetailPage';
 import { DeployScriptPage } from './pages/DeployScriptPage';
 import { SecurityAssessmentPage } from './pages/SecurityAssessmentPage';
 import { ConfigCenterLlmPage } from './pages/ConfigCenterLlmPage';
+import { ConfigCenterLlmChatPage } from './pages/ConfigCenterLlmChatPage';
 
 // Input Pages
 import { ReleasePackagePage } from './pages/inputs/ReleasePackagePage';
@@ -364,7 +365,10 @@ const App: React.FC = () => {
       case 'static-package-detail': return <StaticPackageDetailPage packageId={activePackageId} onBack={() => setCurrentView('static-packages')} />;
       case 'deploy-script-mgmt': return <DeployScriptPage />;
       case 'config-center-root':
-      case 'config-center-llm': return <ConfigCenterLlmPage />;
+      case 'config-center-llm':
+        return <ConfigCenterLlmPage onOpenChat={() => setCurrentView('config-center-llm-chat')} />;
+      case 'config-center-llm-chat':
+        return <ConfigCenterLlmChatPage onBack={() => setCurrentView('config-center-llm')} />;
       
       // Resource Management Pages
       case 'public-resource-management': return <PublicResourceManagementPage projectId={selectedProjectId} />;

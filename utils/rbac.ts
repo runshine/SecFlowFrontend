@@ -98,6 +98,7 @@ const SUPER_ADMIN_ONLY_VIEWS = new Set<string>([
   'admin-dashboard',
   'config-center-root',
   'config-center-llm',
+  'config-center-llm-chat',
   'user-mgmt-users',
   'user-mgmt-access',
   'user-mgmt-online',

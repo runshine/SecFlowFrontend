@@ -1072,7 +1072,7 @@ export interface DeployScriptListResponse {
 export type ViewType =
   | 'dashboard' | 'admin-dashboard' | 'project-mgmt' | 'project-detail' | 'static-packages' | 'static-package-detail' | 'deploy-script-mgmt'
   | 'public-resource-management' | 'test-input-release' | 'test-input-code' | 'test-input-doc' | 'test-input-tasks' | 'test-input-other' | 'pvc-management' | 'project-file-explorer'
-  | 'config-center-root' | 'config-center-llm'
+  | 'config-center-root' | 'config-center-llm' | 'config-center-llm-chat'
   | 'env-mgmt' | 'env-agent' | 'env-service' | 'env-ai-agent' | 'env-ai-agent-overview' | 'env-ai-helper' | 'env-ai-agent-manage' | 'env-ai-session' | 'env-ai-batch-session' | 'env-template' | 'env-tasks'
   | 'workflow-instances' | 'workflow-instance-detail' | 'workflow-instance-logs' | 'workflow-jobs' | 'workflow-job-detail' | 'workflow-apps' | 'workflow-app-detail' | 'workflow-app-instances' | 'workflow-app-instance-detail'
   | 'engine-validation' | 'pentest-root' | 'pentest-risk' | 'pentest-system' 
@@ -1233,6 +1233,20 @@ export interface LlmProviderChatResult {
   ok: boolean;
   assistant_message?: string | null;
   latency_ms: number;
+  status_code?: number | null;
+  request_target?: string | null;
+  error_message?: string | null;
+}
+
+export interface LlmProviderChatStreamEvent {
+  type: 'start' | 'delta' | 'done' | 'error' | 'all_done';
+  provider_key?: string;
+  provider_type?: string;
+  model?: string;
+  delta?: string;
+  ok?: boolean;
+  assistant_message?: string | null;
+  latency_ms?: number;
   status_code?: number | null;
   request_target?: string | null;
   error_message?: string | null;

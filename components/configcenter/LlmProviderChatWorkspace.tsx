@@ -4,6 +4,7 @@ import { api } from '../../clients/api';
 import {
   LlmProviderChatMessage,
   LlmProviderChatResult,
+  LlmProviderChatStreamEvent,
   LlmProviderModelListResult,
   LlmProviderSummary,
 } from '../../types/types';
@@ -36,6 +37,7 @@ export const LlmProviderChatWorkspace: React.FC<LlmProviderChatWorkspaceProps> =
   const [customModels, setCustomModels] = useState<Record<string, string>>({});
   const [chatHistories, setChatHistories] = useState<Record<string, LlmProviderChatMessage[]>>({});
   const [latestResults, setLatestResults] = useState<Record<string, LlmProviderChatResult>>({});
+  const [streamingProviderKeys, setStreamingProviderKeys] = useState<string[]>([]);
   const [draftMessage, setDraftMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState('');
@@ -118,23 +120,107 @@ export const LlmProviderChatWorkspace: React.FC<LlmProviderChatWorkspaceProps> =
     setChatError('');
     setChatNotice('');
     setChatHistories(nextHistories);
+    setStreamingProviderKeys(selectedProviderKeys);
     try {
-      const response = await api.configCenter.chatWithLlmProviders({ targets });
-      const results = (response.results || []) as LlmProviderChatResult[];
-      const updatedHistories = { ...nextHistories };
-      const nextResults = { ...latestResults };
-      results.forEach((result) => {
-        nextResults[result.provider_key] = result;
-        const nextMessage: LlmProviderChatMessage = result.ok
-          ? { role: 'assistant', content: result.assistant_message || '(模型返回了空内容)' }
-          : { role: 'system', content: `请求失败：${result.error_message || '未返回更多错误信息'}` };
-        updatedHistories[result.provider_key] = [...(updatedHistories[result.provider_key] || []), nextMessage];
-      });
-      setLatestResults(nextResults);
-      setChatHistories(updatedHistories);
       setDraftMessage('');
-      setChatNotice(results.some((item) => !item.ok) ? '部分 Provider 返回失败，可直接继续对话或调整模型。' : '本轮消息已发送。');
+      await api.configCenter.streamChatWithLlmProviders(
+        { targets },
+        {
+          onEvent: (event: LlmProviderChatStreamEvent) => {
+            if (!event?.type || !event.provider_key) {
+              if (event?.type === 'all_done') {
+                setStreamingProviderKeys([]);
+              }
+              return;
+            }
+
+            if (event.type === 'start') {
+              setChatHistories((current) => {
+                const existing = [...(current[event.provider_key!] || [])];
+                if (existing[existing.length - 1]?.role !== 'assistant') {
+                  existing.push({ role: 'assistant', content: '' });
+                }
+                return { ...current, [event.provider_key!]: existing };
+              });
+              return;
+            }
+
+            if (event.type === 'delta') {
+              setChatHistories((current) => {
+                const existing = [...(current[event.provider_key!] || [])];
+                if (existing.length === 0 || existing[existing.length - 1]?.role !== 'assistant') {
+                  existing.push({ role: 'assistant', content: String(event.delta || '') });
+                } else {
+                  const last = existing[existing.length - 1];
+                  existing[existing.length - 1] = { ...last, content: `${last.content}${event.delta || ''}` };
+                }
+                return { ...current, [event.provider_key!]: existing };
+              });
+              return;
+            }
+
+            if (event.type === 'error') {
+              setLatestResults((current) => ({
+                ...current,
+                [event.provider_key!]: {
+                  provider_key: event.provider_key!,
+                  provider_type: event.provider_type || '',
+                  model: event.model || '',
+                  ok: false,
+                  assistant_message: null,
+                  latency_ms: event.latency_ms || 0,
+                  status_code: event.status_code,
+                  request_target: event.request_target,
+                  error_message: event.error_message || '未返回更多错误信息',
+                },
+              }));
+              setChatHistories((current) => {
+                const existing = [...(current[event.provider_key!] || [])];
+                if (existing[existing.length - 1]?.role === 'assistant' && !existing[existing.length - 1]?.content.trim()) {
+                  existing.pop();
+                }
+                existing.push({ role: 'system', content: `请求失败：${event.error_message || '未返回更多错误信息'}` });
+                return { ...current, [event.provider_key!]: existing };
+              });
+              setStreamingProviderKeys((current) => current.filter((key) => key !== event.provider_key));
+              return;
+            }
+
+            if (event.type === 'done') {
+              setLatestResults((current) => ({
+                ...current,
+                [event.provider_key!]: {
+                  provider_key: event.provider_key!,
+                  provider_type: event.provider_type || '',
+                  model: event.model || '',
+                  ok: Boolean(event.ok),
+                  assistant_message: event.assistant_message || null,
+                  latency_ms: event.latency_ms || 0,
+                  status_code: event.status_code,
+                  request_target: event.request_target,
+                  error_message: event.error_message || null,
+                },
+              }));
+              setChatHistories((current) => {
+                const existing = [...(current[event.provider_key!] || [])];
+                if (existing[existing.length - 1]?.role === 'assistant' && !existing[existing.length - 1]?.content.trim()) {
+                  existing[existing.length - 1] = {
+                    role: 'assistant',
+                    content: event.assistant_message || '(模型返回了空内容)',
+                  };
+                }
+                return { ...current, [event.provider_key!]: existing };
+              });
+              setStreamingProviderKeys((current) => current.filter((key) => key !== event.provider_key));
+            }
+          },
+          onDone: () => setStreamingProviderKeys([]),
+        }
+      );
+      setDraftMessage('');
+      setChatNotice('流式对话已完成。');
     } catch (err: any) {
+      setStreamingProviderKeys([]);
       setChatError(err.message || '发送消息失败');
     } finally {
       setSending(false);
@@ -288,7 +374,7 @@ export const LlmProviderChatWorkspace: React.FC<LlmProviderChatWorkspaceProps> =
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <Sparkles size={14} className="text-blue-500" />
-                仅支持文本多轮对话，不落库，刷新页面后会清空。
+                默认流式传输，支持上游 Provider 与浏览器前端实时增量显示。
               </div>
               <button
                 type="button"
@@ -330,6 +416,9 @@ export const LlmProviderChatWorkspace: React.FC<LlmProviderChatWorkspaceProps> =
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-black">
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">{currentModel || '未选择模型'}</span>
+                          {streamingProviderKeys.includes(provider.provider_key) && (
+                            <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700">streaming...</span>
+                          )}
                           {result && <span className={`rounded-full px-3 py-1 ${result.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{result.latency_ms} ms</span>}
                         </div>
                       </div>

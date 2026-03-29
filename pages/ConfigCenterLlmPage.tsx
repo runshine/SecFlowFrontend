@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Bot, Braces, CheckCircle2, Eye, EyeOff, LayoutPanelTop, Loader2, MessageSquare, Plus, RefreshCw, Save, ShieldAlert, Sparkles, Trash2, Wifi } from 'lucide-react';
 import { api } from '../clients/api';
 import { showConfirm } from '../components/DialogService';
-import { LlmProviderChatWorkspace } from '../components/configcenter/LlmProviderChatWorkspace';
 import { LlmProviderDetail, LlmProviderSummary, LlmProviderTestResult, LlmProviderUpsertRequest } from '../types/types';
+
+interface ConfigCenterLlmPageProps {
+  onOpenChat: () => void;
+}
 
 const normalizeEnvBindings = (envBindings: Record<string, any> | undefined) => {
   const next = { ...(envBindings || {}) };
@@ -65,7 +68,7 @@ const providerTypeOptions = [
   'custom',
 ];
 
-export const ConfigCenterLlmPage: React.FC = () => {
+export const ConfigCenterLlmPage: React.FC<ConfigCenterLlmPageProps> = ({ onOpenChat }) => {
   const [providers, setProviders] = useState<LlmProviderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -80,7 +83,6 @@ export const ConfigCenterLlmPage: React.FC = () => {
   const [jsonDraft, setJsonDraft] = useState<string>(stringifyDraft(createEmptyForm()));
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<LlmProviderTestResult | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
 
   const selectedSummary = useMemo(
     () => providers.find((item) => item.provider_key === selectedKey) || null,
@@ -342,11 +344,11 @@ export const ConfigCenterLlmPage: React.FC = () => {
             新建 Provider
           </button>
           <button
-            onClick={() => setChatOpen((current) => !current)}
-            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-black shadow-sm ${chatOpen ? 'border border-blue-200 bg-blue-50 text-blue-700' : 'border border-slate-200 bg-white text-slate-600'}`}
+            onClick={onOpenChat}
+            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 shadow-sm"
           >
             <MessageSquare size={16} />
-            {chatOpen ? '收起在线聊天' : '在线聊天'}
+            在线聊天
           </button>
         </div>
       </div>
@@ -356,9 +358,6 @@ export const ConfigCenterLlmPage: React.FC = () => {
           {error || message}
         </div>
       )}
-
-      {chatOpen && <LlmProviderChatWorkspace providers={providers} />}
-
       <div className="grid grid-cols-1 xl:grid-cols-[360px,minmax(0,1fr)] gap-6">
         <div className="rounded-[2.5rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">

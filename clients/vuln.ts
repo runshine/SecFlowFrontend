@@ -55,6 +55,12 @@ export const vulnApi = {
   getCaseDetail: async (caseId: string): Promise<any> =>
     handleResponse(await fetch(`${API_BASE}/api/vuln/cases/${caseId}`, { headers: getHeaders() })),
 
+  deleteCase: async (caseId: string): Promise<any> =>
+    handleResponse(await fetch(`${API_BASE}/api/vuln/cases/${caseId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    })),
+
   getCaseTimeline: async (caseId: string): Promise<{ items: any[]; total: number }> =>
     handleResponse(await fetch(`${API_BASE}/api/vuln/cases/${caseId}/timeline`, { headers: getHeaders() })),
 

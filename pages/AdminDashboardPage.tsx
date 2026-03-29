@@ -140,9 +140,11 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               <p className="text-xs font-bold text-slate-700 truncate" title={service.name}>
                 {service.name}
               </p>
-              <p className="mt-1 text-[11px] text-slate-500 truncate" title={service.id}>
-                {service.runtimeStatus ? `${service.runtimeStatus}` : (service.registered ? 'menu 聚合' : service.source === 'direct' ? '直连兜底' : '目录未纳管')}
-              </p>
+              {service.runtimeStatus ? (
+                <p className="mt-1 text-[11px] text-slate-500 truncate" title={service.id}>
+                  {service.runtimeStatus}
+                </p>
+              ) : null}
               <p className="mt-2 text-[11px] font-bold text-slate-700">
                 {service.replicas !== null && service.replicas !== undefined
                   ? `副本 ${service.readyReplicas ?? 0}/${service.replicas} · Available ${service.availableReplicas ?? 0}`

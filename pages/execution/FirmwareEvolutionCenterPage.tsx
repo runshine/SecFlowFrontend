@@ -284,8 +284,12 @@ function getEvolutionRoundMetrics(round: FirmwareEvolutionJob['rounds'][number])
   const executorTokens = round.evolution_executor_tokens || metrics.evolution_executor_tokens || {};
   const reviewerTokens = round.reviewer_tokens || metrics.reviewer_tokens || {};
   const totalTokens = round.total_tokens || metrics.total_tokens || {};
+  const rawToolDuration = round.tool_unpack_duration_seconds ?? metrics.tool_unpack_duration_seconds ?? null;
+  const toolDurationSeconds = rawToolDuration == null || !Number.isFinite(Number(rawToolDuration))
+    ? null
+    : Number(rawToolDuration);
   return {
-    toolDurationSeconds: Number(round.tool_unpack_duration_seconds ?? metrics.tool_unpack_duration_seconds ?? 0),
+    toolDurationSeconds,
     executorTokens,
     reviewerTokens,
     totalTokens,
@@ -680,9 +684,19 @@ export const FirmwareEvolutionCenterPage: React.FC<Props> = ({ projectId }) => {
     if (!jobId) return;
     if (!options?.silent) setDetailLoading(true);
     try {
-      const job = await fwApi.getEvolutionJob(jobId);
-      setActiveJob((prev) => sameJsonValue(prev, job) ? prev : job);
-      setJobs((prev) => prev.map((item) => item.id === job.id ? job : item));
+      const [job, rounds] = await Promise.all([
+        fwApi.getEvolutionJob(jobId),
+        fwApi.getEvolutionRounds(jobId).catch(() => null),
+      ]);
+      const mergedJob = rounds && rounds.length > 0
+        ? {
+          ...job,
+          rounds,
+          round_count: rounds.length,
+        }
+        : job;
+      setActiveJob((prev) => sameJsonValue(prev, mergedJob) ? prev : mergedJob);
+      setJobs((prev) => prev.map((item) => item.id === mergedJob.id ? mergedJob : item));
     } catch (e: any) {
       notify(`加载进化任务详情失败: ${e?.message || e}`, 'error');
     } finally {
@@ -1162,7 +1176,7 @@ export const FirmwareEvolutionCenterPage: React.FC<Props> = ({ projectId }) => {
     const effectRows = activeJob.rounds.map((round) => ({ round, metrics: getEvolutionRoundMetrics(round) }));
     const bestDuration = effectRows.reduce<number | null>((best, item) => {
       const value = item.metrics.toolDurationSeconds;
-      if (!value) return best;
+      if (value == null || !Number.isFinite(value) || value < 0) return best;
       return best === null ? value : Math.min(best, value);
     }, null);
     const bestTokens = effectRows.reduce<number | null>((best, item) => {
@@ -1279,14 +1293,14 @@ export const FirmwareEvolutionCenterPage: React.FC<Props> = ({ projectId }) => {
                     </thead>
                     <tbody>
                       {effectRows.map(({ round, metrics }) => {
-                        const durationIsBest = bestDuration !== null && metrics.toolDurationSeconds > 0 && metrics.toolDurationSeconds === bestDuration;
+                        const durationIsBest = bestDuration !== null && metrics.toolDurationSeconds != null && metrics.toolDurationSeconds === bestDuration;
                         const tokenIsBest = bestTokens !== null && metrics.totalTokenCount > 0 && metrics.totalTokenCount === bestTokens;
                         return (
                           <tr key={round.id} className="border-b border-slate-100 last:border-0">
                             <td className="px-3 py-3 font-black text-slate-900">第 {round.round} 轮</td>
                             <td className="px-3 py-3"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${roundStatusTone(round.status)}`}>{roundStatusLabel(round.status)}</span></td>
                             <td className="px-3 py-3">
-                              <span className={durationIsBest ? 'font-black text-emerald-700' : 'font-semibold text-slate-700'}>{metrics.toolDurationSeconds ? fmtSeconds(metrics.toolDurationSeconds) : '-'}</span>
+                              <span className={durationIsBest ? 'font-black text-emerald-700' : 'font-semibold text-slate-700'}>{metrics.toolDurationSeconds == null ? '-' : fmtSeconds(metrics.toolDurationSeconds)}</span>
                               {durationIsBest ? <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">最快</span> : null}
                             </td>
                             <td className="px-3 py-3">

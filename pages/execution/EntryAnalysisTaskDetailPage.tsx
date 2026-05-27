@@ -314,7 +314,9 @@ function deriveFullStageStats(events: AppEaStageEvent[]): StageStat[] {
       case 'callchain_failed': touch(3, ts); ccStatus = 'failed'; break;
       // R4 (idx=4) — 需要 R3+CC 并行完成
       case 'r4_w_start': case 'r4_w_func_start': touch(4, ts); break;
-      case 'r4_w_done': touch(4, ts); break;
+      case 'r4_w_done':
+        if (d.func_hash && d.decision === 'keep') r4Funcs.add(String(d.func_hash));
+        touch(4, ts); break;
       case 'r4_w_func_done': touch(4, ts);
         if (d.func_hash && d.decision === 'keep') r4Funcs.add(String(d.func_hash)); break;
       case 'r6_j_start': touch(4, ts); break;
@@ -663,6 +665,9 @@ function deriveStepStatuses(taskStatus: string, events: AppEaStageEvent[], stage
       case 'r3_w_start': if (fh) r3FuncW_Start.add(fh); break;
       case 'r3_j_done':  if (fh) r3FuncJ_Done.add(fh);  break;
       // R4
+      case 'r4_w_start': if (fh) r4FuncStart.add(fh); break;
+      case 'r4_w_done':  if (fh) r4FuncDone.add(fh);  break;
+      // r4_w_func_start/done 是旧事件名，历史日志兼容
       case 'r4_w_func_start': if (fh) r4FuncStart.add(fh); break;
       case 'r4_w_func_done':  if (fh) r4FuncDone.add(fh);  break;
       // R5
@@ -779,15 +784,15 @@ function formatEvent(evt: AppEaStageEvent): string {
     case 'callchain_start':     return `[${ts}] ▶ CC 调用链静态建图开始`;
     case 'callchain_done':      return `[${ts}] ✓ CC 完成: ${d.nodes ?? 0} 节点, ${d.edges ?? 0} 边`;
     case 'callchain_failed':    return `[${ts}] ⚠ CC 建图失败（非致命）: ${String(d.error ?? '').slice(0, 80)}`;
-    // ── R4 入口决策 ──────────────────────────────────────────────────
-    case 'r4_w_start':          return `[${ts}] ▶ R4-W 文件级入口决策汇总: ${d.file ?? ''}`;
-    case 'r4_w_done':           return `[${ts}] ✓ R4-W 文件级汇总完成: ${d.file ?? ''} 入口数=${d.entry_count ?? ''}`;
-    case 'r4_w_func_start':     return `[${ts}] ▶ R4-W 入口决策: ${d.function ?? d.func_hash ?? ''}${Number(d.attempt) > 1 ? `(第${d.attempt}次)` : ''}`;
-    case 'r4_w_func_done':      return `[${ts}] ${d.decision === 'keep' ? '✓' : '✕'} R4-W 入口决策: ${d.function ?? d.func_hash ?? ''} 决策=${d.decision ?? ''}`;
+    // ── R4 入口决策 ──────────────────────────────────────────────────────────────
+    case 'r4_w_start':          return `[${ts}] ▶ R4 开始: ${d.function ?? d.func_hash ?? ''}${Number(d.attempt) > 1 ? `(第${d.attempt}次)` : ''}`;
+    case 'r4_w_done':           return `[${ts}] ${d.decision === 'keep' ? '✓' : '✕'} R4 决策: ${d.function ?? d.func_hash ?? ''} 决策=${d.decision ?? ''}`;
+    case 'r4_w_func_start':     return `[${ts}] ▶ R4-W 入口决策（旧）: ${d.function ?? d.func_hash ?? ''}${Number(d.attempt) > 1 ? `(第${d.attempt}次)` : ''}`;
+    case 'r4_w_func_done':      return `[${ts}] ${d.decision === 'keep' ? '✓' : '✕'} R4-W 入口决策（旧）: ${d.function ?? d.func_hash ?? ''} 决策=${d.decision ?? ''}`;
     case 'r4_j_retry':          return `[${ts}] ↺ R4 重试: ${d.function ?? ''} (第${d.attempt ?? '?'}次)`;
-    // ── R4-J 最终质量验证 ─────────────────────────────────────────────
-    case 'r6_j_start':          return `[${ts}] ▶ R4-J 最终质量验证（第${d.attempt ?? 1}次）`;
-    case 'r6_j_done':           return `[${ts}] ${d.passed ? '✓' : '✗'} R4-J 最终质量验证 ${d.passed ? '通过' : '未通过'}`;
+    // ── R6-J 最终质量验证 ─────────────────────────────────────────────
+    case 'r6_j_start':          return `[${ts}] ▶ R6-J 最终质量验证（第${d.attempt ?? 1}次）`;
+    case 'r6_j_done':           return `[${ts}] ${d.passed ? '✓' : '✗'} R6-J 最终质量验证 ${d.passed ? '通过' : '未通过'}`;
     // ── R5 报告生成 ──────────────────────────────────────────────────
     case 'r5_w_start':   return `[${ts}] ▶ R5-W 报告生成: ${d.function ?? d.func_hash ?? ''}(第${d.attempt ?? 1}次)`;
     case 'r5_j_done':    return `[${ts}] ${d.passed ? '✓' : '✗'} R5-J 报告验证: ${d.function ?? d.func_hash ?? ''}${d.passed ? '' : `—${String(d.feedback ?? '').slice(0,60)}`}`;
@@ -832,14 +837,25 @@ interface FuncProgress {
   name: string;
   file?: string;
   r2j:   FuncStage;   // R2 准确性验证-J（无 Worker 步骤）
-  r3w:   FuncStage;   // R3 外部输入分析-W
-  r3j:   FuncStage;   // R3 外部输入分析-J
-  r4:    FuncStage;   // R4 入口决策 (keep/filter)
+  r3w:   FuncStage;   // R3-W 内部追踪（不直接展示）
+  r3j:   FuncStage;   // R3-J 内部追踪（不直接展示）
+  r3:    FuncStage;   // R3 合并显示（W+J 都 passed 才算 passed）
+  r4:    FuncStage;   // R4 入口决策 (keep/filter) — 以 r4_state 为权威
   rep:   FuncStage;   // R5 报告
   has_external_input?: boolean;
   entry_role?: string;
   is_entry: boolean;
   lastTs?: number;
+}
+
+// R3-W 和 R3-J 合并为单一 R3 状态：W+J 均 passed 才算通过
+function combineR3(r3w: FuncStage, r3j: FuncStage): FuncStage {
+  if (r3w === 'skip' && r3j === 'skip') return 'skip';
+  if (r3w === 'passed' && r3j === 'passed') return 'passed';
+  if (r3w === 'running' || r3j === 'running') return 'running';
+  if (r3w === 'pending' && r3j === 'pending') return 'pending';
+  // 过渡态：W 已结束但 J 未开始，或 J 失败重试中
+  return 'running';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -903,17 +919,27 @@ function deriveFuncProgress(
     } else {
       r3w = toStage(r3wState);
       r3j = toStage(r3jState);
+      // ── R4 以 r4_state 为权威 ──────────────────────────────────────────────
+      // r4_decision 由 R3-W 写入（R3-J 尚未验证时就已存在），不能作为 R4 完成判据。
+      // r4_state='passed'：R4 真正跑完（多文件）或单文件确认绕过（engine 已标记）。
+      // r4_decision='filter'/'remove'：R3 已过滤，R4 不需要跑。
+      const r4Actual = toStage(item.r4_state);
       if (r4dec === 'keep') {
-        r4  = 'keep';
-        rep = toStage(r5State);
+        if (r4Actual === 'passed') {
+          r4  = 'keep';
+          rep = toStage(r5State);
+        } else {
+          // R4 尚未完成（pending/running）：显示实际 r4_state，不提前标为 keep
+          r4  = r4Actual;
+          rep = 'skip';
+        }
       } else if (r4dec === 'filter' || r4dec === 'remove') {
-        // has_input=false → R3-W 就确认无外部输入，R4入口决策步未运行 → 显示 skip
-        // has_input=true  → R3-W 确认有外部输入但入口决策 W 过滤  → 显示 remove
+        // R3 已过滤 → R4 不运行
         r4  = (hasInput === false) ? 'skip' : 'remove';
         rep = 'skip';
       } else {
-        // 还未做入口决策（pending/running）
-        r4  = toStage(item.r4_state);
+        // r4_decision 未设置（R3 未完成）
+        r4  = r4Actual;
         rep = 'skip';
       }
     }
@@ -937,7 +963,7 @@ function deriveFuncProgress(
     if (!map.has(fh)) {
       map.set(fh, {
         func_hash: fh, name: name || fh.slice(0, 8), file,
-        r2j: 'pending', r3w: 'pending', r3j: 'pending', r4: 'pending', rep: 'pending',
+        r2j: 'pending', r3w: 'pending', r3j: 'pending', r3: 'pending', r4: 'pending', rep: 'pending',
         is_entry: false,
       });
     }
@@ -1017,7 +1043,9 @@ function deriveFuncProgress(
           }
         }
         f.lastTs = ts; break;
-      case 'r4_w_func_done': {
+      // r4_w_start / r4_w_done：engine._run_r4_for_func 实际发出的事件名
+      case 'r4_w_start': advance(f, 'r4', 'running'); f.lastTs = ts; break;
+      case 'r4_w_done': {
         if (!isTerminal(f.r4)) {
           const dec = String(d.decision ?? 'keep').toLowerCase();
           f.r4 = (dec === 'filter' || dec === 'remove') ? 'remove' : 'keep';
@@ -1026,6 +1054,7 @@ function deriveFuncProgress(
         }
         f.lastTs = ts; break;
       }
+      // r4_w_func_start/done 是已废弃事件名（旧日志兼容），不更新状态
 
       // R5 报告
       case 'r5_w_start': advance(f, 'rep', 'running'); f.lastTs = ts; break;
@@ -1037,8 +1066,10 @@ function deriveFuncProgress(
     }
   }
 
-  // ── Step 3: 修复 is_entry 最终推断 ─────────────────────────────────────────
+  // ── Step 3: 计算合并 R3 状态 + 修复 is_entry 推断 ──────────────────────────
+  // r3 必须在所有事件处理完毕后统一计算（W+J 都 passed 才算 R3 完成）
   for (const f of map.values()) {
+    f.r3 = combineR3(f.r3w, f.r3j);
     if (f.r4 === 'keep' || f.rep === 'running' || f.rep === 'passed') f.is_entry = true;
   }
 
@@ -2298,9 +2329,8 @@ export const EntryAnalysisTaskDetailPage: React.FC<{ projectId: string; taskId: 
                       <th className="px-4 py-2.5 text-left">函数名</th>
                       <th className="px-3 py-2.5 text-center whitespace-nowrap">是否入口</th>
                       <th className="px-2 py-2.5 text-center" title="R2 准确性验证 Judge">R2</th>
-                      <th className="px-2 py-2.5 text-center">R3-W</th>
-                      <th className="px-2 py-2.5 text-center">R3-J</th>
-                      <th className="px-2 py-2.5 text-center">R4</th>
+                      <th className="px-2 py-2.5 text-center" title="R3 外部输入分析（W+J 均通过才完成）">R3</th>
+                      <th className="px-2 py-2.5 text-center" title="R4 入口决策（结合调用链二次确认）">R4</th>
                       <th className="px-2 py-2.5 text-center">R5</th>
                       <th className="px-4 py-2.5 text-left">状态</th>
                     </tr>
@@ -2325,18 +2355,17 @@ export const EntryAnalysisTaskDetailPage: React.FC<{ projectId: string; taskId: 
                           }
                         </td>
                         <td className="px-2 py-2 text-center"><FuncStageDot state={f.r2j} label="R2" /></td>
-                        <td className="px-2 py-2 text-center"><FuncStageDot state={f.r3w} label="R3-W" /></td>
-                        <td className="px-2 py-2 text-center"><FuncStageDot state={f.r3j} label="R3-J" /></td>
+                        <td className="px-2 py-2 text-center"><FuncStageDot state={f.r3}  label="R3" /></td>
                         <td className="px-2 py-2 text-center"><FuncStageDot state={f.r4}  label="R4" /></td>
                         <td className="px-2 py-2 text-center"><FuncStageDot state={f.rep} label="R5" /></td>
                         <td className="px-4 py-2 text-slate-500">
                           {f.r4 === 'keep'   ? <span className="text-emerald-700 font-bold">✓ 最终入口</span>
                           : f.r4 === 'remove' ? <span className="text-orange-600">R4 过滤</span>
+                          : f.r4 === 'running' ? <span className="text-violet-600 animate-pulse">R4 决策中…</span>
                           : f.r2j === 'failed' ? <span className="text-red-500 font-medium">R2失败-跳过</span>
                           : f.has_external_input === false ? <span className="text-slate-400">无外部输入</span>
-                          : f.r3j === 'passed' ? <span className="text-sky-700">R3 候选</span>
-                          : f.r3j === 'failed' ? <span className="text-slate-400">R3-J 未通过</span>
-                          : f.r3w === 'running' || f.r3j === 'running' ? <span className="text-blue-600 animate-pulse">R3分析中…</span>
+                          : f.r3 === 'passed' ? <span className="text-sky-700">R3通过·等R4</span>
+                          : f.r3 === 'running' ? <span className="text-blue-600 animate-pulse">R3分析中…</span>
                           : f.r2j === 'running' ? <span className="text-indigo-600 animate-pulse">R2验证中…</span>
                           : <span className="text-slate-300">等待中</span>}
                         </td>

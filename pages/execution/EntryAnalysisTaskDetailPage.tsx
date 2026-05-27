@@ -682,11 +682,12 @@ interface FuncProgress {
   func_hash: string;
   name: string;
   file?: string;
-  r2j:   FuncStage;   // R2 准确性验证-J（无 Worker 步骤）
-  r3w:   FuncStage;   // R3 外部输入分析-W
-  r3j:   FuncStage;   // R3 外部输入分析-J
-  r4:    FuncStage;   // R4 入口决策 (keep/filter)
-  rep:   FuncStage;   // R5 报告
+  r2j: FuncStage;   // R2-J 准确性验证（Judge only）
+  r3w: FuncStage;   // R3-W 内部追踪（不直接展示）
+  r3j: FuncStage;   // R3-J 内部追踪（不直接展示）
+  r3:  FuncStage;   // R3 合并列：W+J 同时 passed 才算完成
+  r4:  FuncStage;   // R4 入口决策（以 r4_state 为权威）
+  rep: FuncStage;   // R5 报告
   has_external_input?: boolean;
   entry_role?: string;
   is_entry: boolean;
@@ -852,6 +853,7 @@ function deriveFuncProgress(
   });
   return { funcs, totalFuncCount };
 }
+
 
 // ─── 函数级阶段小图标 ────────────────────────────────────────────────────────
 
@@ -1263,6 +1265,18 @@ export const EntryAnalysisTaskDetailPage: React.FC<{ projectId: string; taskId: 
     () => deriveFuncProgress(events, detail?.function_catalog || []),
     [events, detail?.function_catalog],
   );
+  // 每阶段完成计数（用于进度展示）
+  const funcStats = useMemo(() => {
+    let r2=0, r3=0, r4=0, entries=0, r5=0;
+    for (const f of funcProgress) {
+      if (f.r2j === 'passed' || f.r2j === 'failed') r2++;
+      if (f.r3 === 'passed' || f.r3 === 'skip') r3++;
+      if (f.r4 === 'keep' || f.r4 === 'remove' || f.r4 === 'skip') r4++;
+      if (f.r4 === 'keep') entries++;
+      if (f.rep === 'passed') r5++;
+    }
+    return { r2, r3, r4, entries, r5, total: funcProgress.length };
+  }, [funcProgress]);
   const [funcPageSize, setFuncPageSize] = useState<50|100|200>(50);
   const [funcPage, setFuncPage] = useState(0);
   const [funcEntryOnly, setFuncEntryOnly] = useState(false);

@@ -2960,14 +2960,14 @@ export interface AppEaFunctionCatalogItem {
   start_line?: number;
   end_line?: number;
   // 新字段名（后端 v2 fix 后）
-  r2j_state_new?: string;  // r2_j_state 准确性 Judge（待部署后启用）
+  // r2j_state_new 已废弃，由 r2j_state 替代
   r3w_state?: string;      // r3_w_state 外部输入 W（待部署后启用）
   r3j_state?: string;      // r3_j_state 外部输入 J（待部署后启用）
   r5_state?: string;       // r5_state 报告（待部署后启用）
   // 旧字段名（当前部署版本疑用）
-  r1b_state?: string;      // = r2_j_state
-  r2_state?: string;       // = r3_w_state
-  r2j_state?: string;      // = r3_j_state
+  r2j_state?: string;      // = r2_j_state (R2 ctags 准确性 Judge)
+  r3w_state?: string;      // = r3_w_state (R3-W 外部输入分析 Worker)
+  r3j_state?: string;      // = r3_j_state (R3-J 外部输入验证 Judge)
   r3_state?: string;
   r4_state?: string;
   rep_state?: string;      // = r5_state

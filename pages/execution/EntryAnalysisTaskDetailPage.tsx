@@ -708,9 +708,9 @@ function combineR3(r3w: FuncStage, r3j: FuncStage): FuncStage {
  * deriveFuncProgress
  *
  * 后端阶段对应关系（pipeline_state.json → catalog 字段）：
- *   R2-J: r2_j_state  → catalog.r1b_state
- *   R3-W: r3_w_state  → catalog.r2_state
- *   R3-J: r3_j_state  → catalog.r2j_state
+ *   R2-J: r2_j_state  → catalog.r2j_state
+ *   R3-W: r3_w_state  → catalog.r3w_state
+ *   R3-J: r3_j_state  → catalog.r3j_state
  *   R4-W: (决策写 r4_decision；r4_state=PASSED 由 _run_r4_for_func 设置)
  *   R4-J: r4_j_state  (catalog 不含此字段，只能从事件获取)
  *   R4 完成: r4_state=PASSED → catalog.r4_state
@@ -779,11 +779,11 @@ function deriveFuncProgress(
     const f = getOrCreate(fh, String(item.name || fh), String(item.file || ''));
 
     // R2-J
-    f.r2j = toStage(item.r1b_state);
+    f.r2j = toStage(item.r2j_state);
 
     // R3: W + J 分别读取，合并为 r3
-    f.r3w = toStage(item.r2_state);
-    f.r3j = toStage(item.r2j_state);
+    f.r3w = toStage(item.r3w_state);
+    f.r3j = toStage(item.r3j_state);
     f.r3  = combineR3(f.r3w, f.r3j);
 
     // R4: r4_state 为权威，r4_decision 仅在 r4_state=passed 时才说明结论

@@ -1007,15 +1007,14 @@ export const EntryAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?: (
     { label: '智能体等待', value: slotCluster.agent_waiting_requests, className: 'bg-orange-50 border-orange-200 text-orange-700' },
     { label: '智能体RSS', value: formatBytes(slotCluster.agent_rss_total_bytes || 0), className: 'bg-cyan-50 border-cyan-200 text-cyan-700' },
   ] : [];
-  const slotWorkerTotalPages = Math.max(1, Math.ceil((slotCluster?.workers.length || 0) / SLOT_WORKER_PAGE_SIZE));
+  const slotWorkers = slotCluster?.workers || [];
+  const slotWorkerTotalPages = Math.max(1, Math.ceil(slotWorkers.length / SLOT_WORKER_PAGE_SIZE));
   const slotWorkerPageSafe = Math.min(slotWorkerPage, slotWorkerTotalPages);
-  const pagedSlotWorkers = slotCluster
-    ? slotCluster.workers.slice((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE, slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE)
-    : [];
+  const pagedSlotWorkers = slotWorkers.slice((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE, slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE);
 
   useEffect(() => {
     setSlotWorkerPage(1);
-  }, [slotCluster?.updated_at, slotCluster?.workers.length]);
+  }, [slotCluster?.updated_at, slotWorkers.length]);
 
   useEffect(() => {
     if (slotWorkerPage > slotWorkerTotalPages) {
@@ -1073,7 +1072,7 @@ export const EntryAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?: (
                             {worker.healthy ? 'Healthy' : worker.source === 'stale_owner' ? 'Stale Owner' : 'Stale'}
                           </span>
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                            活动任务 {worker.active_tasks.length}
+                            活动任务 {(worker.active_tasks || []).length}
                           </span>
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
@@ -1097,14 +1096,14 @@ export const EntryAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?: (
                           onClick={() => setExpandedWorkerIds((current) => current.includes(worker.worker_id) ? current.filter((item) => item !== worker.worker_id) : [...current, worker.worker_id])}
                           className="rounded-lg border border-slate-200 px-2.5 py-1 text-slate-600 hover:bg-slate-50"
                         >
-                          {expanded ? '收起任务' : `展开任务（${worker.active_tasks.length}）`}
+                          {expanded ? '收起任务' : `展开任务（${(worker.active_tasks || []).length}）`}
                         </button>
                       </div>
                     </div>
                     {expanded ? (
-                      worker.active_tasks.length > 0 ? (
+                      (worker.active_tasks || []).length > 0 ? (
                         <div className="mt-4 space-y-2">
-                          {worker.active_tasks.map((task) => (
+                          {(worker.active_tasks || []).map((task) => (
                             <div key={`${worker.worker_id}:${task.task_id}`} className={`rounded-2xl border px-4 py-4 text-xs ${worker.healthy ? 'border-slate-200 bg-slate-50/70' : 'border-amber-200 bg-amber-50/80'}`}>
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="min-w-0 flex-1">
@@ -1523,7 +1522,7 @@ export const EntryAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?: (
                       首次发现：{formatDateTime(worker.first_seen_at)} · 已存在 {formatDuration(worker.first_seen_at, undefined, clockNow)}
                     </div>
                     <div className="mt-1 text-[11px] text-slate-400">
-                      来源：{worker.source || 'worker_registry'} · 状态 {worker.worker_role_state || 'healthy'} · 活动任务 {worker.active_tasks.length}
+                      来源：{worker.source || 'worker_registry'} · 状态 {worker.worker_role_state || 'healthy'} · 活动任务 {(worker.active_tasks || []).length}
                     </div>
                     {typeof worker.last_heartbeat_duration_ms === 'number' ? (
                       <div className="mt-1 text-[11px] text-slate-400">
@@ -1535,14 +1534,14 @@ export const EntryAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?: (
                   </div>
                 ))}
               </div>
-              {slotCluster.workers.length > SLOT_WORKER_PAGE_SIZE ? (
+              {slotWorkers.length > SLOT_WORKER_PAGE_SIZE ? (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div className="text-xs text-slate-500">
-                    当前显示 {Math.min((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE + 1, slotCluster.workers.length)}
+                    当前显示 {Math.min((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE + 1, slotWorkers.length)}
                     {' - '}
-                    {Math.min(slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE, slotCluster.workers.length)}
+                    {Math.min(slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE, slotWorkers.length)}
                     {' / '}
-                    {slotCluster.workers.length} 个 Worker
+                    {slotWorkers.length} 个 Worker
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <button

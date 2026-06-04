@@ -366,7 +366,7 @@ function TreeNodeView({ node }: { node: DfaTreeNode }) {
         <span className={`h-2 w-2 rounded-full ${node.status === 'done' ? 'bg-emerald-500' : node.status === 'running' ? 'bg-blue-500' : 'bg-slate-300'}`} />
         <span className="font-mono text-slate-700">{node.name}</span>
       </div>
-      {node.children.length ? <div className="ml-5 border-l border-slate-200 pl-3 space-y-2">{node.children.map((child) => <TreeNodeView key={`${node.name}-${child.name}-${child.depth}`} node={child} />)}</div> : null}
+      {(node.children || []).length ? <div className="ml-5 border-l border-slate-200 pl-3 space-y-2">{(node.children || []).map((child) => <TreeNodeView key={`${node.name}-${child.name}-${child.depth}`} node={child} />)}</div> : null}
     </div>
   );
 }

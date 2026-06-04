@@ -1239,15 +1239,14 @@ export const DataflowAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?
       text: 'text-amber-700',
     },
   ], [slotSummary]);
-  const slotWorkerTotalPages = Math.max(1, Math.ceil((slotSummary?.workers.length || 0) / SLOT_WORKER_PAGE_SIZE));
+  const slotWorkers = slotSummary?.workers || [];
+  const slotWorkerTotalPages = Math.max(1, Math.ceil(slotWorkers.length / SLOT_WORKER_PAGE_SIZE));
   const slotWorkerPageSafe = Math.min(slotWorkerPage, slotWorkerTotalPages);
-  const pagedSlotWorkers = slotSummary
-    ? slotSummary.workers.slice((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE, slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE)
-    : [];
+  const pagedSlotWorkers = slotWorkers.slice((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE, slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE);
 
   useEffect(() => {
     setSlotWorkerPage(1);
-  }, [slotSummary?.updated_at, slotSummary?.workers.length]);
+  }, [slotSummary?.updated_at, slotWorkers.length]);
 
   useEffect(() => {
     if (slotWorkerPage > slotWorkerTotalPages) {
@@ -1670,14 +1669,14 @@ export const DataflowAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?
                   </div>
                 ) : null}
               </div>
-              {slotSummary && slotSummary.workers.length > SLOT_WORKER_PAGE_SIZE ? (
+              {slotSummary && slotWorkers.length > SLOT_WORKER_PAGE_SIZE ? (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div className="text-xs text-slate-500">
-                    当前显示 {Math.min((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE + 1, slotSummary.workers.length)}
+                    当前显示 {Math.min((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE + 1, slotWorkers.length)}
                     {' - '}
-                    {Math.min(slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE, slotSummary.workers.length)}
+                    {Math.min(slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE, slotWorkers.length)}
                     {' / '}
-                    {slotSummary.workers.length} 个 Worker
+                    {slotWorkers.length} 个 Worker
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <button
@@ -1862,14 +1861,14 @@ export const DataflowAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?
                   })}
                 </div>
               )}
-              {slotSummary && slotSummary.workers.length > SLOT_WORKER_PAGE_SIZE ? (
+              {slotSummary && slotWorkers.length > SLOT_WORKER_PAGE_SIZE ? (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div className="text-xs text-slate-500">
-                    当前显示 {Math.min((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE + 1, slotSummary.workers.length)}
+                    当前显示 {Math.min((slotWorkerPageSafe - 1) * SLOT_WORKER_PAGE_SIZE + 1, slotWorkers.length)}
                     {' - '}
-                    {Math.min(slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE, slotSummary.workers.length)}
+                    {Math.min(slotWorkerPageSafe * SLOT_WORKER_PAGE_SIZE, slotWorkers.length)}
                     {' / '}
-                    {slotSummary.workers.length} 个 Worker
+                    {slotWorkers.length} 个 Worker
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <button
@@ -2474,7 +2473,8 @@ export const DataflowAnalysisTaskPage: React.FC<{ projectId: string; onOpenTask?
 
 const DfaTreeNodeView: React.FC<{ node: DfaTreeNode; depth?: number }> = ({ node, depth = 0 }) => {
   const [expanded, setExpanded] = useState(depth < 3);
-  const hasChildren = node.children.length > 0;
+  const children = node.children || [];
+  const hasChildren = children.length > 0;
   const shortName = node.name.includes('::')
     ? node.name.split('::').pop()!
     : node.name.split('/').pop() ?? node.name;
@@ -2503,13 +2503,13 @@ const DfaTreeNodeView: React.FC<{ node: DfaTreeNode; depth?: number }> = ({ node
             className="ml-auto shrink-0 flex items-center gap-0.5 text-[10px] text-violet-400 hover:text-violet-600"
           >
             {expanded ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
-            <span className="font-mono text-[9px]">{node.children.length}</span>
+            <span className="font-mono text-[9px]">{children.length}</span>
           </button>
         ) : null}
       </div>
       {hasChildren && expanded ? (
         <div className="ml-3 border-l border-dashed border-slate-200">
-          {node.children.map((child, i) => (
+          {children.map((child, i) => (
             <DfaTreeNodeView key={`${child.name}-${i}`} node={child} depth={depth + 1} />
           ))}
         </div>

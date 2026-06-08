@@ -143,6 +143,8 @@ export const PROJECT_REQUIRED_VIEWS = new Set<string>([
   'dataflow-vuln-scan-task',
   'dataflow-vuln-scan-detail',
   'dataflow-vuln-scan-config',
+  'pentest-vuln-verify',
+  'vuln-verify-task',
   'entry-analysis-root',
   'entry-analysis-task',
   'entry-analysis-config',
@@ -229,6 +231,8 @@ const DEVELOPER_ATOMIC_CAPABILITY_VIEWS = new Set<string>([
   'dataflow-vuln-scan-task',
   'dataflow-vuln-scan-detail',
   'dataflow-vuln-scan-config',
+  'pentest-vuln-verify',
+  'vuln-verify-task',
 ]);
 
 const DEVELOPER_TOOL_VIEWS = new Set<string>([
@@ -416,6 +420,7 @@ export const SIDEBAR_SECTIONS: Record<TopLevelNavKey, NavSection[]> = {
             { id: 'pentest-exec-b2s', label: '二进制逆向', aliases: ['pentest-exec-b2s-root', 'pentest-exec-b2s-task-list', 'pentest-exec-b2s-create', 'pentest-exec-b2s-queue', 'pentest-exec-b2s-result', 'pentest-exec-b2s-detail', 'pentest-exec-b2s-advanced'], requiresProject: true },
             { id: 'pentest-threat', label: '入口分析', aliases: ['entry-analysis-root', 'entry-analysis-task', 'entry-analysis-detail'], requiresProject: true },
             { id: 'pentest-dataflow-vuln-scan', label: '数据流漏洞挖掘', aliases: ['dataflow-vuln-scan-task', 'dataflow-vuln-scan-detail', 'dataflow-vuln-scan-config'], requiresProject: true },
+            { id: 'pentest-vuln-verify', label: '漏洞验证', aliases: ['vuln-verify-task'], requiresProject: true },
           ],
         },
         {

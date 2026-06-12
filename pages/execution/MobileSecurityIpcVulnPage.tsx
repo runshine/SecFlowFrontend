@@ -460,6 +460,7 @@ const cloneReportOutputDrafts = (items: ReportOutputDraft[]): ReportOutputDraft[
   items.map((item) => ({ ...item, key: createDraftKey() }));
 
 const defaultCustomGraphAuditedResultPath = '[[ task.attempt_root ]]/exports/audited-result.json';
+const DEFAULT_TASK_TIMEOUT_SECONDS = 604800;
 const defaultOpenCodeNodeProvider = {
   name: 'opencode',
   options: {
@@ -549,6 +550,8 @@ Use these commands when runtime testing is needed:
   [[ task.poc_runtime.helper_bin ]] ensure [[ task.poc_runtime.instance_name ]]
   [[ task.poc_runtime.hdc_bin ]] tconn [[ task.poc_runtime.hdc_bind ]]:<HDC_PORT_FROM_HELPER_LIST>
   [[ task.poc_runtime.hdc_bin ]] list targets
+
+- When running any [[ task.poc_runtime.helper_bin ]] command, set the command/tool timeout to more than 240 seconds, for example 300s or 600s. Shorter timeouts can expire before the QEMU guest OS finishes booting.
 
 Network rules:
 - In bridge mode, the guest normally receives a 192.168.111.x address and [[ task.poc_runtime.helper_bin ]] starts socat to forward [[ task.poc_runtime.hdc_bind ]]:<HDC_PORT> to <GUEST_IP>:55555.
@@ -2204,6 +2207,7 @@ export const MobileSecurityIpcVulnPage: React.FC<{ projectId: string }> = ({ pro
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>('custom_graph');
   const [executorMode, setExecutorMode] = useState<ExecutorMode>('agentflow_cli');
   const [modelName, setModelName] = useState('');
+  const [taskTimeoutSeconds, setTaskTimeoutSeconds] = useState(String(DEFAULT_TASK_TIMEOUT_SECONDS));
   const [graphSourceType, setGraphSourceType] = useState<GraphSourceType>('inline_json');
   const [builderSourceMode, setBuilderSourceMode] = useState<BuilderSourceMode>('code');
   const [inlineJsonText, setInlineJsonText] = useState(defaultCustomGraphContent);
@@ -2515,6 +2519,7 @@ export const MobileSecurityIpcVulnPage: React.FC<{ projectId: string }> = ({ pro
         setCapabilities(capability);
         setRuntimeConfig(runtime);
         setMaxParallelDraft(String(runtime.max_parallel_tasks || capability.max_parallel_tasks || 1));
+        setTaskTimeoutSeconds(String(capability.default_task_timeout_seconds || DEFAULT_TASK_TIMEOUT_SECONDS));
         setWorkspaces(workspaceItems);
         setWorkspaceId((current) => {
           if (current && workspaceItems.some((item) => item.workspace_id === current)) return current;
@@ -3799,6 +3804,7 @@ export const MobileSecurityIpcVulnPage: React.FC<{ projectId: string }> = ({ pro
             provider_keys: normalizedProviderKey ? [normalizedProviderKey] : [],
             graph_source: graphSource,
             report_outputs: reportOutputs,
+            timeout_seconds: Math.max(1, Math.trunc(Number(taskTimeoutSeconds) || (capabilities?.default_task_timeout_seconds || DEFAULT_TASK_TIMEOUT_SECONDS))),
           });
           createdTasks.push(createdTask);
         } catch (error: any) {
@@ -5324,6 +5330,20 @@ export const MobileSecurityIpcVulnPage: React.FC<{ projectId: string }> = ({ pro
                   </label>
                   <div className="text-xs font-medium text-slate-500">{modelHintForExecutor(executorMode, providerFallbackModel || null)}</div>
 
+                  <label className="block">
+                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">任务限时（秒）</div>
+                    <input
+                      type="number"
+                      min={1}
+                      step={60}
+                      value={taskTimeoutSeconds}
+                      onChange={(event) => setTaskTimeoutSeconds(event.target.value)}
+                      placeholder={String(capabilities?.default_task_timeout_seconds || DEFAULT_TASK_TIMEOUT_SECONDS)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+                    />
+                    <div className="mt-2 text-xs font-medium text-slate-500">默认 604800 秒；这里控制 IPC audit 外层任务执行限时，不会改写 AgentFlow 图节点默认超时。</div>
+                  </label>
+
                   <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <button
@@ -5779,6 +5799,12 @@ export const MobileSecurityIpcVulnPage: React.FC<{ projectId: string }> = ({ pro
                       <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
                         <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Model</div>
                         <div className="mt-2 break-all font-mono text-xs text-slate-700">{modelName.trim() || providerFallbackModel || '(default)'}</div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">任务限时</div>
+                        <div className="mt-2 break-all font-mono text-xs text-slate-700">
+                          {Math.max(1, Math.trunc(Number(taskTimeoutSeconds) || (capabilities?.default_task_timeout_seconds || DEFAULT_TASK_TIMEOUT_SECONDS)))}s
+                        </div>
                       </div>
                       <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
                         <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Provider</div>

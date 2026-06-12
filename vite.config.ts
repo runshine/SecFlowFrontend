@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
     const keepAliveHttpAgent = new http.Agent({ keepAlive: true, maxSockets: 50, keepAliveMsecs: 3000 });
     const keepAliveHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50, keepAliveMsecs: 3000 });
     const buildVersion = String(env.SECFLOW_BUILD_VERSION || '').trim() || 'dev';
+    const ipcAuditProxyTarget = String(env.IPC_AUDIT_PROXY_TARGET || 'http://127.0.0.1:18080').trim();
     return {
       // Use an absolute base in dev so HMR/module requests stay rooted at the
       // Vite server, while production builds keep relative assets for static hosting.
@@ -30,6 +31,13 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         sourcemapIgnoreList: (sourcePath) => sourcePath.includes('node_modules'),
         proxy: {
+          '/api/app/ipc-audit': {
+            target: ipcAuditProxyTarget,
+            changeOrigin: true,
+            secure: false,
+            ws: true,
+            agent: keepAliveHttpAgent,
+          },
           '/api/app/kernel-scan': {
             target: 'https://secflow.ai.icsl.huawei.com',
             changeOrigin: true,

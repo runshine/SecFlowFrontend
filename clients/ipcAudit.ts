@@ -105,6 +105,7 @@ export interface IpcAuditCapability {
   default_pipeline_mode?: string | null;
   artifact_kinds: string[];
   max_parallel_tasks: number;
+  default_task_timeout_seconds?: number;
 }
 
 export interface IpcAuditRuntimeConfig {
@@ -631,6 +632,7 @@ export const ipcAuditApi = {
     provider_keys?: string[];
     graph_source?: IpcAuditTaskGraphSource;
     report_outputs?: IpcAuditTaskReportOutputSpec[];
+    timeout_seconds?: number;
     notes?: string;
     idempotency_key?: string;
   }): Promise<IpcAuditTaskSummary> => {
